@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Kalepin v17 — Bardage & Encadrements</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -499,7 +499,11 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
   const[showChassis,setShowChassis]=useState(true);
   const[showBrackets,setShowBrackets]=useState(true);
   const[isMobile,setIsMobile]=useState(()=>window.innerWidth<640);
-  const chassisGroupRef=useRef();const bracketsGroupRef=useRef();
+  const chassisGroupRef=useRef();const bracketsGroupRef=useRef();const panMatRef=useRef();
+  const showOss3DRef=useRef(showOss3D);const showChassisRef=useRef(showChassis);const showBracketsRef=useRef(showBrackets);
+  useEffect(()=>{showOss3DRef.current=showOss3D},[showOss3D]);
+  useEffect(()=>{showChassisRef.current=showChassis},[showChassis]);
+  useEffect(()=>{showBracketsRef.current=showBrackets},[showBrackets]);
   useEffect(()=>{const h=()=>setIsMobile(window.innerWidth<640);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);
 
   useEffect(()=>{
@@ -554,8 +558,9 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     cubeCamera.update(renderer,envScene);
 
     const panMat=new THREE.MeshStandardMaterial({color:baseColor.clone(),metalness:panMetal,roughness:panRough,
-      envMap:cubeRT.texture,envMapIntensity:isBrillant?1.4:isSatine?0.7:isMiroir?2.0:0.25});
-    panMat.needsUpdate=true;
+      envMap:cubeRT.texture,envMapIntensity:isBrillant?1.4:isSatine?0.7:isMiroir?2.0:0.25,
+      transparent:true,opacity:1.0});
+    panMat.needsUpdate=true;panMatRef.current=panMat;
     const ossMat=new THREE.MeshStandardMaterial({color:0x909090,metalness:0.65,roughness:0.25});
     const concreteMat=new THREE.MeshStandardMaterial({color:0xb0b0a8,metalness:0.04,roughness:0.92});
 
@@ -894,9 +899,16 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     const animate=()=>{
       frameRef.current=requestAnimationFrame(animate);
       const d=zoomRef.current;
-      ossGroup.visible=showOss3D;
-      chassisGroup.visible=showChassis;
-      bracketsGroup.visible=showBrackets&&showOss3D;
+      const _oss=showOss3DRef.current,_chas=showChassisRef.current,_brk=showBracketsRef.current;
+      ossGroup.visible=_oss;
+      chassisGroup.visible=_chas;
+      bracketsGroup.visible=_brk&&_oss;
+      // Make panels semi-transparent when viewing ossature/brackets
+      if(panMatRef.current){
+        const wantTransp=_oss||_brk;
+        panMatRef.current.opacity=wantTransp?0.35:1.0;
+        panMatRef.current.needsUpdate=true;
+      }
       const px=panRef.current.x,py=panRef.current.y;
       camera.position.set(px+d*Math.sin(rotRef.current.y)*Math.cos(rotRef.current.x),
         py+d*Math.sin(rotRef.current.x),d*Math.cos(rotRef.current.y)*Math.cos(rotRef.current.x));
@@ -1049,10 +1061,10 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
           <Btn icon={IC.face} label="Face" active={false} onClick={()=>{rotRef.current={x:0,y:0};zoomRef.current=3}}
             style={{minWidth:48,minHeight:48}}/>
         </div>
-        {/* Bas : dock toggles */}
+        {/* Bas : dock toggles — safe area for iPhone */}
         <div style={{position:'absolute',bottom:0,left:0,right:0,pointerEvents:'auto',
-          padding:'8px 12px 16px',
-          background:'linear-gradient(0deg,rgba(10,12,20,.95) 0%,transparent 100%)'}}>
+          padding:'8px 12px calc(24px + env(safe-area-inset-bottom, 0px))',
+          background:'linear-gradient(0deg,rgba(10,12,20,.95) 0%,rgba(10,12,20,.85) 70%,transparent 100%)'}}>
           <div style={{display:'flex',gap:8,justifyContent:'center'}}>
             {[
               {icon:IC.oss,label:'Oss.',active:showOss3D,fn:()=>setShowOss3D(v=>!v),c:'amber'},
