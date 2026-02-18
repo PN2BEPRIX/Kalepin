@@ -501,9 +501,10 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
   const[isMobile,setIsMobile]=useState(()=>window.innerWidth<640);
   const chassisGroupRef=useRef();const bracketsGroupRef=useRef();const panMatRef=useRef();
   const showOss3DRef=useRef(showOss3D);const showChassisRef=useRef(showChassis);const showBracketsRef=useRef(showBrackets);
-  useEffect(()=>{showOss3DRef.current=showOss3D},[showOss3D]);
+  useEffect(()=>{showOss3DRef.current=showOss3D;if(panMatRef.current){panMatRef.current.opacity=showOss3D?0.35:1.0}},[showOss3D]);
   useEffect(()=>{showChassisRef.current=showChassis},[showChassis]);
   useEffect(()=>{showBracketsRef.current=showBrackets},[showBrackets]);
+  useEffect(()=>{if(sceneRef.current?.wallMesh)sceneRef.current.wallMesh.visible=showWall},[showWall]);
   useEffect(()=>{const h=()=>setIsMobile(window.innerWidth<640);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);
 
   useEffect(()=>{
@@ -851,13 +852,12 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
 
     scene.add(facadeGroup);sceneRef.current={scene,camera,renderer,facadeGroup};
 
-    // ── Concrete wall (toggleable) ──
-    if(showWall){
-      const wallGeo=new THREE.BoxGeometry(Lm+0.1,Hm+0.1,0.18);
-      const wallMat=new THREE.MeshStandardMaterial({color:0x787878,roughness:0.95,metalness:0.02});
-      const wall=new THREE.Mesh(wallGeo,wallMat);
-      wall.position.set(0,0,-0.14);scene.add(wall);
-    }
+    // ── Concrete wall (always created, visibility toggled via ref) ──
+    const wallGeo=new THREE.BoxGeometry(Lm+0.1,Hm+0.1,0.18);
+    const wallMat=new THREE.MeshStandardMaterial({color:0x787878,roughness:0.95,metalness:0.02});
+    const wallMesh=new THREE.Mesh(wallGeo,wallMat);
+    wallMesh.position.set(0,0,-0.14);wallMesh.visible=showWall;scene.add(wallMesh);
+    sceneRef.current.wallMesh=wallMesh;
 
     // ── Bavette (drip edge at bottom) ──
     const bavH=0.04,bavD=0.06;
@@ -893,22 +893,15 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     plinth.position.set(0,-Hm/2-0.04,0.07);scene.add(plinth);
 
     // Refs pour toggle visibilité sans recréer la scène
-    sceneRef.current={scene,camera,renderer,ossGroup,chassisGroup,bracketsGroup};
+    sceneRef.current={...sceneRef.current,ossGroup,chassisGroup,bracketsGroup};
 
     // Render loop
     const animate=()=>{
       frameRef.current=requestAnimationFrame(animate);
       const d=zoomRef.current;
-      const _oss=showOss3DRef.current,_chas=showChassisRef.current,_brk=showBracketsRef.current;
-      ossGroup.visible=_oss;
-      chassisGroup.visible=_chas;
-      bracketsGroup.visible=_brk&&_oss;
-      // Make panels semi-transparent when viewing ossature/brackets
-      if(panMatRef.current){
-        const wantTransp=_oss||_brk;
-        panMatRef.current.opacity=wantTransp?0.35:1.0;
-        panMatRef.current.needsUpdate=true;
-      }
+      ossGroup.visible=showOss3DRef.current;
+      chassisGroup.visible=showChassisRef.current;
+      bracketsGroup.visible=showBracketsRef.current&&showOss3DRef.current;
       const px=panRef.current.x,py=panRef.current.y;
       camera.position.set(px+d*Math.sin(rotRef.current.y)*Math.cos(rotRef.current.x),
         py+d*Math.sin(rotRef.current.x),d*Math.cos(rotRef.current.y)*Math.cos(rotRef.current.x));
@@ -1006,7 +999,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
       canvas.removeEventListener('touchcancel',onTE);
       renderer.dispose();if(mountRef.current)mountRef.current.innerHTML='';
     };
-  },[zone,calc,ralColor,ralFinish,showOss3D,showWall]);
+  },[zone,calc,ralColor,ralFinish]);
 
   // ── Styles communs boutons 3D ──
   const bBase={WebkitTapHighlightColor:'transparent',WebkitBackdropFilter:'blur(10px)',backdropFilter:'blur(10px)',
