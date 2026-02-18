@@ -494,7 +494,7 @@ function optimizeLayout(z){
 function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
   const mountRef=useRef();const sceneRef=useRef();const frameRef=useRef();
   const rotRef=useRef({x:-.3,y:.4});const dragRef=useRef(null);const zoomRef=useRef(3);
-  const panRef=useRef({x:0,y:0});
+  const panRef=useRef({x:0,y:0});const pinchRef=useRef(null);
   const[showOss3D,setShowOss3D]=useState(true);
   const[measure3D,setMeasure3D]=useState(null);
   const[mPt1,setMPt1]=useState(null);
@@ -502,87 +502,136 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
   useEffect(()=>{
     if(!zone||!calc||!mountRef.current)return;
     const W=mountRef.current.clientWidth,H=mountRef.current.clientHeight;
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
-    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,200);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    const scene=new THREE.Scene();
+    // Dégradé ciel : couleur de fond basée sur une nuit urbaine / ciel nuageux
+    scene.background=new THREE.Color(0x1a1e2e);
+    // Brume atmosphérique légère
+    scene.fog=new THREE.FogExp2(0x1a1e2e,0.04);
+
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,300);
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
 
-    // Lights
-    const amb=new THREE.AmbientLight(0xffffff,0.5);scene.add(amb);
-    const dir=new THREE.DirectionalLight(0xffffff,0.8);dir.position.set(3,4,5);scene.add(dir);
-    const dir2=new THREE.DirectionalLight(0x8888ff,0.3);dir2.position.set(-2,2,-3);scene.add(dir2);
+    // ── Lumières ──
+    // Lumière ambiante douce (ciel couvert)
+    const amb=new THREE.AmbientLight(0xd0dff0,0.55);scene.add(amb);
+    // Soleil (angle ~45° depuis la droite-haut)
+    const sun=new THREE.DirectionalLight(0xfff5e0,1.1);
+    sun.position.set(8,12,8);sun.castShadow=true;
+    sun.shadow.camera.near=0.1;sun.shadow.camera.far=80;
+    sun.shadow.camera.left=-15;sun.shadow.camera.right=15;
+    sun.shadow.camera.top=15;sun.shadow.camera.bottom=-15;
+    sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
+    sun.shadow.bias=-0.0005;
+    scene.add(sun);
+    // Contre-jour bleuté depuis le bas-gauche
+    const fill=new THREE.DirectionalLight(0x8ab0ff,0.35);fill.position.set(-4,-2,3);scene.add(fill);
+    // Lumière de rebond du sol
+    const bounce=new THREE.PointLight(0xffeedd,0.2,30);bounce.position.set(0,-5,4);scene.add(bounce);
 
-
-
-    const Lm=zone.L/1000,Hm=zone.H/1000,depth=0.008;// 8mm panel depth
+    const Lm=zone.L/1000,Hm=zone.H/1000,depth=0.008;
     const facadeGroup=new THREE.Group();
     facadeGroup.position.set(-Lm/2,-Hm/2,0);
 
-    // Panel material with RAL color — adapt to finish
+    // ── Matériaux ──
     const baseColor=new THREE.Color(ralColor||'#383E42');
     const fin=ralFinish||'mat';
     const isBrillant=fin==='brillant',isSatine=fin==='satiné',isMiroir=fin==='miroir',isBrosse=fin==='brossé';
-    const panMetal=isBrillant?0.7:isSatine?0.5:isMiroir?0.85:isBrosse?0.45:0.35;
-    const panRough=isBrillant?0.08:isSatine?0.25:isMiroir?0.03:isBrosse?0.4:0.55;
-    // Procedural env map for reflections (cube render target)
-    const cubeRT=new THREE.WebGLCubeRenderTarget(64);
-    const cubeCamera=new THREE.CubeCamera(0.1,10,cubeRT);
-    // Simple fake environment: sky gradient
+    const panMetal=isBrillant?0.75:isSatine?0.55:isMiroir?0.9:isBrosse?0.5:0.38;
+    const panRough=isBrillant?0.06:isSatine?0.2:isMiroir?0.02:isBrosse?0.38:0.52;
+    // Env map pour les reflets
+    const cubeRT=new THREE.WebGLCubeRenderTarget(128);
+    const cubeCamera=new THREE.CubeCamera(0.1,20,cubeRT);
     const envScene=new THREE.Scene();
-    envScene.background=new THREE.Color(0x4488cc);
-    const envFloor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshBasicMaterial({color:0x334455}));
-    envFloor.rotation.x=-Math.PI/2;envFloor.position.y=-2;envScene.add(envFloor);
-    const envSky=new THREE.Mesh(new THREE.SphereGeometry(8,16,8),new THREE.MeshBasicMaterial({color:0x88bbee,side:THREE.BackSide}));
+    envScene.background=new THREE.Color(0x4a7ab5);
+    const envSky=new THREE.Mesh(new THREE.SphereGeometry(10,16,8),new THREE.MeshBasicMaterial({color:0x6aa0d0,side:THREE.BackSide}));
     envScene.add(envSky);
+    const envFloor2=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshBasicMaterial({color:0x3a4a3a}));
+    envFloor2.rotation.x=-Math.PI/2;envFloor2.position.y=-3;envScene.add(envFloor2);
     cubeCamera.update(renderer,envScene);
-    const panMat=new THREE.MeshStandardMaterial({color:baseColor.clone(),metalness:panMetal,roughness:panRough,
-      envMap:cubeRT.texture,envMapIntensity:isBrillant?1.2:isSatine?0.6:isMiroir?1.5:0.2});
-    const ossMat=new THREE.MeshStandardMaterial({color:0x888888,metalness:0.6,roughness:0.3});
-    const concreteMat=new THREE.MeshStandardMaterial({color:0xb0b0a8,metalness:0.05,roughness:0.95});// Concrete color
 
-    // Panels with joint-aware gaps
-    const jH=(zone.jointH||0)/1000,jV=(zone.jointV||0)/1000;// meters
-    const minGap=0.001;// 1mm min visual separation
-    const gapX=Math.max(minGap,jH/2),gapY=Math.max(minGap,jV/2);
-    const activePanels=calc.panelMap.filter(p=>!p.isVoid&&!p.isExcluded);// Exclude excluded panels
-    activePanels.forEach((pm,i)=>{
-      const w=pm.pWa-gapX*2,h=pm.pHa-gapY*2;if(w<0.001||h<0.001)return;
+    const panMat=new THREE.MeshStandardMaterial({color:baseColor.clone(),metalness:panMetal,roughness:panRough,
+      envMap:cubeRT.texture,envMapIntensity:isBrillant?1.4:isSatine?0.7:isMiroir?2.0:0.25});
+    panMat.needsUpdate=true;
+    const ossMat=new THREE.MeshStandardMaterial({color:0x909090,metalness:0.65,roughness:0.25});
+    const concreteMat=new THREE.MeshStandardMaterial({color:0xb0b0a8,metalness:0.04,roughness:0.92});
+
+    // ── Panels — positions corrigées avec joints réels ──
+    // Dans baseXBounds : pLeft du col bc>0 commence AU DÉBUT du joint précédent,
+    // donc pWa inclut ce joint. Il faut soustraire jGapsH[bc-1] pour le vrai panneau.
+    const jGapsH3=calc.jGapsH||[];// joint widths per gap (mm)
+    const jGapsV3=calc.jGapsV||[];
+    const minJointVis=0.002;// 2mm min visual joint in 3D
+
+    const getPanelRect=(pm)=>{
+      const bx1=calc.baseXBounds[pm.parentCol];
+      const by1=calc.baseYBounds[pm.parentRow];
+      const jPH=pm.parentCol>0?(jGapsH3[pm.parentCol-1]||0)/1000:0;
+      const jPV=pm.parentRow>0?(jGapsV3[pm.parentRow-1]||0)/1000:0;
+      const atLeft=Math.abs(pm.pLeft-bx1)<0.0005;
+      const atTop=Math.abs(pm.pTop-by1)<0.0005;
+      const l=pm.pLeft+(atLeft?jPH:0);
+      const t=pm.pTop+(atTop?jPV:0);
+      const w=pm.pWa-(atLeft?jPH:0);
+      const h=pm.pHa-(atTop?jPV:0);
+      return{l,t,w,h};
+    };
+
+    // Panneau normaux
+    const activePanels=calc.panelMap.filter(p=>!p.isVoid&&!p.isExcluded);
+    activePanels.forEach(pm=>{
+      const{l,t,w,h}=getPanelRect(pm);
+      if(w<0.001||h<0.001)return;
       const geo=new THREE.BoxGeometry(w,h,depth);
       const mesh=new THREE.Mesh(geo,panMat);
-      mesh.position.set(pm.pLeft+pm.pWa/2,Hm-(pm.pTop+pm.pHa/2),depth/2);
+      mesh.position.set(l+w/2,Hm-(t+h/2),depth/2);
       facadeGroup.add(mesh);
     });
-    // Excluded panels (balconies) - concrete extrusion
+
+    // Panneaux exclus (balcons) — béton extrudé
     const excludedPanels=calc.panelMap.filter(p=>p.isExcluded);
     excludedPanels.forEach(pm=>{
-      const w=pm.pWa-gapX*2,h=pm.pHa-gapY*2;if(w<0.001||h<0.001)return;
-      const extDepth=(pm.exclusionDepth||1500)/1000;// Convert mm to meters
+      const{l,t,w,h}=getPanelRect(pm);
+      if(w<0.001||h<0.001)return;
+      const extDepth=(pm.exclusionDepth||1500)/1000;
       const geo=new THREE.BoxGeometry(w,h,extDepth);
       const mesh=new THREE.Mesh(geo,concreteMat);
-      mesh.position.set(pm.pLeft+pm.pWa/2,Hm-(pm.pTop+pm.pHa/2),depth+extDepth/2);// Extrude forward
-      mesh.castShadow=true;
+      mesh.position.set(l+w/2,Hm-(t+h/2),depth+extDepth/2);
       facadeGroup.add(mesh);
     });
-    // Draw joint lines (visible dark lines between panels)
-    if(jH>0.001||jV>0.001){
-      const jMat=new THREE.MeshBasicMaterial({color:0x222222});
-      const merges=zone.merges||[];
-      // Horizontal joints (between rows)
-      calc.baseYBounds.forEach((yb,i)=>{if(i===0||i===calc.baseNr)return;
-        // Check if this joint is inside a merged panel
-        const isInsideMerge=merges.some(m=>i-1>=m.r1 && i-1<m.r2);
-        if(isInsideMerge)return;  // Skip this joint
-        const g=new THREE.BoxGeometry(Lm,Math.max(jV,0.001),0.001);
-        const m=new THREE.Mesh(g,jMat);m.position.set(Lm/2,Hm-yb,depth+0.001);facadeGroup.add(m)});
-      // Vertical joints (between cols)
-      calc.baseXBounds.forEach((xb,i)=>{if(i===0||i===calc.baseNc)return;
-        // Check if this joint is inside a merged panel
-        const isInsideMerge=merges.some(m=>i-1>=m.c1 && i-1<m.c2);
-        if(isInsideMerge)return;  // Skip this joint
-        const g=new THREE.BoxGeometry(Math.max(jH,0.001),Hm,0.001);
-        const m=new THREE.Mesh(g,jMat);m.position.set(xb,Hm/2,depth+0.001);facadeGroup.add(m)});
-    }
+
+    // ── Joints 3D : rainures visibles entre panneaux ──
+    // Matériau joint : aluminium sombre, légèrement métallique (EPDM / silicone noir)
+    const jointMat=new THREE.MeshStandardMaterial({color:0x111418,metalness:0.15,roughness:0.9});
+    const jointDepth=depth*1.5;// joints légèrement plus profonds que les panneaux
+    const merges=zone.merges||[];
+
+    // Joints verticaux (entre colonnes)
+    calc.baseXBounds.slice(1,-1).forEach((xb,i)=>{
+      const isInsideMerge=merges.some(m=>i>=m.c1&&i<m.c2);
+      if(isInsideMerge)return;
+      const jw=Math.max(minJointVis,(jGapsH3[i]||0)/1000);
+      // Joint starts at xb (end of col i), width = jw
+      const jCx=xb+jw/2;
+      const geo=new THREE.BoxGeometry(jw,Hm,jointDepth);
+      const m=new THREE.Mesh(geo,jointMat);
+      m.position.set(jCx,Hm/2,jointDepth/2);
+      facadeGroup.add(m);
+    });
+    // Joints horizontaux (entre rangées)
+    calc.baseYBounds.slice(1,-1).forEach((yb,i)=>{
+      const isInsideMerge=merges.some(m=>i>=m.r1&&i<m.r2);
+      if(isInsideMerge)return;
+      const jv=Math.max(minJointVis,(jGapsV3[i]||0)/1000);
+      const jCy=Hm-yb-jv/2;
+      const geo=new THREE.BoxGeometry(Lm,jv,jointDepth);
+      const m=new THREE.Mesh(geo,jointMat);
+      m.position.set(Lm/2,jCy,jointDepth/2);
+      facadeGroup.add(m);
+    });
 
     // Retours (cassettes around openings) - perpendicular to facade face
     const retMat=new THREE.MeshStandardMaterial({color:0x8b5cf6,metalness:0.4,roughness:0.5});
@@ -714,6 +763,18 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     const covLip=new THREE.Mesh(covLipGeo,covMat);
     covLip.position.set(0,Hm/2+covH+0.003,covD/2-0.02);scene.add(covLip);
 
+    // ── Sol / trottoir ──
+    const groundW=Lm+6,groundD=8;
+    const groundMat=new THREE.MeshStandardMaterial({color:0x666670,roughness:0.92,metalness:0.05});
+    const groundGeo=new THREE.BoxGeometry(groundW,0.08,groundD);
+    const ground=new THREE.Mesh(groundGeo,groundMat);
+    ground.position.set(0,-Hm/2-0.04-0.04,groundD/2-1);
+    ground.receiveShadow=true;scene.add(ground);
+    // Liseré de plinthe au pied du bâtiment
+    const plinthMat=new THREE.MeshStandardMaterial({color:0x5a5a60,roughness:0.85,metalness:0.1});
+    const plinthGeo=new THREE.BoxGeometry(Lm+0.06,0.12,0.15);
+    const plinth=new THREE.Mesh(plinthGeo,plinthMat);
+    plinth.position.set(0,-Hm/2-0.04,0.07);scene.add(plinth);
 
     // Render loop
     const animate=()=>{
@@ -730,17 +791,10 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
       camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)};
     window.addEventListener('resize',handleResize);
 
-    return()=>{cancelAnimationFrame(frameRef.current);window.removeEventListener('resize',handleResize);
-      renderer.dispose();if(mountRef.current)mountRef.current.innerHTML=''};
-  },[zone,calc,ralColor,ralFinish,showOss3D,showWall]);
+    // ── Events souris + touch directement sur le canvas WebGL ──
+    // (nécessaire sur iOS Safari : le canvas natif intercepte tout avant React)
+    const canvas=renderer.domElement;
 
-  const onWheel=e=>{e.preventDefault();zoomRef.current=Math.max(0.15,Math.min(60,zoomRef.current*(1+e.deltaY*0.0012)))};
-  const pinchRef=useRef(null);
-
-  // Attacher les events directement sur le canvas DOM natif (contourne iOS WebGL)
-  useEffect(()=>{
-    const el=mountRef.current;if(!el)return;
-    // Mouse
     const onMD=e=>{
       if(e.button===2||e.shiftKey||e.button===1){
         dragRef.current={x:e.clientX,y:e.clientY,px:panRef.current.x,py:panRef.current.y,mode:'pan'};
@@ -748,17 +802,18 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     };
     const onMM=e=>{if(!dragRef.current)return;
       if(dragRef.current.mode==='pan'){
-        panRef.current.x=dragRef.current.px-(e.clientX-dragRef.current.x)*0.004;
-        panRef.current.y=dragRef.current.py+(e.clientY-dragRef.current.y)*0.004;
+        panRef.current.x=dragRef.current.px-(e.clientX-dragRef.current.x)*0.006;
+        panRef.current.y=dragRef.current.py+(e.clientY-dragRef.current.y)*0.006;
       }else{
         rotRef.current.y=dragRef.current.ry+(e.clientX-dragRef.current.x)*0.005;
         rotRef.current.x=Math.max(-1.2,Math.min(1.2,dragRef.current.rx+(e.clientY-dragRef.current.y)*0.005));
       }};
     const onMU=()=>{dragRef.current=null;};
     const onWH=e=>{e.preventDefault();zoomRef.current=Math.max(0.15,Math.min(60,zoomRef.current*(1+e.deltaY*0.0012)));};
-    // Touch — 1 doigt=rotation, 2 doigts=pan+pinch
+
+    // Touch : 1 doigt = rotation, 2 doigts = pan horizontal/vertical + pinch zoom
     const onTS=e=>{
-      e.preventDefault();// bloque scroll Safari sur le canvas uniquement
+      e.preventDefault();
       const t=e.touches;
       if(t.length===1){
         dragRef.current={x:t[0].clientX,y:t[0].clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};
@@ -768,6 +823,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
         const dist=Math.sqrt(dx*dx+dy*dy);
         const mx=(t[0].clientX+t[1].clientX)/2,my=(t[0].clientY+t[1].clientY)/2;
         pinchRef.current={dist,zoom:zoomRef.current};
+        // Stocker position initiale du centre pour le pan
         dragRef.current={x:mx,y:my,px:panRef.current.x,py:panRef.current.y,mode:'pan'};
       }
     };
@@ -781,38 +837,48 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
         const dx=t[1].clientX-t[0].clientX,dy=t[1].clientY-t[0].clientY;
         const dist=Math.sqrt(dx*dx+dy*dy);
         const mx=(t[0].clientX+t[1].clientX)/2,my=(t[0].clientY+t[1].clientY)/2;
-        if(pinchRef.current) zoomRef.current=Math.max(0.15,Math.min(60,pinchRef.current.zoom*(pinchRef.current.dist/dist)));
+        // Pinch → zoom
+        if(pinchRef.current){
+          zoomRef.current=Math.max(0.15,Math.min(60,pinchRef.current.zoom*(pinchRef.current.dist/dist)));
+        }
+        // Translation 2 doigts → pan (horizontal prioritaire, sensibilité augmentée)
         if(dragRef.current?.mode==='pan'){
-          panRef.current.x=dragRef.current.px-(mx-dragRef.current.x)*0.004;
-          panRef.current.y=dragRef.current.py+(my-dragRef.current.y)*0.004;
+          panRef.current.x=dragRef.current.px-(mx-dragRef.current.x)*0.008;
+          panRef.current.y=dragRef.current.py+(my-dragRef.current.y)*0.008;
         }
       }
     };
     const onTE=e=>{
       if(e.touches.length===0){dragRef.current=null;pinchRef.current=null;}
       else if(e.touches.length===1){
+        // Retour à 1 doigt après 2 → reprendre rotation depuis position actuelle
         dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};
         pinchRef.current=null;
       }
     };
-    el.addEventListener('mousedown',onMD);
-    el.addEventListener('mousemove',onMM);
-    el.addEventListener('mouseup',onMU);
-    el.addEventListener('mouseleave',onMU);
-    el.addEventListener('wheel',onWH,{passive:false});
-    el.addEventListener('touchstart',onTS,{passive:false});
-    el.addEventListener('touchmove',onTM,{passive:false});
-    el.addEventListener('touchend',onTE);
-    el.addEventListener('touchcancel',onTE);
-    el.addEventListener('contextmenu',e=>e.preventDefault());
+
+    canvas.addEventListener('mousedown',onMD);
+    canvas.addEventListener('mousemove',onMM,{passive:true});
+    canvas.addEventListener('mouseup',onMU);
+    canvas.addEventListener('mouseleave',onMU);
+    canvas.addEventListener('wheel',onWH,{passive:false});
+    canvas.addEventListener('touchstart',onTS,{passive:false});
+    canvas.addEventListener('touchmove',onTM,{passive:false});
+    canvas.addEventListener('touchend',onTE);
+    canvas.addEventListener('touchcancel',onTE);
+    canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
     return()=>{
-      el.removeEventListener('mousedown',onMD);el.removeEventListener('mousemove',onMM);
-      el.removeEventListener('mouseup',onMU);el.removeEventListener('mouseleave',onMU);
-      el.removeEventListener('wheel',onWH);el.removeEventListener('touchstart',onTS);
-      el.removeEventListener('touchmove',onTM);el.removeEventListener('touchend',onTE);
-      el.removeEventListener('touchcancel',onTE);
+      cancelAnimationFrame(frameRef.current);
+      window.removeEventListener('resize',handleResize);
+      canvas.removeEventListener('mousedown',onMD);canvas.removeEventListener('mousemove',onMM);
+      canvas.removeEventListener('mouseup',onMU);canvas.removeEventListener('mouseleave',onMU);
+      canvas.removeEventListener('wheel',onWH);canvas.removeEventListener('touchstart',onTS);
+      canvas.removeEventListener('touchmove',onTM);canvas.removeEventListener('touchend',onTE);
+      canvas.removeEventListener('touchcancel',onTE);
+      renderer.dispose();if(mountRef.current)mountRef.current.innerHTML='';
     };
-  },[]);// [] = une seule fois, les refs sont stables
+  },[zone,calc,ralColor,ralFinish,showOss3D,showWall]);
 
   return<div style={{position:'absolute',inset:0,zIndex:10,background:'#1a1a2a'}}>
     {/* Canvas Three.js — touchAction:none bloque le scroll page Safari */}
