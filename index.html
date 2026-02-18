@@ -804,8 +804,8 @@ async function supaUpload(zoneData){
   }catch(e){console.error('Supabase upload:',e);return null}
 }
 
-async function supaFetch(viewId){
-  const cfg=getSupaConfig();if(!cfg.url||!cfg.key)return null;
+async function supaFetch(viewId,cfgOverride){
+  const cfg=cfgOverride||getSupaConfig();if(!cfg.url||!cfg.key)return null;
   try{
     const res=await fetch(cfg.url+'/rest/v1/kalepin_views?id=eq.'+viewId+'&select=*',{
       headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key}
@@ -833,8 +833,12 @@ function makeQRDataURL(text,sizeMM){
 function ViewerApp({viewId}){
   const[data,setData]=useState(null);const[err,setErr]=useState(null);const[loading,setLoading]=useState(true);
   useEffect(()=>{
-    supaFetch(viewId).then(d=>{
-      if(d){setData(d)}else{setErr('Projet introuvable ou Supabase non configuré')}
+    // Read supabase config from URL params (embedded in QR link) or fallback to localStorage
+    const params=new URLSearchParams(window.location.search);
+    const cfgFromUrl={url:params.get('s_url')||'',key:params.get('s_key')||''};
+    const cfg=(cfgFromUrl.url&&cfgFromUrl.key)?cfgFromUrl:getSupaConfig();
+    supaFetch(viewId,cfg).then(d=>{
+      if(d){setData(d)}else{setErr('Projet introuvable')}
       setLoading(false);
     });
   },[viewId]);
@@ -2049,7 +2053,8 @@ function App(){
                 ral_color:RAL_COLORS[ralIdx]?.hex||'#383E42',ral_finish:RAL_COLORS[ralIdx]?.finish||'mat'};
               const uid=await supaUpload(viewData);
               if(uid){
-                const viewUrl=viewerBase+'?view='+uid;
+                const sConf=getSupaConfig();
+                const viewUrl=viewerBase+'?view='+uid+'&s_url='+encodeURIComponent(sConf.url)+'&s_key='+encodeURIComponent(sConf.key);
                 const qrImg=makeQRDataURL(viewUrl,18);
                 if(qrImg){
                   doc.addImage(qrImg,'PNG',qxOff,PH-23,18,18);
