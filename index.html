@@ -734,107 +734,121 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
       renderer.dispose();if(mountRef.current)mountRef.current.innerHTML=''};
   },[zone,calc,ralColor,ralFinish,showOss3D,showWall]);
 
-  const onMouseDown=e=>{if(e.button===2||e.shiftKey||e.button===1){
-    dragRef.current={x:e.clientX,y:e.clientY,px:panRef.current.x,py:panRef.current.y,mode:'pan'};
-  }else{dragRef.current={x:e.clientX,y:e.clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'}}};
-  const onMouseMove=e=>{if(!dragRef.current)return;
-    if(dragRef.current.mode==='pan'){
-      panRef.current.x=dragRef.current.px-(e.clientX-dragRef.current.x)*0.004;
-      panRef.current.y=dragRef.current.py+(e.clientY-dragRef.current.y)*0.004;
-    }else{
-      rotRef.current.y=dragRef.current.ry+(e.clientX-dragRef.current.x)*0.005;
-      rotRef.current.x=Math.max(-1.2,Math.min(1.2,dragRef.current.rx+(e.clientY-dragRef.current.y)*0.005));
-    }};
-  const onMouseUp=()=>{dragRef.current=null};
   const onWheel=e=>{e.preventDefault();zoomRef.current=Math.max(0.15,Math.min(60,zoomRef.current*(1+e.deltaY*0.0012)))};
+  const pinchRef=useRef(null);
 
-  // ── Touch handlers (iPhone / iPad) ──
-  const pinchRef=useRef(null);// stores initial pinch distance for zoom
-  const onTouchStart=e=>{
-    // Ne pas bloquer les boutons UI qui sont au-dessus
-    if(e.target.tagName==='BUTTON'||e.target.closest('button'))return;
-    e.preventDefault();
-    const touches=e.touches;
-    if(touches.length===1){
-      dragRef.current={x:touches[0].clientX,y:touches[0].clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};
-      pinchRef.current=null;
-    }else if(touches.length===2){
-      const dx=touches[1].clientX-touches[0].clientX,dy=touches[1].clientY-touches[0].clientY;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      const mx=(touches[0].clientX+touches[1].clientX)/2,my=(touches[0].clientY+touches[1].clientY)/2;
-      pinchRef.current={dist,zoom:zoomRef.current};
-      dragRef.current={x:mx,y:my,px:panRef.current.x,py:panRef.current.y,mode:'pan'};
-    }
-  };
-  const onTouchMove=e=>{
-    if(e.target.tagName==='BUTTON'||e.target.closest('button'))return;
-    e.preventDefault();
-    const touches=e.touches;
-    if(touches.length===1&&dragRef.current&&dragRef.current.mode==='rot'){
-      const dx=touches[0].clientX-dragRef.current.x,dy=touches[0].clientY-dragRef.current.y;
-      rotRef.current.y=dragRef.current.ry+dx*0.005;
-      rotRef.current.x=Math.max(-1.2,Math.min(1.2,dragRef.current.rx+dy*0.005));
-    }else if(touches.length===2){
-      const dx=touches[1].clientX-touches[0].clientX,dy=touches[1].clientY-touches[0].clientY;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      const mx=(touches[0].clientX+touches[1].clientX)/2,my=(touches[0].clientY+touches[1].clientY)/2;
-      // Pinch zoom
-      if(pinchRef.current){
-        const scale=pinchRef.current.dist/dist;
-        zoomRef.current=Math.max(0.15,Math.min(60,pinchRef.current.zoom*scale));
+  // Attacher les events directement sur le canvas DOM natif (contourne iOS WebGL)
+  useEffect(()=>{
+    const el=mountRef.current;if(!el)return;
+    // Mouse
+    const onMD=e=>{
+      if(e.button===2||e.shiftKey||e.button===1){
+        dragRef.current={x:e.clientX,y:e.clientY,px:panRef.current.x,py:panRef.current.y,mode:'pan'};
+      }else{dragRef.current={x:e.clientX,y:e.clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};}
+    };
+    const onMM=e=>{if(!dragRef.current)return;
+      if(dragRef.current.mode==='pan'){
+        panRef.current.x=dragRef.current.px-(e.clientX-dragRef.current.x)*0.004;
+        panRef.current.y=dragRef.current.py+(e.clientY-dragRef.current.y)*0.004;
+      }else{
+        rotRef.current.y=dragRef.current.ry+(e.clientX-dragRef.current.x)*0.005;
+        rotRef.current.x=Math.max(-1.2,Math.min(1.2,dragRef.current.rx+(e.clientY-dragRef.current.y)*0.005));
+      }};
+    const onMU=()=>{dragRef.current=null;};
+    const onWH=e=>{e.preventDefault();zoomRef.current=Math.max(0.15,Math.min(60,zoomRef.current*(1+e.deltaY*0.0012)));};
+    // Touch — 1 doigt=rotation, 2 doigts=pan+pinch
+    const onTS=e=>{
+      e.preventDefault();// bloque scroll Safari sur le canvas uniquement
+      const t=e.touches;
+      if(t.length===1){
+        dragRef.current={x:t[0].clientX,y:t[0].clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};
+        pinchRef.current=null;
+      }else if(t.length===2){
+        const dx=t[1].clientX-t[0].clientX,dy=t[1].clientY-t[0].clientY;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        const mx=(t[0].clientX+t[1].clientX)/2,my=(t[0].clientY+t[1].clientY)/2;
+        pinchRef.current={dist,zoom:zoomRef.current};
+        dragRef.current={x:mx,y:my,px:panRef.current.x,py:panRef.current.y,mode:'pan'};
       }
-      // 2-finger pan
-      if(dragRef.current&&dragRef.current.mode==='pan'){
-        panRef.current.x=dragRef.current.px-(mx-dragRef.current.x)*0.004;
-        panRef.current.y=dragRef.current.py+(my-dragRef.current.y)*0.004;
+    };
+    const onTM=e=>{
+      e.preventDefault();
+      const t=e.touches;
+      if(t.length===1&&dragRef.current?.mode==='rot'){
+        rotRef.current.y=dragRef.current.ry+(t[0].clientX-dragRef.current.x)*0.005;
+        rotRef.current.x=Math.max(-1.2,Math.min(1.2,dragRef.current.rx+(t[0].clientY-dragRef.current.y)*0.005));
+      }else if(t.length===2){
+        const dx=t[1].clientX-t[0].clientX,dy=t[1].clientY-t[0].clientY;
+        const dist=Math.sqrt(dx*dx+dy*dy);
+        const mx=(t[0].clientX+t[1].clientX)/2,my=(t[0].clientY+t[1].clientY)/2;
+        if(pinchRef.current) zoomRef.current=Math.max(0.15,Math.min(60,pinchRef.current.zoom*(pinchRef.current.dist/dist)));
+        if(dragRef.current?.mode==='pan'){
+          panRef.current.x=dragRef.current.px-(mx-dragRef.current.x)*0.004;
+          panRef.current.y=dragRef.current.py+(my-dragRef.current.y)*0.004;
+        }
       }
-    }
-  };
-  const onTouchEnd=e=>{
-    if(e.touches.length===0){dragRef.current=null;pinchRef.current=null;}
-    else if(e.touches.length===1){
-      // Transition from 2-finger to 1-finger — restart rotation from current pos
-      dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};
-      pinchRef.current=null;
-    }
-  };
+    };
+    const onTE=e=>{
+      if(e.touches.length===0){dragRef.current=null;pinchRef.current=null;}
+      else if(e.touches.length===1){
+        dragRef.current={x:e.touches[0].clientX,y:e.touches[0].clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};
+        pinchRef.current=null;
+      }
+    };
+    el.addEventListener('mousedown',onMD);
+    el.addEventListener('mousemove',onMM);
+    el.addEventListener('mouseup',onMU);
+    el.addEventListener('mouseleave',onMU);
+    el.addEventListener('wheel',onWH,{passive:false});
+    el.addEventListener('touchstart',onTS,{passive:false});
+    el.addEventListener('touchmove',onTM,{passive:false});
+    el.addEventListener('touchend',onTE);
+    el.addEventListener('touchcancel',onTE);
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+    return()=>{
+      el.removeEventListener('mousedown',onMD);el.removeEventListener('mousemove',onMM);
+      el.removeEventListener('mouseup',onMU);el.removeEventListener('mouseleave',onMU);
+      el.removeEventListener('wheel',onWH);el.removeEventListener('touchstart',onTS);
+      el.removeEventListener('touchmove',onTM);el.removeEventListener('touchend',onTE);
+      el.removeEventListener('touchcancel',onTE);
+    };
+  },[]);// [] = une seule fois, les refs sont stables
 
-  return<div style={{position:'absolute',inset:0,zIndex:10,background:'#1a1a2a'}} onWheel={e=>e.stopPropagation()} onMouseDown={e=>e.stopPropagation()} onMouseMove={e=>e.stopPropagation()}>
-    {/* Canvas 3D — touch-action:none pour désactiver scroll Safari */}
-    <div ref={mountRef} style={{width:'100%',height:'100%',cursor:'grab',touchAction:'none',userSelect:'none'}}
-      onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
-      onWheel={e=>{e.stopPropagation();onWheel(e)}} onContextMenu={e=>e.preventDefault()}
-      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd}/>
-    {/* Boutons — zIndex explicite pour passer au-dessus du canvas iOS */}
-    <div style={{position:'absolute',top:12,left:12,display:'flex',gap:8,alignItems:'center',zIndex:20,pointerEvents:'auto'}}>
-      <button onClick={onClose} className="ba px-3 py-2 rounded-lg text-xs font-bold text-white"
-        style={{background:'rgba(79,110,247,.9)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)'}}>← Vue 2D</button>
-      <button onClick={()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}} className="ba px-3 py-2 rounded-lg text-xs font-medium"
-        style={{background:'rgba(255,255,255,.08)',color:'#fff',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',border:'1px solid rgba(255,255,255,.1)'}}>⟲ Reset</button>
-      <button onClick={()=>{rotRef.current={x:0,y:0};zoomRef.current=3}} className="ba px-3 py-2 rounded-lg text-xs font-medium"
-        style={{background:'rgba(255,255,255,.08)',color:'#fff',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',border:'1px solid rgba(255,255,255,.1)'}}>⊡ Face</button>
-      <button onClick={()=>{setShowOss3D(v=>!v)}} className="ba px-3 py-2 rounded-lg text-xs font-medium"
-        style={{background:showOss3D?'rgba(245,158,11,.25)':'rgba(255,255,255,.08)',color:showOss3D?'#f59e0b':'#fff',
-          backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',border:`1px solid ${showOss3D?'rgba(245,158,11,.5)':'rgba(255,255,255,.1)'}`}}>
-        {showOss3D?'Masquer':'Afficher'} ossature</button>
-    </div>
-    {/* Bouton mur béton — zIndex 20 + pointerEvents auto pour iPhone */}
-    <div style={{position:'absolute',top:12,right:12,display:'flex',flexDirection:'column',gap:6,zIndex:20,pointerEvents:'auto'}}>
-      <button
-        onTouchEnd={e=>{e.preventDefault();e.stopPropagation();onToggle('wall');}}
-        onClick={()=>onToggle('wall')}
-        className="ba px-3 py-2 rounded-lg text-[10px] font-bold"
-        style={{background:showWall?'rgba(79,110,247,.3)':'rgba(255,255,255,.08)',
-          color:showWall?'#93c5fd':'#fff',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',
-          border:`1px solid ${showWall?'rgba(79,110,247,.6)':'rgba(255,255,255,.15)'}`,
-          WebkitTapHighlightColor:'transparent',minWidth:90,minHeight:44}}>
-        {showWall?'✓ Mur béton':'Mur béton'}</button>
-    </div>
-    <div style={{position:'absolute',bottom:12,left:'50%',transform:'translateX(-50%)',display:'flex',gap:10,alignItems:'center',
-      background:'rgba(15,17,24,.75)',borderRadius:10,padding:'6px 16px',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',zIndex:20}}>
-      <span className="text-[10px] mn" style={{color:'rgba(255,255,255,.5)'}}>1 doigt: tourner · 2 doigts: pan+zoom · PC: molette/shift</span>
-      <span className="text-[10px] mn px-2 py-1 rounded" style={{background:'rgba(79,110,247,.2)',color:'#93c5fd'}}>
-        {(zone.L/1000).toFixed(2)}×{(zone.H/1000).toFixed(2)} m · {calc.nP} pan.</span>
+  return<div style={{position:'absolute',inset:0,zIndex:10,background:'#1a1a2a'}}>
+    {/* Canvas Three.js — touchAction:none bloque le scroll page Safari */}
+    <div ref={mountRef} style={{position:'absolute',inset:0,cursor:'grab',touchAction:'none',userSelect:'none'}}/>
+    {/* Overlay boutons — position absolute AU-DESSUS du canvas, pointerEvents ciblés */}
+    <div style={{position:'absolute',inset:0,zIndex:20,pointerEvents:'none'}}>
+      {/* Haut gauche */}
+      <div style={{position:'absolute',top:12,left:12,display:'flex',gap:8,alignItems:'center',pointerEvents:'auto'}}>
+        <button onClick={onClose} className="ba px-3 py-2 rounded-lg text-xs font-bold text-white"
+          style={{background:'rgba(79,110,247,.9)',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',WebkitTapHighlightColor:'transparent',minHeight:44}}>← Vue 2D</button>
+        <button onClick={()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}} className="ba px-3 py-2 rounded-lg text-xs font-medium"
+          style={{background:'rgba(30,30,50,.85)',color:'#fff',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',border:'1px solid rgba(255,255,255,.15)',WebkitTapHighlightColor:'transparent',minHeight:44}}>⟲ Reset</button>
+        <button onClick={()=>{rotRef.current={x:0,y:0};zoomRef.current=3}} className="ba px-3 py-2 rounded-lg text-xs font-medium"
+          style={{background:'rgba(30,30,50,.85)',color:'#fff',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',border:'1px solid rgba(255,255,255,.15)',WebkitTapHighlightColor:'transparent',minHeight:44}}>⊡ Face</button>
+        <button onClick={()=>setShowOss3D(v=>!v)} className="ba px-3 py-2 rounded-lg text-xs font-medium"
+          style={{background:showOss3D?'rgba(245,158,11,.3)':'rgba(30,30,50,.85)',color:showOss3D?'#fbbf24':'#fff',
+            WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',border:`1px solid ${showOss3D?'rgba(245,158,11,.5)':'rgba(255,255,255,.15)'}`,WebkitTapHighlightColor:'transparent',minHeight:44}}>
+          {showOss3D?'Masquer':'Afficher'} ossature</button>
+      </div>
+      {/* Haut droite — bouton mur béton */}
+      <div style={{position:'absolute',top:12,right:12,pointerEvents:'auto'}}>
+        <button onClick={()=>onToggle('wall')} className="ba px-3 py-2 rounded-lg text-[11px] font-bold"
+          style={{background:showWall?'rgba(79,110,247,.35)':'rgba(30,30,50,.85)',
+            color:showWall?'#93c5fd':'#aaa',
+            WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',
+            border:`1px solid ${showWall?'rgba(79,110,247,.6)':'rgba(255,255,255,.15)'}`,
+            WebkitTapHighlightColor:'transparent',minHeight:44,minWidth:100}}>
+          {showWall?'✓ Mur béton':'○ Mur béton'}</button>
+      </div>
+      {/* Bas centre — infos */}
+      <div style={{position:'absolute',bottom:12,left:'50%',transform:'translateX(-50%)',display:'flex',gap:10,alignItems:'center',
+        background:'rgba(10,12,20,.8)',borderRadius:10,padding:'6px 16px',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',whiteSpace:'nowrap'}}>
+        <span style={{fontSize:10,fontFamily:'monospace',color:'rgba(255,255,255,.4)'}}>1 doigt: rotation · 2 doigts: pan+zoom</span>
+        <span style={{fontSize:10,fontFamily:'monospace',padding:'2px 8px',borderRadius:6,background:'rgba(79,110,247,.2)',color:'#93c5fd'}}>
+          {(zone.L/1000).toFixed(2)}×{(zone.H/1000).toFixed(2)} m · {calc.nP} pan.</span>
+      </div>
     </div>
   </div>;
 }
