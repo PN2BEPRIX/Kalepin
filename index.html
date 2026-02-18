@@ -496,17 +496,17 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
   const rotRef=useRef({x:-.3,y:.4});const dragRef=useRef(null);const zoomRef=useRef(3);
   const panRef=useRef({x:0,y:0});const pinchRef=useRef(null);
   const[showOss3D,setShowOss3D]=useState(true);
-  const[measure3D,setMeasure3D]=useState(null);
-  const[mPt1,setMPt1]=useState(null);
+  const[showChassis,setShowChassis]=useState(true);
+  const[showBrackets,setShowBrackets]=useState(true);
+  const[isMobile,setIsMobile]=useState(()=>window.innerWidth<640);
+  const chassisGroupRef=useRef();const bracketsGroupRef=useRef();
+  useEffect(()=>{const h=()=>setIsMobile(window.innerWidth<640);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);
 
   useEffect(()=>{
     if(!zone||!calc||!mountRef.current)return;
     const W=mountRef.current.clientWidth,H=mountRef.current.clientHeight;
     const scene=new THREE.Scene();
-    // Dégradé ciel : couleur de fond basée sur une nuit urbaine / ciel nuageux
     scene.background=new THREE.Color(0x1a1e2e);
-    // Brume atmosphérique légère
-    scene.fog=new THREE.FogExp2(0x1a1e2e,0.04);
 
     const camera=new THREE.PerspectiveCamera(42,W/H,0.01,300);
     const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
@@ -608,116 +608,194 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     const jointMat=new THREE.MeshStandardMaterial({color:0x111418,metalness:0.15,roughness:0.9});
     const jointDepth=depth*1.5;// joints légèrement plus profonds que les panneaux
     const merges=zone.merges||[];
+    // Ouvertures en mètres pour découper les joints
+    const ouvsMm=zone.ouvs.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,t:o.y/1000,b:(o.y+o.h)/1000}));
 
-    // Joints verticaux (entre colonnes)
+    // ── Joints verticaux (entre colonnes) — découpés autour des ouvertures ──
     calc.baseXBounds.slice(1,-1).forEach((xb,i)=>{
       const isInsideMerge=merges.some(m=>i>=m.c1&&i<m.c2);
       if(isInsideMerge)return;
       const jw=Math.max(minJointVis,(jGapsH3[i]||0)/1000);
-      // Joint starts at xb (end of col i), width = jw
       const jCx=xb+jw/2;
-      const geo=new THREE.BoxGeometry(jw,Hm,jointDepth);
-      const m=new THREE.Mesh(geo,jointMat);
-      m.position.set(jCx,Hm/2,jointDepth/2);
-      facadeGroup.add(m);
+      // Découper ce joint vertical en segments qui évitent les ouvertures
+      let segs=[{y1:0,y2:Hm}];
+      ouvsMm.forEach(o=>{
+        // Le joint passe dans l'ouverture si son x est entre oL et oR
+        if(jCx<o.l-jw/2||jCx>o.r+jw/2)return;
+        const ns=[];segs.forEach(s=>{
+          const oT=o.t,oB=o.b;
+          if(oT>=s.y2||oB<=s.y1){ns.push(s);return;}
+          if(s.y1<oT)ns.push({y1:s.y1,y2:oT});
+          if(oB<s.y2)ns.push({y1:oB,y2:s.y2});
+        });segs=ns;
+      });
+      segs.forEach(s=>{
+        const sh=s.y2-s.y1;if(sh<0.005)return;
+        const geo=new THREE.BoxGeometry(jw,sh,jointDepth);
+        const m=new THREE.Mesh(geo,jointMat);
+        m.position.set(jCx,Hm-s.y1-sh/2,jointDepth/2);
+        facadeGroup.add(m);
+      });
     });
-    // Joints horizontaux (entre rangées)
+
+    // ── Joints horizontaux (entre rangées) — découpés autour des ouvertures ──
     calc.baseYBounds.slice(1,-1).forEach((yb,i)=>{
       const isInsideMerge=merges.some(m=>i>=m.r1&&i<m.r2);
       if(isInsideMerge)return;
       const jv=Math.max(minJointVis,(jGapsV3[i]||0)/1000);
       const jCy=Hm-yb-jv/2;
-      const geo=new THREE.BoxGeometry(Lm,jv,jointDepth);
-      const m=new THREE.Mesh(geo,jointMat);
-      m.position.set(Lm/2,jCy,jointDepth/2);
-      facadeGroup.add(m);
+      const jYworld=yb+jv/2;// position Y en coords façade
+      let segs=[{x1:0,x2:Lm}];
+      ouvsMm.forEach(o=>{
+        if(jYworld<o.t-jv/2||jYworld>o.b+jv/2)return;
+        const ns=[];segs.forEach(s=>{
+          const oL=o.l,oR=o.r;
+          if(oL>=s.x2||oR<=s.x1){ns.push(s);return;}
+          if(s.x1<oL)ns.push({x1:s.x1,x2:oL});
+          if(oR<s.x2)ns.push({x1:oR,x2:s.x2});
+        });segs=ns;
+      });
+      segs.forEach(s=>{
+        const sw=s.x2-s.x1;if(sw<0.005)return;
+        const geo=new THREE.BoxGeometry(sw,jv,jointDepth);
+        const m=new THREE.Mesh(geo,jointMat);
+        m.position.set(s.x1+sw/2,jCy,jointDepth/2);
+        facadeGroup.add(m);
+      });
     });
 
-    // Retours (cassettes around openings) - perpendicular to facade face
-    const retMat=new THREE.MeshStandardMaterial({color:0x8b5cf6,metalness:0.4,roughness:0.5});
-    const lintMat=new THREE.MeshStandardMaterial({color:0x22d3ee,metalness:0.4,roughness:0.5});
-    const appMat=new THREE.MeshStandardMaterial({color:0x34d399,metalness:0.4,roughness:0.5});
-    const fz=depth+0.002;// face z offset (in front of panels to avoid z-fighting)
+    // ── Matériaux retours : même finition RAL que les cassettes ──
+    const retMat=new THREE.MeshStandardMaterial({color:baseColor.clone(),metalness:panMetal,roughness:panRough+0.05,
+      envMap:cubeRT.texture,envMapIntensity:isBrillant?0.9:0.2});
+    // Matériau bord coupé (chant de tôle) : légèrement plus foncé, mat
+    const edgeMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.7),metalness:0.3,roughness:0.65});
+    // Vitrage
+    const glassMat=new THREE.MeshStandardMaterial({color:0x3a6a9f,metalness:0.05,roughness:0.04,transparent:true,opacity:0.45,side:THREE.DoubleSide});
+    // Chassis alu anodisé
+    const chassisMat=new THREE.MeshStandardMaterial({color:0x8a8a8a,metalness:0.7,roughness:0.25});
+    // Vis / rivet
+    const boltMat=new THREE.MeshStandardMaterial({color:0x5a5a5a,metalness:0.85,roughness:0.2});
+
+    const chassisGroup=new THREE.Group();
+    chassisGroupRef.current=chassisGroup;
+
     zone.ouvs.forEach(o=>{
       const ox=o.x/1000,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
       const r=o.retours||{tG:150,tD:150,lin:150,app:150};
-      const fv=(o.faceVis||50)/1000;
-      const retD_default=0.15;// fallback retour depth
-      // Tableau G (left)
+      const fv=(o.faceVis||50)/1000;// face visible (retour en saillie)
+      const pt=depth;// épaisseur tôle = même que cassette
+
+      // ── Tableau G (joue gauche) — profil L ──
       if(r.tG>0){
-        const gFace=new THREE.BoxGeometry(fv,oh,0.004);const mFace=new THREE.Mesh(gFace,retMat);
-        mFace.position.set(ox-fv/2,Hm-(oy+oh/2),fz);facadeGroup.add(mFace);
-        const rdG=r.tG/1000||retD_default;const gRet=new THREE.BoxGeometry(0.005,oh,rdG);const mRet=new THREE.Mesh(gRet,retMat);
-        mRet.position.set(ox,Hm-(oy+oh/2),-rdG/2);facadeGroup.add(mRet)}
-      // Tableau D (right)
+        const rd=r.tG/1000;
+        // Face visible (dans le plan de façade)
+        const fg=new THREE.Mesh(new THREE.BoxGeometry(fv,oh,pt),retMat);
+        fg.position.set(ox-fv/2,Hm-(oy+oh/2),pt/2);facadeGroup.add(fg);
+        // Chant visible
+        const eg=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,pt),edgeMat);
+        eg.position.set(ox-fv,Hm-(oy+oh/2),pt/2);facadeGroup.add(eg);
+        // Retour (perpendiculaire, s'enfonce dans le mur)
+        const rg=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,rd),retMat);
+        rg.position.set(ox,Hm-(oy+oh/2),-rd/2);facadeGroup.add(rg);
+      }
+      // ── Tableau D (joue droite) ──
       if(r.tD>0){
-        const gFace=new THREE.BoxGeometry(fv,oh,0.004);const mFace=new THREE.Mesh(gFace,retMat);
-        mFace.position.set(ox+ow+fv/2,Hm-(oy+oh/2),fz);facadeGroup.add(mFace);
-        const rdD=r.tD/1000||retD_default;const gRet2=new THREE.BoxGeometry(0.005,oh,rdD);const mRet2=new THREE.Mesh(gRet2,retMat);
-        mRet2.position.set(ox+ow,Hm-(oy+oh/2),-rdD/2);facadeGroup.add(mRet2)}
-      // Linteau (top)
+        const rd=r.tD/1000;
+        const fd=new THREE.Mesh(new THREE.BoxGeometry(fv,oh,pt),retMat);
+        fd.position.set(ox+ow+fv/2,Hm-(oy+oh/2),pt/2);facadeGroup.add(fd);
+        const ed=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,pt),edgeMat);
+        ed.position.set(ox+ow+fv,Hm-(oy+oh/2),pt/2);facadeGroup.add(ed);
+        const rd2=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,rd),retMat);
+        rd2.position.set(ox+ow,Hm-(oy+oh/2),-rd/2);facadeGroup.add(rd2);
+      }
+      // ── Linteau (retour haut) ──
       if(r.lin>0){
-        const gFace=new THREE.BoxGeometry(ow+fv*2,fv,0.004);const mFace=new THREE.Mesh(gFace,lintMat);
-        mFace.position.set(ox+ow/2,Hm-(oy-fv/2),fz);facadeGroup.add(mFace);
-        const rdL=r.lin/1000||retD_default;const gRetL=new THREE.BoxGeometry(ow,0.005,rdL);const mRetL=new THREE.Mesh(gRetL,lintMat);
-        mRetL.position.set(ox+ow/2,Hm-oy,-rdL/2);facadeGroup.add(mRetL)}
-      // Appui (bottom)
+        const rd=r.lin/1000;
+        const fl=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,pt),retMat);
+        fl.position.set(ox+ow/2,Hm-(oy-fv/2),pt/2);facadeGroup.add(fl);
+        const el=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,pt,pt),edgeMat);
+        el.position.set(ox+ow/2,Hm-(oy-fv),pt/2);facadeGroup.add(el);
+        const rl=new THREE.Mesh(new THREE.BoxGeometry(ow,pt,rd),retMat);
+        rl.position.set(ox+ow/2,Hm-oy,-rd/2);facadeGroup.add(rl);
+      }
+      // ── Appui (retour bas) ──
       if(r.app>0){
-        const gFace=new THREE.BoxGeometry(ow+fv*2,fv,0.004);const mFace=new THREE.Mesh(gFace,appMat);
-        mFace.position.set(ox+ow/2,Hm-(oy+oh+fv/2),fz);facadeGroup.add(mFace);
-        const rdA=r.app/1000||retD_default;const gRetA=new THREE.BoxGeometry(ow,0.005,rdA);const mRetA=new THREE.Mesh(gRetA,appMat);
-        mRetA.position.set(ox+ow/2,Hm-(oy+oh),-rdA/2);facadeGroup.add(mRetA)}
-      // Window glass
-      const glassMat=new THREE.MeshStandardMaterial({color:0x1a3a5f,metalness:0.1,roughness:0.05,transparent:true,opacity:0.5,side:THREE.DoubleSide});
-      const glassGeo=new THREE.PlaneGeometry(ow,oh);const glassMesh=new THREE.Mesh(glassGeo,glassMat);
-      glassMesh.position.set(ox+ow/2,Hm-(oy+oh/2),-(r.tG/1000||retD_default)*0.5);facadeGroup.add(glassMesh);
-    });
+        const rd=r.app/1000;
+        const fa=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,pt),retMat);
+        fa.position.set(ox+ow/2,Hm-(oy+oh+fv/2),pt/2);facadeGroup.add(fa);
+        const ea=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,pt,pt),edgeMat);
+        ea.position.set(ox+ow/2,Hm-(oy+oh+fv),pt/2);facadeGroup.add(ea);
+        const ra=new THREE.Mesh(new THREE.BoxGeometry(ow,pt,rd),retMat);
+        ra.position.set(ox+ow/2,Hm-(oy+oh),-rd/2);facadeGroup.add(ra);
+      }
+      // Vitrage recalé au fond du tableau
+      const glassZ=-(Math.max(r.tG||0,r.tD||0)/1000)*0.65;
+      const gm=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.01,oh-0.01),glassMat);
+      gm.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(gm);
 
-    // Chassis frames around openings
-    const chassisMat=new THREE.MeshStandardMaterial({color:0xaaaaaa,metalness:0.5,roughness:0.4});
-    zone.ouvs.forEach(o=>{
-      const ox=o.x/1000,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
-      const ct=0.04;// chassis thickness
-      // Top
-      const gt=new THREE.BoxGeometry(ow+ct*2,ct,ct);const mt=new THREE.Mesh(gt,chassisMat);
-      mt.position.set(ox+ow/2,Hm-(oy-ct/2),-ct/2);facadeGroup.add(mt);
-      // Bottom
-      const gb=new THREE.BoxGeometry(ow+ct*2,ct,ct);const mb=new THREE.Mesh(gb,chassisMat);
-      mb.position.set(ox+ow/2,Hm-(oy+oh+ct/2),-ct/2);facadeGroup.add(mb);
-      // Left
-      const gl=new THREE.BoxGeometry(ct,oh,ct);const ml=new THREE.Mesh(gl,chassisMat);
-      ml.position.set(ox-ct/2,Hm-(oy+oh/2),-ct/2);facadeGroup.add(ml);
-      // Right
-      const gr=new THREE.BoxGeometry(ct,oh,ct);const mr=new THREE.Mesh(gr,chassisMat);
-      mr.position.set(ox+ow+ct/2,Hm-(oy+oh/2),-ct/2);facadeGroup.add(mr);
+      // ── Chassis aluminium autour de l'ouverture ──
+      const ct=0.035,cd=0.055;// épaisseur et profondeur chassis
+      const cz=glassZ+0.01;
+      // Haut
+      const cTop=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,cd),chassisMat);
+      cTop.position.set(ox+ow/2,Hm-(oy-ct/2),cz-cd/2);chassisGroup.add(cTop);
+      // Bas
+      const cBot=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,cd),chassisMat);
+      cBot.position.set(ox+ow/2,Hm-(oy+oh+ct/2),cz-cd/2);chassisGroup.add(cBot);
+      // Gauche
+      const cL=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,cd),chassisMat);
+      cL.position.set(ox-ct/2,Hm-(oy+oh/2),cz-cd/2);chassisGroup.add(cL);
+      // Droite
+      const cR=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,cd),chassisMat);
+      cR.position.set(ox+ow+ct/2,Hm-(oy+oh/2),cz-cd/2);chassisGroup.add(cR);
     });
+    facadeGroup.add(chassisGroup);
 
-    // Ossature (montants as vertical bars behind panels) - toggleable
+    // ── Ossature + Équerres + Fixations ──
     const ossGroup=new THREE.Group();
+    const bracketsGroup=new THREE.Group();
+    bracketsGroupRef.current=bracketsGroup;
     const eM=zone.oss.eM/1000,eLi=zone.oss.eL/1000;
-    for(let i=0;i<Math.floor(Lm/eM)+1;i++){
-      const mx=i*eM;if(mx>Lm)break;
-      // Split montant around openings (interrupted, not removed)
-      let segments=[{y1:0,y2:Hm}];
-      zone.ouvs.forEach(o=>{const oT=o.y/1000,oB=(o.y+o.h)/1000,oL=o.x/1000,oR=(o.x+o.w)/1000;
-        if(mx<oL+0.01||mx>oR-0.01)return;// montant not inside this opening
-        const ns=[];segments.forEach(s=>{
+    const mW=0.06,mD=0.04;// montant section (60x40mm omega)
+    const lW=0.04,lD=0.04;// lisse section (40x40mm)
+    const ossZ=-mD/2-0.002;// z de l'ossature (derrière les panneaux)
+
+    // Montants verticaux — profil oméga (3 faces)
+    const montantsX=[];
+    for(let i=0;i<=Math.floor(Lm/eM);i++){
+      const mx=i*eM;if(mx>Lm+0.001)break;
+      montantsX.push(mx);
+      let segs=[{y1:0,y2:Hm}];
+      zone.ouvs.forEach(o=>{
+        const oT=o.y/1000,oB=(o.y+o.h)/1000,oL=o.x/1000,oR=(o.x+o.w)/1000;
+        if(mx<oL+0.01||mx>oR-0.01)return;
+        const ns=[];segs.forEach(s=>{
           if(oT>=s.y2||oB<=s.y1){ns.push(s);return}
           if(s.y1<oT)ns.push({y1:s.y1,y2:oT});
           if(oB<s.y2)ns.push({y1:oB,y2:s.y2});
-        });segments=ns;
+        });segs=ns;
       });
-      segments.forEach(s=>{
+      segs.forEach(s=>{
         const sh=s.y2-s.y1;if(sh<0.02)return;
-        const g=new THREE.BoxGeometry(0.05,sh,0.05);const m=new THREE.Mesh(g,ossMat);
-        m.position.set(mx,Hm-s.y1-sh/2,-0.04);ossGroup.add(m);
+        // Corps montant
+        const g=new THREE.BoxGeometry(mW,sh,mD);const m=new THREE.Mesh(g,ossMat);
+        m.position.set(mx,Hm-s.y1-sh/2,ossZ);ossGroup.add(m);
+        // Ailette gauche et droite (profil U)
+        const aw=0.01,ah=sh;
+        const al=new THREE.Mesh(new THREE.BoxGeometry(aw,ah,0.012),ossMat);
+        al.position.set(mx-mW/2-aw/2,Hm-s.y1-sh/2,ossZ+mD/2-0.005);ossGroup.add(al);
+        const ar=new THREE.Mesh(new THREE.BoxGeometry(aw,ah,0.012),ossMat);
+        ar.position.set(mx+mW/2+aw/2,Hm-s.y1-sh/2,ossZ+mD/2-0.005);ossGroup.add(ar);
       });
     }
-    // Lisses
-    for(let i=0;i<Math.floor(Hm/eLi)+1;i++){
-      const ly=i*eLi;if(ly>Hm)break;
+    // Lisses horizontales
+    const lissesY=[];
+    for(let i=0;i<=Math.floor(Hm/eLi);i++){
+      const ly=i*eLi;if(ly>Hm+0.001)break;
+      lissesY.push(ly);
       let segs=[{x1:0,x2:Lm}];
-      zone.ouvs.forEach(o=>{const oT=o.y/1000,oB=(o.y+o.h)/1000,oL=o.x/1000,oR=(o.x+o.w)/1000;
+      zone.ouvs.forEach(o=>{
+        const oT=o.y/1000,oB=(o.y+o.h)/1000,oL=o.x/1000,oR=(o.x+o.w)/1000;
         if(ly<oT+0.01||ly>oB-0.01)return;
         const ns=[];segs.forEach(s=>{
           if(oL>=s.x2||oR<=s.x1){ns.push(s);return}
@@ -727,11 +805,44 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
       });
       segs.forEach(s=>{
         const sw=s.x2-s.x1;if(sw<0.02)return;
-        const g=new THREE.BoxGeometry(sw,0.04,0.04);const m=new THREE.Mesh(g,ossMat);
-        m.position.set(s.x1+sw/2,Hm-ly,-0.04);ossGroup.add(m);
+        const g=new THREE.BoxGeometry(sw,lW,lD);const m=new THREE.Mesh(g,ossMat);
+        m.position.set(s.x1+sw/2,Hm-ly,ossZ-mD/2-lD/2+0.002);ossGroup.add(m);
       });
     }
+    // ── Équerres aux intersections montant × lisse ──
+    const eqMat=new THREE.MeshStandardMaterial({color:0x707070,metalness:0.8,roughness:0.2});
+    const eqThick=0.004,eqW=0.05,eqH=0.05;
+    montantsX.forEach(mx=>{
+      lissesY.forEach(ly=>{
+        // Vérifier si cette intersection est dans une ouverture
+        const inOpening=zone.ouvs.some(o=>{
+          const oL=o.x/1000,oR=(o.x+o.w)/1000,oT=o.y/1000,oB=(o.y+o.h)/1000;
+          return mx>oL+0.01&&mx<oR-0.01&&ly>oT+0.01&&ly<oB-0.01;
+        });
+        if(inOpening)return;
+        const ex=mx,ey=Hm-ly,ez=ossZ;
+        // Aile verticale de l'équerre
+        const ev=new THREE.Mesh(new THREE.BoxGeometry(eqThick,eqH,mD+0.004),eqMat);
+        ev.position.set(ex+mW/2+eqThick/2,ey,ez);bracketsGroup.add(ev);
+        // Aile horizontale de l'équerre
+        const eh=new THREE.Mesh(new THREE.BoxGeometry(eqW,eqThick,mD+0.004),eqMat);
+        eh.position.set(ex+mW/2+eqW/2,ey+eqH/2,ez);bracketsGroup.add(eh);
+        // Vis de fixation (cylindre aplati) sur l'aile verticale
+        const boltR=0.005,boltH=0.003;
+        const bv=new THREE.Mesh(new THREE.CylinderGeometry(boltR,boltR,boltH,8),boltMat);
+        bv.rotation.z=Math.PI/2;
+        bv.position.set(ex+mW/2+eqThick+boltH/2,ey+eqH*0.3,ez+0.008);bracketsGroup.add(bv);
+        const bv2=new THREE.Mesh(new THREE.CylinderGeometry(boltR,boltR,boltH,8),boltMat);
+        bv2.rotation.z=Math.PI/2;
+        bv2.position.set(ex+mW/2+eqThick+boltH/2,ey-eqH*0.3,ez+0.008);bracketsGroup.add(bv2);
+        // Vis sur l'aile horizontale
+        const bh=new THREE.Mesh(new THREE.CylinderGeometry(boltR,boltR,boltH,8),boltMat);
+        bh.rotation.x=Math.PI/2;
+        bh.position.set(ex+mW/2+eqW*0.6,ey+eqH/2,ez+0.008);bracketsGroup.add(bh);
+      });
+    });
     facadeGroup.add(ossGroup);
+    facadeGroup.add(bracketsGroup);
 
     scene.add(facadeGroup);sceneRef.current={scene,camera,renderer,facadeGroup};
 
@@ -776,11 +887,16 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     const plinth=new THREE.Mesh(plinthGeo,plinthMat);
     plinth.position.set(0,-Hm/2-0.04,0.07);scene.add(plinth);
 
+    // Refs pour toggle visibilité sans recréer la scène
+    sceneRef.current={scene,camera,renderer,ossGroup,chassisGroup,bracketsGroup};
+
     // Render loop
     const animate=()=>{
       frameRef.current=requestAnimationFrame(animate);
       const d=zoomRef.current;
       ossGroup.visible=showOss3D;
+      chassisGroup.visible=showChassis;
+      bracketsGroup.visible=showBrackets&&showOss3D;
       const px=panRef.current.x,py=panRef.current.y;
       camera.position.set(px+d*Math.sin(rotRef.current.y)*Math.cos(rotRef.current.x),
         py+d*Math.sin(rotRef.current.x),d*Math.cos(rotRef.current.y)*Math.cos(rotRef.current.x));
@@ -880,41 +996,102 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     };
   },[zone,calc,ralColor,ralFinish,showOss3D,showWall]);
 
-  return<div style={{position:'absolute',inset:0,zIndex:10,background:'#1a1a2a'}}>
-    {/* Canvas Three.js — touchAction:none bloque le scroll page Safari */}
+  // ── Styles communs boutons 3D ──
+  const bBase={WebkitTapHighlightColor:'transparent',WebkitBackdropFilter:'blur(10px)',backdropFilter:'blur(10px)',
+    border:'none',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+    transition:'all .15s',fontFamily:'DM Sans,sans-serif'};
+  const bOff={...bBase,background:'rgba(20,22,38,.82)',color:'rgba(255,255,255,.55)'};
+  const bOn={...bBase,background:'rgba(79,110,247,.28)',color:'#93c5fd'};
+  const bGreen={...bBase,background:'rgba(16,185,129,.25)',color:'#6ee7b7'};
+  const bAmber={...bBase,background:'rgba(245,158,11,.22)',color:'#fbbf24'};
+  const bRed={...bBase,background:'rgba(139,26,43,.35)',color:'#fca5a5'};
+
+  // Icônes SVG inline légères
+  const IC={
+    back:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>,
+    reset:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>,
+    face:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>,
+    oss:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="3"/></svg>,
+    chassis:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="1"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>,
+    bracket:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 19V5h7M5 12h7"/><circle cx="16" cy="8" r="2"/><circle cx="16" cy="16" r="2"/></svg>,
+    wall:<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="3" width="20" height="18" rx="1"/><path d="M2 9h20M2 15h20M8 9v6M14 3v6M14 15v6"/></svg>,
+  };
+
+  const Btn=({icon,label,active,color,onClick,style={}})=>{
+    const s=color==='green'?bGreen:color==='amber'?bAmber:color==='red'?bRed:active?bOn:bOff;
+    return<button onClick={onClick} style={{...s,borderRadius:12,gap:4,
+      boxShadow:active?'0 0 0 1px rgba(79,110,247,.4)':'0 0 0 1px rgba(255,255,255,.08)',...style}}>
+      {icon}
+      <span style={{fontSize:9,fontWeight:600,letterSpacing:.3,textTransform:'uppercase',lineHeight:1}}>{label}</span>
+    </button>;
+  };
+
+  return<div style={{position:'absolute',inset:0,zIndex:10,background:'#13151f'}}>
     <div ref={mountRef} style={{position:'absolute',inset:0,cursor:'grab',touchAction:'none',userSelect:'none'}}/>
-    {/* Overlay boutons — position absolute AU-DESSUS du canvas, pointerEvents ciblés */}
     <div style={{position:'absolute',inset:0,zIndex:20,pointerEvents:'none'}}>
-      {/* Haut gauche */}
-      <div style={{position:'absolute',top:12,left:12,display:'flex',gap:8,alignItems:'center',pointerEvents:'auto'}}>
-        <button onClick={onClose} className="ba px-3 py-2 rounded-lg text-xs font-bold text-white"
-          style={{background:'rgba(79,110,247,.9)',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',WebkitTapHighlightColor:'transparent',minHeight:44}}>← Vue 2D</button>
-        <button onClick={()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}} className="ba px-3 py-2 rounded-lg text-xs font-medium"
-          style={{background:'rgba(30,30,50,.85)',color:'#fff',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',border:'1px solid rgba(255,255,255,.15)',WebkitTapHighlightColor:'transparent',minHeight:44}}>⟲ Reset</button>
-        <button onClick={()=>{rotRef.current={x:0,y:0};zoomRef.current=3}} className="ba px-3 py-2 rounded-lg text-xs font-medium"
-          style={{background:'rgba(30,30,50,.85)',color:'#fff',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',border:'1px solid rgba(255,255,255,.15)',WebkitTapHighlightColor:'transparent',minHeight:44}}>⊡ Face</button>
-        <button onClick={()=>setShowOss3D(v=>!v)} className="ba px-3 py-2 rounded-lg text-xs font-medium"
-          style={{background:showOss3D?'rgba(245,158,11,.3)':'rgba(30,30,50,.85)',color:showOss3D?'#fbbf24':'#fff',
-            WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',border:`1px solid ${showOss3D?'rgba(245,158,11,.5)':'rgba(255,255,255,.15)'}`,WebkitTapHighlightColor:'transparent',minHeight:44}}>
-          {showOss3D?'Masquer':'Afficher'} ossature</button>
-      </div>
-      {/* Haut droite — bouton mur béton */}
-      <div style={{position:'absolute',top:12,right:12,pointerEvents:'auto'}}>
-        <button onClick={()=>onToggle('wall')} className="ba px-3 py-2 rounded-lg text-[11px] font-bold"
-          style={{background:showWall?'rgba(79,110,247,.35)':'rgba(30,30,50,.85)',
-            color:showWall?'#93c5fd':'#aaa',
-            WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',
-            border:`1px solid ${showWall?'rgba(79,110,247,.6)':'rgba(255,255,255,.15)'}`,
-            WebkitTapHighlightColor:'transparent',minHeight:44,minWidth:100}}>
-          {showWall?'✓ Mur béton':'○ Mur béton'}</button>
-      </div>
-      {/* Bas centre — infos */}
-      <div style={{position:'absolute',bottom:12,left:'50%',transform:'translateX(-50%)',display:'flex',gap:10,alignItems:'center',
-        background:'rgba(10,12,20,.8)',borderRadius:10,padding:'6px 16px',WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',whiteSpace:'nowrap'}}>
-        <span style={{fontSize:10,fontFamily:'monospace',color:'rgba(255,255,255,.4)'}}>1 doigt: rotation · 2 doigts: pan+zoom</span>
-        <span style={{fontSize:10,fontFamily:'monospace',padding:'2px 8px',borderRadius:6,background:'rgba(79,110,247,.2)',color:'#93c5fd'}}>
-          {(zone.L/1000).toFixed(2)}×{(zone.H/1000).toFixed(2)} m · {calc.nP} pan.</span>
-      </div>
+
+      {/* ── VERSION MOBILE : bottom dock ── */}
+      {isMobile&&<>
+        {/* Haut : bouton retour + infos zone */}
+        <div style={{position:'absolute',top:0,left:0,right:0,pointerEvents:'auto',
+          display:'flex',alignItems:'center',gap:8,padding:'8px 12px',
+          background:'linear-gradient(180deg,rgba(10,12,20,.95) 0%,transparent 100%)'}}>
+          <Btn icon={IC.back} label="2D" color="red" active={false} onClick={onClose}
+            style={{minWidth:48,minHeight:48}}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#fff',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{zone.name||'Façade'}</div>
+            <div style={{fontSize:9,color:'rgba(255,255,255,.4)',fontFamily:'monospace'}}>
+              {(zone.L/1000).toFixed(2)}×{(zone.H/1000).toFixed(2)} m · {calc.nP} pan.
+            </div>
+          </div>
+          <Btn icon={IC.reset} label="Reset" active={false} onClick={()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}}
+            style={{minWidth:48,minHeight:48}}/>
+          <Btn icon={IC.face} label="Face" active={false} onClick={()=>{rotRef.current={x:0,y:0};zoomRef.current=3}}
+            style={{minWidth:48,minHeight:48}}/>
+        </div>
+        {/* Bas : dock toggles */}
+        <div style={{position:'absolute',bottom:0,left:0,right:0,pointerEvents:'auto',
+          padding:'8px 12px 16px',
+          background:'linear-gradient(0deg,rgba(10,12,20,.95) 0%,transparent 100%)'}}>
+          <div style={{display:'flex',gap:8,justifyContent:'center'}}>
+            {[
+              {icon:IC.oss,label:'Oss.',active:showOss3D,fn:()=>setShowOss3D(v=>!v),c:'amber'},
+              {icon:IC.bracket,label:'Équerres',active:showBrackets,fn:()=>setShowBrackets(v=>!v),c:'amber'},
+              {icon:IC.chassis,label:'Chassis',active:showChassis,fn:()=>setShowChassis(v=>!v),c:'green'},
+              {icon:IC.wall,label:'Béton',active:showWall,fn:()=>onToggle('wall'),c:'blue'},
+            ].map(({icon,label,active,fn,c})=><Btn key={label} icon={icon} label={label}
+              active={active} color={active?(c==='amber'?'amber':c==='green'?'green':''):''}
+              onClick={fn} style={{flex:1,minHeight:52,maxWidth:90}}/>)}
+          </div>
+          <div style={{textAlign:'center',marginTop:6,fontSize:9,color:'rgba(255,255,255,.25)',fontFamily:'monospace'}}>
+            1 doigt: rotation · 2 doigts: déplacer + zoom
+          </div>
+        </div>
+      </>}
+
+      {/* ── VERSION DESKTOP : top bars ── */}
+      {!isMobile&&<>
+        <div style={{position:'absolute',top:12,left:12,display:'flex',gap:6,alignItems:'center',pointerEvents:'auto'}}>
+          <Btn icon={IC.back} label="Vue 2D" color="red" active={false} onClick={onClose} style={{minWidth:64,minHeight:40}}/>
+          <Btn icon={IC.reset} label="Reset" active={false} onClick={()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}} style={{minWidth:56,minHeight:40}}/>
+          <Btn icon={IC.face} label="Face" active={false} onClick={()=>{rotRef.current={x:0,y:0};zoomRef.current=3}} style={{minWidth:56,minHeight:40}}/>
+          <div style={{width:1,height:32,background:'rgba(255,255,255,.1)',margin:'0 2px'}}/>
+          <Btn icon={IC.oss} label="Ossature" active={showOss3D} color={showOss3D?'amber':''} onClick={()=>setShowOss3D(v=>!v)} style={{minWidth:72,minHeight:40}}/>
+          <Btn icon={IC.bracket} label="Équerres" active={showBrackets} color={showBrackets?'amber':''} onClick={()=>setShowBrackets(v=>!v)} style={{minWidth:72,minHeight:40}}/>
+          <Btn icon={IC.chassis} label="Chassis" active={showChassis} color={showChassis?'green':''} onClick={()=>setShowChassis(v=>!v)} style={{minWidth:72,minHeight:40}}/>
+        </div>
+        <div style={{position:'absolute',top:12,right:12,display:'flex',gap:6,alignItems:'center',pointerEvents:'auto'}}>
+          <Btn icon={IC.wall} label="Mur béton" active={showWall} onClick={()=>onToggle('wall')} style={{minWidth:80,minHeight:40}}/>
+        </div>
+        <div style={{position:'absolute',bottom:12,left:'50%',transform:'translateX(-50%)',
+          display:'flex',gap:10,alignItems:'center',pointerEvents:'none',
+          background:'rgba(10,12,20,.75)',borderRadius:8,padding:'5px 14px',
+          WebkitBackdropFilter:'blur(8px)',backdropFilter:'blur(8px)',whiteSpace:'nowrap'}}>
+          <span style={{fontSize:10,color:'rgba(255,255,255,.35)',fontFamily:'monospace'}}>Drag: rotation · Shift+drag: pan · Molette: zoom</span>
+          <span style={{fontSize:10,fontFamily:'monospace',padding:'2px 8px',borderRadius:5,background:'rgba(79,110,247,.2)',color:'#93c5fd'}}>
+            {(zone.L/1000).toFixed(2)}×{(zone.H/1000).toFixed(2)} m · {calc.nP} pan.</span>
+        </div>
+      </>}
     </div>
   </div>;
 }
