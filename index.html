@@ -904,6 +904,7 @@ function makeQRDataURL(text,sizeMM){
 // ── VIEWER MODE (standalone 3D from QR scan) ──
 function ViewerApp({viewId}){
   const[data,setData]=useState(null);const[err,setErr]=useState(null);const[loading,setLoading]=useState(true);
+  const[showWall,setShowWall]=useState(true);
   useEffect(()=>{
     // Read supabase config from URL params (embedded in QR link) or fallback to localStorage
     const params=new URLSearchParams(window.location.search);
@@ -922,7 +923,7 @@ function ViewerApp({viewId}){
   const zone=JSON.parse(data.zone_json);const calc=JSON.parse(data.calc_json);
   return<div style={{width:'100vw',height:'100vh',position:'relative'}}>
     <Facade3D zone={zone} calc={calc} ralColor={data.ral_color||'#383E42'} ralFinish={data.ral_finish||'mat'}
-      showWall={true} onToggle={()=>{}} onClose={()=>window.location.href=window.location.pathname}/>
+      showWall={showWall} onToggle={k=>{if(k==='wall')setShowWall(v=>!v);}} onClose={()=>window.location.href=window.location.pathname}/>
     <div style={{position:'absolute',top:16,left:16,zIndex:100,background:'rgba(0,0,0,.7)',padding:'10px 16px',borderRadius:12,color:'#fff',fontFamily:'DM Sans'}}>
       <div style={{fontSize:14,fontWeight:700}}>{data.project_name}</div>
       <div style={{fontSize:11,opacity:.7}}>{data.zone_name} — {zone.L/1000}×{zone.H/1000}m</div>
