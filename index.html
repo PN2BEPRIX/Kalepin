@@ -517,6 +517,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     renderer.shadowMap.enabled=true;
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
+    renderer.domElement.style.pointerEvents='auto';// canvas reçoit les events, le div parent ne bloque pas les boutons
 
     // ── Lumières ──
     // Lumière ambiante douce (ciel couvert)
@@ -1008,7 +1009,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
   const uiZ={position:'absolute',zIndex:30};
   return<div style={{position:'absolute',inset:0,zIndex:10,background:'#13151f'}}>
     {/* Canvas 3D — aucun pointer event sur ce div, seulement sur le canvas interne via addEventListener */}
-    <div ref={mountRef} style={{position:'absolute',inset:0,touchAction:'none'}}/>
+    <div ref={mountRef} style={{position:'absolute',inset:0,touchAction:'none',pointerEvents:'none'}}/>
 
     {/* ── MOBILE : haut + bas ── */}
     {isMobile&&<>
