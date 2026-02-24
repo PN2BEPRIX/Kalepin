@@ -3,7 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Kalepin v17 — Bardage & Encadrements</title>
+  <title>Kalepin — Calepinage Bardage Pro</title>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#c4324a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Kalepin">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="description" content="Outil professionnel de calepinage bardage metallique avec vue 3D, export PDF et metres">
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -22,13 +30,13 @@
   </script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    :root{--bg:#f5f2ee;--pnl:#ffffff;--crd:#f9f6f3;--crd2:#f0ece6;--inp:#ffffff;--bd:#ddd5cc;--bd2:#c4b8ab;--bdf:#8b1a2b;--t1:#2a1a1e;--t2:#6b5860;--t3:#9a8890;--bl:#8b1a2b;--blg:rgba(139,26,43,.10);--gn:#0d9488;--gnd:rgba(13,148,136,.08);--am:#b45309;--amd:rgba(180,83,9,.08);--rs:#be123c;--rsd:rgba(190,18,60,.08);--pp:#8b1a2b;--ppd:rgba(139,26,43,.06);--cy:#0891b2;--cyd:rgba(8,145,178,.08)}
+    :root{--bg:#0a0a0f;--pnl:#16161f;--crd:#1c1c28;--crd2:#22222e;--inp:#1a1a26;--bd:#2a2a3a;--bd2:#3a3a4e;--bdf:#c4324a;--t1:#f0ece6;--t2:#9a9aac;--t3:#5a5a6e;--bl:#c4324a;--blg:rgba(196,50,74,.15);--gn:#10b981;--gnd:rgba(16,185,129,.10);--am:#f59e0b;--amd:rgba(245,158,11,.10);--rs:#ef4444;--rsd:rgba(239,68,68,.10);--pp:#c4324a;--ppd:rgba(196,50,74,.08);--cy:#0ea5e9;--cyd:rgba(14,165,233,.10)}
     *{font-family:'DM Sans',system-ui,sans-serif;box-sizing:border-box;margin:0}
     html,body,#root{height:100%;overflow:hidden;background:var(--bg);color:var(--t1)}
     .mn{font-family:'JetBrains Mono',monospace}
-    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:10px}
+    ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:10px}
     input[type=number]{-moz-appearance:textfield}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
-    .idark{background:var(--inp);border:1.5px solid var(--bd);color:var(--t1);transition:.2s}.idark:focus{border-color:var(--bdf);box-shadow:0 0 0 3px rgba(139,26,43,.1);outline:none}
+    .idark{background:var(--inp);border:1.5px solid var(--bd);color:var(--t1);transition:.2s}.idark:focus{border-color:var(--bdf);box-shadow:0 0 0 3px rgba(196,50,74,.15);outline:none}
     .cd{background:var(--crd);border:1px solid var(--bd);transition:.2s;border-radius:12px}.cd:hover{border-color:var(--bd2)}
     .ba{transition:.15s;cursor:pointer;user-select:none}.ba:active{transform:scale(.97)}
     .rv{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:.92rem;letter-spacing:-.02em}
@@ -36,24 +44,24 @@
     @keyframes pg{0%,100%{box-shadow:0 0 8px var(--blg)}50%{box-shadow:0 0 20px var(--blg)}}
     .afu{animation:fu .25s ease-out}.apg{animation:pg 2s ease-in-out infinite}
     .pb{background:var(--inp);border:1px solid var(--bd);color:var(--t2);cursor:pointer;transition:.15s;font-size:10px;padding:5px 7px;border-radius:7px;text-align:left}
-    .pb:hover{border-color:var(--bl);color:var(--t1);background:rgba(139,26,43,.05)}.pb.on{border-color:var(--bl);color:var(--bl);background:rgba(139,26,43,.08)}
+    .pb:hover{border-color:var(--bl);color:var(--t1);background:rgba(196,50,74,.08)}.pb.on{border-color:var(--bl);color:var(--bl);background:rgba(196,50,74,.12)}
     .tb{padding:6px 8px;font-size:10px;font-weight:500;color:var(--t3);cursor:pointer;transition:.2s;border-bottom:2px solid transparent;white-space:nowrap}
     .tb:hover{color:var(--t2)}.tb.on{color:var(--bl);border-bottom-color:var(--bl)}
-    .ov{position:fixed;inset:0;background:rgba(42,26,30,.3);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-    .mbx{background:var(--pnl);border:1px solid var(--bd);border-radius:16px;padding:24px;min-width:380px;max-width:520px;box-shadow:0 25px 60px rgba(42,26,30,.12);max-height:90vh;overflow-y:auto}
+    .ov{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+    .mbx{background:var(--pnl);border:1px solid var(--bd);border-radius:16px;padding:24px;min-width:380px;max-width:520px;box-shadow:0 25px 60px rgba(0,0,0,.5);max-height:90vh;overflow-y:auto}
     .rng{-webkit-appearance:none;appearance:none;width:100%;height:4px;background:var(--bd);border-radius:4px;outline:none}
     .rng::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;background:var(--bl);border-radius:50%;cursor:pointer;border:2px solid var(--pnl)}
-    .cvbg{background-color:#eee9e3;background-image:radial-gradient(#d8d0c6 1px,transparent 1px);background-size:24px 24px}
-    .drop{border:2px dashed var(--bd);border-radius:16px;transition:.3s;cursor:pointer}.drop:hover{border-color:var(--bl);background:rgba(139,26,43,.04)}
+    .cvbg{background-color:#0e0e18;background-image:radial-gradient(rgba(196,50,74,.08) 1px,transparent 1px);background-size:24px 24px}
+    .drop{border:2px dashed var(--bd2);border-radius:16px;transition:.3s;cursor:pointer}.drop:hover{border-color:var(--bl);background:rgba(196,50,74,.06)}
     .ztab{display:flex;align-items:center;gap:5px;padding:5px 11px;font-size:10px;font-weight:600;border-radius:6px 6px 0 0;cursor:pointer;transition:.15s;border:1px solid transparent;border-bottom:none;position:relative;white-space:nowrap;max-width:160px}
-    .ztab:hover{background:var(--crd2)}.ztab.on{background:var(--pnl);border-color:var(--bd);margin-bottom:-1px;z-index:2;padding-bottom:6px}
+    .ztab:hover{background:var(--crd)}.ztab.on{background:var(--pnl);border-color:var(--bd);margin-bottom:-1px;z-index:2;padding-bottom:6px}
     .ztab .ztab-close{opacity:0;width:14px;height:14px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;transition:.1s}
     .ztab:hover .ztab-close,.ztab.on .ztab-close{opacity:.5}.ztab .ztab-close:hover{opacity:1!important;background:var(--rsd);color:var(--rs)}
     .ztab-bar{display:flex;align-items:flex-end;gap:2px;overflow-x:auto;scrollbar-width:none;padding:0 4px;flex:1;min-width:0}
     .ztab-bar::-webkit-scrollbar{display:none}
     .ztab-add{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-size:14px;cursor:pointer;flex-shrink:0;opacity:.6;transition:.15s}
     .ztab-add:hover{opacity:1;background:var(--blg);color:var(--bl)}
-    .dtbl{width:100%;border-collapse:collapse;font-size:10px}.dtbl th{text-align:left;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--bd);color:var(--t3);font-size:9px;text-transform:uppercase}.dtbl td{padding:4px 6px;border-bottom:1px solid rgba(39,45,66,.4)}
+    .dtbl{width:100%;border-collapse:collapse;font-size:10px}.dtbl th{text-align:left;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--bd);color:var(--t3);font-size:9px;text-transform:uppercase}.dtbl td{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.05)}
     .imp-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600}
     @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
     @keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
@@ -66,7 +74,7 @@
     .wc-d2{animation:slideUp .6s ease-out both;animation-delay:.3s}.wc-d3{animation:slideUp .6s ease-out both;animation-delay:.45s}
     .wc-d4{animation:slideUp .6s ease-out both;animation-delay:.6s}
     .wc-glow{animation:glow 2.5s ease-in-out infinite}
-    .wc-shine{background:linear-gradient(90deg,transparent,rgba(79,110,247,.15),transparent);background-size:200% 100%;animation:shimmer 3s linear infinite}
+    .wc-shine{background:linear-gradient(90deg,transparent,rgba(196,50,74,.15),transparent);background-size:200% 100%;animation:shimmer 3s linear infinite}
     .opt-card{border:1px solid var(--bd);border-radius:10px;padding:10px;cursor:pointer;transition:.15s}
     .opt-card:hover{border-color:var(--bl)}.opt-card.best{border-color:var(--gn);background:var(--gnd)}
   </style>
@@ -500,6 +508,10 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
   const rotRef=useRef({x:-.3,y:.4});const dragRef=useRef(null);const zoomRef=useRef(3);
   const panRef=useRef({x:0,y:0});const pinchRef=useRef(null);
   const[showOss3D,setShowOss3D]=useState(true);
+  const[showInsul,setShowInsul]=useState(true);
+  const[insulThick,setInsulThick]=useState(100);// mm
+  const[showScaff,setShowScaff]=useState(false);
+  const[scaff,setScaff]=useState({x:0,y:0,nBays:3,nLevels:3,bayW:2.57,levelH:2.0,dist:0.8,scaffW:0.73});// standard EU dimensions
   const[isMobile,setIsMobile]=useState(()=>window.innerWidth<640);
   useEffect(()=>{const h=()=>setIsMobile(window.innerWidth<640);window.addEventListener('resize',h);return()=>window.removeEventListener('resize',h);},[]);
 
@@ -516,6 +528,8 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     renderer.shadowMap.type=THREE.PCFShadowMap;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
+    renderer.domElement.style.pointerEvents='auto';
+    renderer.domElement.style.cursor='grab';
 
     // ── Lumières ──
     // Lumière ambiante douce (ciel couvert)
@@ -684,9 +698,8 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
 
     // ── Matériaux retours : même finition RAL que les cassettes ──
     const retMat=new THREE.MeshStandardMaterial({color:baseColor.clone(),metalness:panMetal,roughness:panRough+0.05,
-      envMap:cubeRT.texture,envMapIntensity:isBrillant?0.9:0.2});
-    // Matériau bord coupé (chant de tôle) : légèrement plus foncé, mat
-    const edgeMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.7),metalness:0.3,roughness:0.65});
+      envMap:cubeRT.texture,envMapIntensity:isBrillant?0.9:0.2,
+      polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
     // ── Vitrage double couche (fond sombre + reflet) ──
     const glassBackMat=new THREE.MeshStandardMaterial({
       color:0x1a2a3a,metalness:0.0,roughness:0.95,transparent:true,opacity:0.6,side:THREE.DoubleSide});
@@ -698,45 +711,63 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
       envMap:cubeRT.texture,envMapIntensity:0.6});
 
     // ── Retours + Vitrages pour chaque ouverture ──
+    const sheetT=0.003;// épaisseur tôle 3mm
     zoneOuvs.forEach(o=>{
       const ox=o.x/1000,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
       const r=o.retours||{tG:150,tD:150,lin:150,app:150};
       const fv=(o.faceVis||50)/1000;
-      const pt=depth;
-      // Tableau G
-      if(r.tG>0){const rd=r.tG/1000;
-        const fg=new THREE.Mesh(new THREE.BoxGeometry(fv,oh,pt),retMat);fg.position.set(ox-fv/2,Hm-(oy+oh/2),pt/2);facadeGroup.add(fg);
-        const eg=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,pt),edgeMat);eg.position.set(ox-fv,Hm-(oy+oh/2),pt/2);facadeGroup.add(eg);
-        const rg=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,rd),retMat);rg.position.set(ox,Hm-(oy+oh/2),-rd/2);facadeGroup.add(rg);
+      const panZ=depth+0.001;// juste devant les panneaux
+
+      // ── RETOURS en profondeur (perpendiculaires à la facade, dans l'épaisseur du mur) ──
+      const rTG=r.tG/1000,rTD=r.tD/1000,rLin=r.lin/1000,rApp=r.app/1000;
+      // Tableau Gauche — retour en profondeur
+      if(rTG>0){
+        const rg=new THREE.Mesh(new THREE.BoxGeometry(sheetT,oh,rTG),retMat);
+        rg.position.set(ox-sheetT/2,Hm-(oy+oh/2),-rTG/2);facadeGroup.add(rg);
       }
-      // Tableau D
-      if(r.tD>0){const rd=r.tD/1000;
-        const fd=new THREE.Mesh(new THREE.BoxGeometry(fv,oh,pt),retMat);fd.position.set(ox+ow+fv/2,Hm-(oy+oh/2),pt/2);facadeGroup.add(fd);
-        const ed=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,pt),edgeMat);ed.position.set(ox+ow+fv,Hm-(oy+oh/2),pt/2);facadeGroup.add(ed);
-        const rd2=new THREE.Mesh(new THREE.BoxGeometry(pt,oh,rd),retMat);rd2.position.set(ox+ow,Hm-(oy+oh/2),-rd/2);facadeGroup.add(rd2);
+      // Tableau Droit — retour en profondeur
+      if(rTD>0){
+        const rd2=new THREE.Mesh(new THREE.BoxGeometry(sheetT,oh,rTD),retMat);
+        rd2.position.set(ox+ow+sheetT/2,Hm-(oy+oh/2),-rTD/2);facadeGroup.add(rd2);
       }
-      // Linteau
-      if(r.lin>0){const rd=r.lin/1000;
-        const fl=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,pt),retMat);fl.position.set(ox+ow/2,Hm-(oy-fv/2),pt/2);facadeGroup.add(fl);
-        const el=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,pt,pt),edgeMat);el.position.set(ox+ow/2,Hm-(oy-fv),pt/2);facadeGroup.add(el);
-        const rl=new THREE.Mesh(new THREE.BoxGeometry(ow,pt,rd),retMat);rl.position.set(ox+ow/2,Hm-oy,-rd/2);facadeGroup.add(rl);
+      // Linteau — retour en profondeur
+      if(rLin>0){
+        const rl=new THREE.Mesh(new THREE.BoxGeometry(ow,sheetT,rLin),retMat);
+        rl.position.set(ox+ow/2,Hm-oy+sheetT/2,-rLin/2);facadeGroup.add(rl);
       }
-      // Appui
-      if(r.app>0){const rd=r.app/1000;
-        const fa=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,pt),retMat);fa.position.set(ox+ow/2,Hm-(oy+oh+fv/2),pt/2);facadeGroup.add(fa);
-        const ea=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,pt,pt),edgeMat);ea.position.set(ox+ow/2,Hm-(oy+oh+fv),pt/2);facadeGroup.add(ea);
-        const ra=new THREE.Mesh(new THREE.BoxGeometry(ow,pt,rd),retMat);ra.position.set(ox+ow/2,Hm-(oy+oh),-rd/2);facadeGroup.add(ra);
+      // Appui — retour en profondeur
+      if(rApp>0){
+        const ra=new THREE.Mesh(new THREE.BoxGeometry(ow,sheetT,rApp),retMat);
+        ra.position.set(ox+ow/2,Hm-(oy+oh)-sheetT/2,-rApp/2);facadeGroup.add(ra);
       }
-      // Vitrage double couche — fond sombre + couche reflet
-      const maxRet=Math.max(r.tG||0,r.tD||0,r.lin||0,r.app||0)/1000;
+
+      // ── FACES VISIBLES sur facade (recouvrement de la découpe) ──
+      if(fv>0.001){
+        // Tab G face visible
+        if(rTG>0){const fg=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,sheetT),retMat);
+          fg.position.set(ox-fv/2,Hm-(oy+oh/2),panZ);facadeGroup.add(fg);}
+        // Tab D face visible
+        if(rTD>0){const fd=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,sheetT),retMat);
+          fd.position.set(ox+ow+fv/2,Hm-(oy+oh/2),panZ);facadeGroup.add(fd);}
+        // Linteau face visible
+        if(rLin>0){const fl=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,sheetT),retMat);
+          fl.position.set(ox+ow/2,Hm-(oy-fv/2),panZ);facadeGroup.add(fl);}
+        // Appui face visible
+        if(rApp>0){const fa=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,sheetT),retMat);
+          fa.position.set(ox+ow/2,Hm-(oy+oh+fv/2),panZ);facadeGroup.add(fa);}
+      }
+
+      // ── VITRAGE double couche ──
+      const maxRet=Math.max(rTG,rTD,rLin,rApp);
       const glassZ=-maxRet*0.65;
-      // Couche arrière sombre (simule intérieur du bâtiment)
+      // Couche arrière sombre (simule intérieur)
       const gb=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.008,oh-0.008),glassBackMat);
       gb.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ-0.003);facadeGroup.add(gb);
       // Couche avant réfléchissante
       const gm=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.006,oh-0.006),glassMat);
       gm.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(gm);
-      // Cadre menuiserie alu autour du vitrage
+
+      // ── CADRE MENUISERIE ALU ──
       const ft=0.032,fd2=0.045;
       const fTop=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd2),frameMat);
       fTop.position.set(ox+ow/2,Hm-(oy-ft/2),glassZ);facadeGroup.add(fTop);
@@ -746,24 +777,6 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
       fL.position.set(ox-ft/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(fL);
       const fR=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd2),frameMat);
       fR.position.set(ox+ow+ft/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(fR);
-      // Croisillons (meneau vertical + traverse horizontale)
-      const mw2=0.022;// largeur meneau
-      if(ow>0.8){
-        const nMen=Math.max(1,Math.round(ow/0.8)-1);
-        for(let mi=1;mi<=nMen;mi++){
-          const mxPos=ox+ow*mi/(nMen+1);
-          const men=new THREE.Mesh(new THREE.BoxGeometry(mw2,oh,fd2*0.8),frameMat);
-          men.position.set(mxPos,Hm-(oy+oh/2),glassZ);facadeGroup.add(men);
-        }
-      }
-      if(oh>0.8){
-        const nTrav=Math.max(1,Math.round(oh/0.8)-1);
-        for(let ti=1;ti<=nTrav;ti++){
-          const tyPos=oy+oh*ti/(nTrav+1);
-          const trav=new THREE.Mesh(new THREE.BoxGeometry(ow,mw2,fd2*0.8),frameMat);
-          trav.position.set(ox+ow/2,Hm-tyPos,glassZ);facadeGroup.add(trav);
-        }
-      }
     });
 
     // ── Ossature ──
@@ -773,14 +786,14 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     const lW=0.04,lD=0.04;// lisse section (40x40mm)
     const ossZ=-mD/2-0.002;// z de l'ossature (derrière les panneaux)
 
-    // Pré-calculer les rectangles d'exclusion ossature (ouverture + faceVis + marge)
-    const ossExclusions=zoneOuvs.map(o=>{
-      const fv2=(o.faceVis||50)/1000;const mg2=0.02;// 20mm marge supplémentaire
-      return{
-        l:o.x/1000-fv2-mg2, r:(o.x+o.w)/1000+fv2+mg2,
-        t:o.y/1000-fv2-mg2, b:(o.y+o.h)/1000+fv2+mg2
-      };
-    });
+    // Exclusion ossature = rectangle de l'ouverture élargi de la demi-largeur des montants
+    // pour que rien de visible ne dépasse dans le cadre
+    const halfM=mW/2+0.005;// demi-largeur montant + 5mm
+    const halfL=lW/2+0.005;// demi-largeur lisse + 5mm
+    const ossExclusions=zoneOuvs.map(o=>({
+      l:o.x/1000-halfM, r:(o.x+o.w)/1000+halfM,
+      t:o.y/1000-halfL, b:(o.y+o.h)/1000+halfL
+    }));
 
     // Montants verticaux — profil oméga (3 faces)
     const montantsX=[];
@@ -831,21 +844,206 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     }
     facadeGroup.add(ossGroup);
 
+    // ── Isolant (entre ossature et mur béton) ──
+    const insulGroup=new THREE.Group();
+    const insulD=insulThick/1000;// épaisseur en mètres
+    const insulZ=-mD-0.005;// juste derrière l'ossature
+    const insulMat=new THREE.MeshStandardMaterial({
+      color:0xe8c840,metalness:0.0,roughness:0.95,
+      transparent:true,opacity:0.85
+    });
+    // Découper l'isolant autour des ouvertures
+    // Stratégie: créer des rectangles d'isolant qui évitent les ouvertures
+    // Simple: découpe en bandes horizontales
+    const ouvRects=zoneOuvs.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,t:o.y/1000,b:(o.y+o.h)/1000}));
+    // Créer une grille de rectangles couvrant la facade, découpés autour des ouvertures
+    let insulRects=[{l:0,r:Lm,t:0,b:Hm}];
+    ouvRects.forEach(ouv=>{
+      const next=[];
+      insulRects.forEach(ir=>{
+        // Pas de chevauchement → garder tel quel
+        if(ouv.l>=ir.r||ouv.r<=ir.l||ouv.t>=ir.b||ouv.b<=ir.t){next.push(ir);return}
+        // Découpe: on crée les 4 rectangles autour de l'ouverture
+        if(ir.t<ouv.t)next.push({l:ir.l,r:ir.r,t:ir.t,b:ouv.t});// haut
+        if(ouv.b<ir.b)next.push({l:ir.l,r:ir.r,t:ouv.b,b:ir.b});// bas
+        if(ir.l<ouv.l)next.push({l:ir.l,r:ouv.l,t:Math.max(ir.t,ouv.t),b:Math.min(ir.b,ouv.b)});// gauche
+        if(ouv.r<ir.r)next.push({l:ouv.r,r:ir.r,t:Math.max(ir.t,ouv.t),b:Math.min(ir.b,ouv.b)});// droite
+      });
+      insulRects=next;
+    });
+    insulRects.forEach(ir=>{
+      const w=ir.r-ir.l,h=ir.b-ir.t;
+      if(w<0.01||h<0.01)return;
+      const geo=new THREE.BoxGeometry(w,h,insulD);
+      const m=new THREE.Mesh(geo,insulMat);
+      m.position.set(ir.l+w/2,Hm-(ir.t+h/2),insulZ-insulD/2);
+      insulGroup.add(m);
+    });
+    insulGroup.visible=showInsul;
+    facadeGroup.add(insulGroup);
+
+    // ── Échafaudage ──
+    const scaffGroup=new THREE.Group();
+    if(showScaff){
+      const tubR=0.024;// rayon tube 48mm
+      const tubSegs=8;
+      const scaffMat=new THREE.MeshStandardMaterial({color:0xb8b8c0,metalness:0.75,roughness:0.25});
+      const planckMat=new THREE.MeshStandardMaterial({color:0x9B7424,metalness:0.05,roughness:0.9});
+      const guardMat=new THREE.MeshStandardMaterial({color:0xe8d020,metalness:0.45,roughness:0.25});
+      const couplerMat=new THREE.MeshStandardMaterial({color:0x888890,metalness:0.8,roughness:0.2});
+      const {nBays,nLevels,bayW,levelH,dist,x:scaffX,y:scaffY,scaffW}=scaff;
+      const totalW=nBays*bayW;
+      const totalH=nLevels*levelH;
+      const zBack=depth+dist;// face arrière (côté facade)
+      const zFront=zBack+scaffW;// face avant
+      const zMid=(zFront+zBack)/2;
+      const oX=scaffX-totalW/2+Lm/2;// centrage X sur facade + offset
+      const baseY=scaffY;// Y de base (sol par défaut = 0, mais peut être décalé)
+
+      // Helper: tube entre 2 points
+      const makeTube=(p1,p2,r,mat)=>{
+        const dx=p2[0]-p1[0],dy=p2[1]-p1[1],dz=p2[2]-p1[2];
+        const len=Math.sqrt(dx*dx+dy*dy+dz*dz);if(len<0.001)return;
+        const geo=new THREE.CylinderGeometry(r,r,len,tubSegs);
+        const m=new THREE.Mesh(geo,mat);
+        m.position.set((p1[0]+p2[0])/2,(p1[1]+p2[1])/2,(p1[2]+p2[2])/2);
+        // Orient cylinder along direction
+        const up=new THREE.Vector3(0,1,0);
+        const dir=new THREE.Vector3(dx,dy,dz).normalize();
+        const q=new THREE.Quaternion().setFromUnitVectors(up,dir);
+        m.setRotationFromQuaternion(q);
+        scaffGroup.add(m);
+      };
+      // Helper: coupler (raccord) at a joint
+      const makeCoupler=(x,y,z)=>{
+        const geo=new THREE.SphereGeometry(tubR*1.6,6,6);
+        const m=new THREE.Mesh(geo,couplerMat);
+        m.position.set(x,y,z);scaffGroup.add(m);
+      };
+
+      // ── Pieds réglables (vérins + platines) ──
+      for(let bi=0;bi<=nBays;bi++){
+        const mx=oX+bi*bayW;
+        [zFront,zBack].forEach(zz=>{
+          // Platine au sol
+          const plate=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.008,0.18),scaffMat);
+          plate.position.set(mx,baseY+0.004,zz);scaffGroup.add(plate);
+          // Tige filetée vérin
+          const spinH=0.25;
+          makeTube([mx,baseY+0.008,zz],[mx,baseY+spinH,zz],0.016,scaffMat);
+          // Écrou de réglage
+          const nut=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.04,6),couplerMat);
+          nut.position.set(mx,baseY+spinH*0.6,zz);scaffGroup.add(nut);
+        });
+      }
+
+      // ── Montants verticaux — du pied jusqu'au sommet ──
+      const postBase=baseY+0.25;// au-dessus du vérin
+      const postTop=baseY+totalH+0.5;// dépasse un peu au-dessus
+      for(let bi=0;bi<=nBays;bi++){
+        const mx=oX+bi*bayW;
+        [zFront,zBack].forEach(zz=>{
+          makeTube([mx,postBase,zz],[mx,postTop,zz],tubR,scaffMat);
+          // Bouchon haut
+          const cap=new THREE.Mesh(new THREE.CylinderGeometry(tubR*1.3,tubR*1.3,0.01,tubSegs),couplerMat);
+          cap.position.set(mx,postTop,zz);scaffGroup.add(cap);
+        });
+      }
+
+      // ── Niveaux: longerons, traverses, planchers, garde-corps, diagonales ──
+      for(let li=0;li<=nLevels;li++){
+        const ly=baseY+li*levelH;
+        // Longerons avant et arrière (tubes horizontaux)
+        [zFront,zBack].forEach(zz=>{
+          makeTube([oX,ly,zz],[oX+totalW,ly,zz],tubR,scaffMat);
+        });
+        // Traverses perpendiculaires (relient avant-arrière)
+        for(let bi=0;bi<=nBays;bi++){
+          const mx=oX+bi*bayW;
+          makeTube([mx,ly,zBack],[mx,ly,zFront],tubR,scaffMat);
+          // Raccords aux intersections
+          [zFront,zBack].forEach(zz=>makeCoupler(mx,ly,zz));
+        }
+
+        // Plancher bois (pas au sol, pas au-dessus du dernier niveau)
+        if(li>0){
+          for(let bi=0;bi<nBays;bi++){
+            const px=oX+bi*bayW+bayW/2;
+            // Planches individuelles (3 par travée pour le réalisme)
+            const nPlanks=3;const plankW=(scaffW-0.08)/nPlanks;
+            for(let pi=0;pi<nPlanks;pi++){
+              const pz=zBack+0.04+pi*plankW+plankW/2;
+              const plank=new THREE.Mesh(new THREE.BoxGeometry(bayW-0.06,0.035,plankW-0.005),planckMat);
+              plank.position.set(px,ly+0.017,pz);scaffGroup.add(plank);
+            }
+          }
+        }
+
+        // Diagonales de contreventement (face avant, alternées)
+        if(li<nLevels){
+          for(let bi=0;bi<nBays;bi++){
+            const x1=oX+bi*bayW,x2=oX+(bi+1)*bayW;
+            const y1=ly,y2=ly+levelH;
+            if((bi+li)%2===0){
+              makeTube([x1,y1,zFront],[x2,y2,zFront],tubR*0.55,scaffMat);
+            }else{
+              makeTube([x2,y1,zFront],[x1,y2,zFront],tubR*0.55,scaffMat);
+            }
+          }
+        }
+
+        // Garde-corps jaune (seulement au-dessus des planchers, face avant + retours latéraux)
+        if(li>0){
+          // Lisse intermédiaire (0.5m) + lisse haute (1.0m)
+          [0.5,1.0].forEach(gh=>{
+            // Avant
+            makeTube([oX,ly+gh,zFront],[oX+totalW,ly+gh,zFront],tubR*0.65,guardMat);
+            // Retours latéraux (gauche et droite)
+            makeTube([oX,ly+gh,zBack],[oX,ly+gh,zFront],tubR*0.65,guardMat);
+            makeTube([oX+totalW,ly+gh,zBack],[oX+totalW,ly+gh,zFront],tubR*0.65,guardMat);
+          });
+          // Plinthe bois (protection pied) — face avant
+          const plin=new THREE.Mesh(new THREE.BoxGeometry(totalW,0.15,0.025),guardMat);
+          plin.position.set(oX+totalW/2,ly+0.075,zFront+tubR);scaffGroup.add(plin);
+          // Plinthes latérales
+          const plinL=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.15,scaffW),guardMat);
+          plinL.position.set(oX-tubR,ly+0.075,zMid);scaffGroup.add(plinL);
+          const plinR=new THREE.Mesh(new THREE.BoxGeometry(0.025,0.15,scaffW),guardMat);
+          plinR.position.set(oX+totalW+tubR,ly+0.075,zMid);scaffGroup.add(plinR);
+        }
+      }
+
+      // ── Amarrages facade (ancres au mur, 1 par bay tous les 2 niveaux) ──
+      for(let li=1;li<=nLevels;li+=2){
+        const ly=baseY+li*levelH;
+        for(let bi=0;bi<=nBays;bi++){
+          const mx=oX+bi*bayW;
+          // Tube d'ancrage vers la facade
+          makeTube([mx,ly,zBack],[mx,ly,depth+0.02],tubR*0.5,scaffMat);
+          // Platine d'ancrage sur facade
+          const anchor=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.08,0.01),couplerMat);
+          anchor.position.set(mx,ly,depth+0.015);scaffGroup.add(anchor);
+        }
+      }
+    }
+    facadeGroup.add(scaffGroup);
 
     scene.add(facadeGroup);
 
     // ── Concrete wall (toggleable) ──
     if(showWall){
-      const wallGeo=new THREE.BoxGeometry(Lm+0.1,Hm+0.1,0.18);
+      const wallThick=0.18;
+      const wallZ=insulZ-insulD-wallThick/2+0.005;// juste derrière l'isolant
+      const wallGeo=new THREE.BoxGeometry(Lm+0.1,Hm+0.1,wallThick);
       const wallMat=new THREE.MeshStandardMaterial({color:0x787878,roughness:0.95,metalness:0.02});
       const wall=new THREE.Mesh(wallGeo,wallMat);
-      wall.position.set(0,0,-0.14);scene.add(wall);
+      wall.position.set(0,0,wallZ);scene.add(wall);
     }
 
 
 
     // Refs pour toggle visibilité sans recréer la scène
-    sceneRef.current={scene,camera,renderer,ossGroup};
+    sceneRef.current={scene,camera,renderer,ossGroup,insulGroup,scaffGroup};
 
     // Render loop
     const animate=()=>{
@@ -884,7 +1082,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
 
     // Touch : 1 doigt = rotation, 2 doigts = pan horizontal/vertical + pinch zoom
     const onTS=e=>{
-      e.preventDefault();
+      // Pas de preventDefault ici — bloquerait les taps sur les boutons iOS
       const t=e.touches;
       if(t.length===1){
         dragRef.current={x:t[0].clientX,y:t[0].clientY,rx:rotRef.current.x,ry:rotRef.current.y,mode:'rot'};
@@ -933,7 +1131,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     canvas.addEventListener('mouseup',onMU);
     canvas.addEventListener('mouseleave',onMU);
     canvas.addEventListener('wheel',onWH,{passive:false});
-    canvas.addEventListener('touchstart',onTS,{passive:false});
+    canvas.addEventListener('touchstart',onTS,{passive:true});
     canvas.addEventListener('touchmove',onTM,{passive:false});
     canvas.addEventListener('touchend',onTE);
     canvas.addEventListener('touchcancel',onTE);
@@ -949,11 +1147,11 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
       canvas.removeEventListener('touchcancel',onTE);
       renderer.dispose();if(mountRef.current)mountRef.current.innerHTML='';
     };
-  },[zone,calc,ralColor,ralFinish,showOss3D,showWall]);
+  },[zone,calc,ralColor,ralFinish,showOss3D,showWall,showInsul,insulThick,showScaff,scaff]);
 
 
   return<div style={{position:'absolute',inset:0,zIndex:10,background:'#13151f'}}>
-    <div ref={mountRef} style={{position:'absolute',inset:0,cursor:'grab',touchAction:'none',userSelect:'none'}}/>
+    <div ref={mountRef} style={{position:'absolute',inset:0,touchAction:'none',pointerEvents:'none'}}/>
     <div style={{position:'absolute',top:10,left:10,right:10,zIndex:50,display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}
       onMouseDown={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()}>
       <div style={{display:'flex',gap:5,padding:5,background:'rgba(12,14,28,.88)',borderRadius:10,backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)'}}>
@@ -961,10 +1159,46 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
         ].map(b=><button key={b.l} onClick={b.fn} style={{border:'none',cursor:'pointer',padding:isMobile?'8px 10px':'7px 14px',borderRadius:7,fontSize:10,fontWeight:600,fontFamily:'DM Sans',background:b.col==='red'?'rgba(139,26,43,.45)':'rgba(40,44,65,.9)',color:b.col==='red'?'#fca5a5':'rgba(255,255,255,.65)',boxShadow:'0 0 0 1px rgba(255,255,255,.08)'}}>{b.l}</button>)}
       </div>
       <div style={{display:'flex',gap:5,padding:5,background:'rgba(12,14,28,.88)',borderRadius:10,backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)'}}>
-        {[{l:'Ossature',fn:()=>setShowOss3D(v=>!v),a:showOss3D,col:'amber'},{l:isMobile?'B\u00e9ton':'Mur b\u00e9ton',fn:()=>onToggle('wall'),a:showWall,col:'blue'}
-        ].map(b=><button key={b.l} onClick={b.fn} style={{border:'none',cursor:'pointer',padding:isMobile?'8px 10px':'7px 14px',borderRadius:7,fontSize:10,fontWeight:600,fontFamily:'DM Sans',background:b.a?(b.col==='amber'?'rgba(245,158,11,.3)':'rgba(79,110,247,.3)'):'rgba(40,44,65,.9)',color:b.a?(b.col==='amber'?'#fbbf24':'#93c5fd'):'rgba(255,255,255,.55)',boxShadow:b.a?'0 0 0 1.5px '+(b.col==='amber'?'rgba(245,158,11,.5)':'rgba(79,110,247,.5)'):'0 0 0 1px rgba(255,255,255,.08)'}}>{b.l}</button>)}
+        {[{l:'Ossature',fn:()=>setShowOss3D(v=>!v),a:showOss3D,col:'amber'},{l:'Isolant',fn:()=>setShowInsul(v=>!v),a:showInsul,col:'yellow'},{l:isMobile?'B\u00e9ton':'Mur b\u00e9ton',fn:()=>onToggle('wall'),a:showWall,col:'blue'}
+        ].map(b=><button key={b.l} onClick={b.fn} style={{border:'none',cursor:'pointer',padding:isMobile?'8px 10px':'7px 14px',borderRadius:7,fontSize:10,fontWeight:600,fontFamily:'DM Sans',background:b.a?(b.col==='amber'?'rgba(245,158,11,.3)':b.col==='yellow'?'rgba(232,200,64,.25)':'rgba(79,110,247,.3)'):'rgba(40,44,65,.9)',color:b.a?(b.col==='amber'?'#fbbf24':b.col==='yellow'?'#e8c840':'#93c5fd'):'rgba(255,255,255,.55)',boxShadow:b.a?'0 0 0 1.5px '+(b.col==='amber'?'rgba(245,158,11,.5)':b.col==='yellow'?'rgba(232,200,64,.4)':'rgba(79,110,247,.5)'):'0 0 0 1px rgba(255,255,255,.08)'}}>{b.l}</button>)}
+        {showInsul&&<select value={insulThick} onChange={e=>setInsulThick(Number(e.target.value))}
+          onMouseDown={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()}
+          style={{background:'rgba(232,200,64,.15)',border:'1px solid rgba(232,200,64,.3)',color:'#e8c840',borderRadius:6,padding:'5px 6px',fontSize:9,fontWeight:600,fontFamily:'DM Sans',cursor:'pointer',outline:'none'}}>
+          {[60,80,100,120,140,160,180,200,240].map(v=><option key={v} value={v} style={{background:'#1a1a26',color:'#e8c840'}}>{v}mm</option>)}
+        </select>}
+        <div style={{width:1,height:18,background:'rgba(255,255,255,.1)',margin:'0 2px'}}/>
+        <button onClick={()=>setShowScaff(v=>!v)} style={{border:'none',cursor:'pointer',padding:isMobile?'8px 10px':'7px 14px',borderRadius:7,fontSize:10,fontWeight:600,fontFamily:'DM Sans',
+          background:showScaff?'rgba(16,185,129,.25)':'rgba(40,44,65,.9)',color:showScaff?'#34d399':'rgba(255,255,255,.55)',
+          boxShadow:showScaff?'0 0 0 1.5px rgba(16,185,129,.4)':'0 0 0 1px rgba(255,255,255,.08)'}}>🏗 {isMobile?'':'Échafaudage'}</button>
       </div>
     </div>
+    {/* ── Panneau config échafaudage ── */}
+    {showScaff&&<div style={{position:'absolute',top:60,right:10,zIndex:50,background:'rgba(12,14,28,.92)',backdropFilter:'blur(12px)',WebkitBackdropFilter:'blur(12px)',borderRadius:12,padding:14,width:isMobile?200:220,border:'1px solid rgba(16,185,129,.2)',boxShadow:'0 10px 40px rgba(0,0,0,.5)'}}
+      onMouseDown={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()}>
+      <div style={{fontSize:11,fontWeight:700,color:'#34d399',marginBottom:10,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <span>🏗 Échafaudage</span>
+        <button onClick={()=>setShowScaff(false)} style={{background:'none',border:'none',color:'rgba(255,255,255,.3)',cursor:'pointer',fontSize:14}}>×</button>
+      </div>
+      {[
+        {label:'Travées',key:'nBays',min:1,max:15,step:1,unit:''},
+        {label:'Niveaux',key:'nLevels',min:1,max:12,step:1,unit:''},
+        {label:'Larg. travée',key:'bayW',min:0.73,max:4,step:0.01,unit:'m'},
+        {label:'Haut. niveau',key:'levelH',min:1.0,max:3,step:0.05,unit:'m'},
+        {label:'Profondeur',key:'scaffW',min:0.6,max:1.5,step:0.01,unit:'m'},
+        {label:'Dist. facade',key:'dist',min:0.15,max:3,step:0.05,unit:'m'},
+        {label:'Décalage X',key:'x',min:-15,max:15,step:0.1,unit:'m'},
+        {label:'Décalage Y',key:'y',min:-2,max:5,step:0.1,unit:'m'},
+      ].map(s=><div key={s.key} style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+        <span style={{fontSize:9,color:'rgba(255,255,255,.5)',width:75,flexShrink:0}}>{s.label}</span>
+        <input type="range" min={s.min} max={s.max} step={s.step} value={scaff[s.key]}
+          onChange={e=>setScaff(prev=>({...prev,[s.key]:parseFloat(e.target.value)}))}
+          style={{flex:1,accentColor:'#34d399',height:4}}/>
+        <span style={{fontSize:9,color:'#34d399',width:40,textAlign:'right',fontFamily:'monospace',flexShrink:0}}>{typeof scaff[s.key]==='number'&&scaff[s.key]%1!==0?scaff[s.key].toFixed(2):scaff[s.key]}{s.unit}</span>
+      </div>)}
+      <div style={{borderTop:'1px solid rgba(255,255,255,.06)',marginTop:6,paddingTop:8,fontSize:9,color:'rgba(255,255,255,.35)'}}>
+        {(scaff.nBays*scaff.bayW).toFixed(1)}m × {(scaff.nLevels*scaff.levelH).toFixed(1)}m — prof. {scaff.scaffW}m — {scaff.nBays*(scaff.nLevels+1)} cadres
+      </div>
+    </div>}
     <div style={{position:'absolute',bottom:isMobile?'calc(10px + env(safe-area-inset-bottom, 0px))':10,left:'50%',transform:'translateX(-50%)',zIndex:40,pointerEvents:'none',background:'rgba(10,12,20,.7)',backdropFilter:'blur(8px)',WebkitBackdropFilter:'blur(8px)',borderRadius:8,padding:'5px 14px',whiteSpace:'nowrap'}}>
       <span style={{fontSize:10,color:'rgba(255,255,255,.3)',fontFamily:'monospace'}}>{isMobile?'1 doigt: rotation \u00b7 2 doigts: zoom/pan':'Drag: rotation \u00b7 Shift+drag: pan \u00b7 Molette: zoom'}</span>
       <span style={{fontSize:10,fontFamily:'monospace',padding:'2px 8px',marginLeft:8,borderRadius:5,background:'rgba(79,110,247,.2)',color:'#93c5fd'}}>{(zone.L/1000).toFixed(2)}\u00d7{(zone.H/1000).toFixed(2)} m \u00b7 {calc.nP} pan.</span>
@@ -980,6 +1214,641 @@ const SUPA_STORAGE_KEY='kalepin_supabase';
 const SUPA_DEFAULTS={url:'https://kaawdguztacoagfhhcgz.supabase.co',key:'sb_publishable_5AGy4vctveV8pk8Fzb5fsw_xqCoSsMU',viewerUrl:''};
 function getSupaConfig(){try{const stored=JSON.parse(localStorage.getItem(SUPA_STORAGE_KEY)||'{}');return{url:stored.url||SUPA_DEFAULTS.url,key:stored.key||SUPA_DEFAULTS.key,viewerUrl:stored.viewerUrl||SUPA_DEFAULTS.viewerUrl}}catch(e){return SUPA_DEFAULTS}}
 function setSupaConfig(cfg){localStorage.setItem(SUPA_STORAGE_KEY,JSON.stringify(cfg))}
+
+// ═══════════════════════════════════════════════════════════
+// SUPABASE AUTH
+// ═══════════════════════════════════════════════════════════
+const AUTH_STORAGE_KEY='kalepin_auth_session';
+const SUPA=SUPA_DEFAULTS;
+
+function getAuthSession(){try{return JSON.parse(localStorage.getItem(AUTH_STORAGE_KEY)||'null')}catch(e){return null}}
+function setAuthSession(session){if(session)localStorage.setItem(AUTH_STORAGE_KEY,JSON.stringify(session));else localStorage.removeItem(AUTH_STORAGE_KEY)}
+
+async function authSignUp(email,password,fullName){
+  const res=await fetch(SUPA.url+'/auth/v1/signup',{
+    method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key},
+    body:JSON.stringify({email,password,data:{full_name:fullName||''}})
+  });
+  const data=await res.json();if(!res.ok)throw new Error(data.error_description||data.msg||data.error||'Erreur inscription');
+  // If email confirmation is disabled, we get a session back
+  if(data.access_token){
+    const session={access_token:data.access_token,refresh_token:data.refresh_token,user:data.user,expires_at:Date.now()+data.expires_in*1000};
+    setAuthSession(session);return session;
+  }
+  return data; // email confirmation needed
+}
+
+async function authSignIn(email,password){
+  const res=await fetch(SUPA.url+'/auth/v1/token?grant_type=password',{
+    method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key},
+    body:JSON.stringify({email,password})
+  });
+  const data=await res.json();if(!res.ok)throw new Error(data.error_description||data.msg||data.error||'Email ou mot de passe incorrect');
+  const session={access_token:data.access_token,refresh_token:data.refresh_token,user:data.user,expires_at:Date.now()+data.expires_in*1000};
+  setAuthSession(session);return session;
+}
+
+async function authRefresh(){
+  const s=getAuthSession();if(!s?.refresh_token)return null;
+  try{
+    const res=await fetch(SUPA.url+'/auth/v1/token?grant_type=refresh_token',{
+      method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key},
+      body:JSON.stringify({refresh_token:s.refresh_token})
+    });
+    if(!res.ok){setAuthSession(null);return null}
+    const data=await res.json();
+    const session={access_token:data.access_token,refresh_token:data.refresh_token,user:data.user,expires_at:Date.now()+data.expires_in*1000};
+    setAuthSession(session);return session;
+  }catch(e){return null}
+}
+
+async function authSignOut(){
+  const s=getAuthSession();
+  if(s?.access_token){
+    try{await fetch(SUPA.url+'/auth/v1/logout',{method:'POST',headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}})}catch(e){}
+  }
+  setAuthSession(null);
+}
+
+async function authGetUser(){
+  let s=getAuthSession();if(!s)return null;
+  // Refresh if expired or about to expire (5min buffer)
+  if(s.expires_at && Date.now()>s.expires_at-300000){s=await authRefresh();if(!s)return null}
+  try{
+    const res=await fetch(SUPA.url+'/auth/v1/user',{headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}});
+    if(!res.ok){if(res.status===401){const refreshed=await authRefresh();if(!refreshed)return null;
+      const res2=await fetch(SUPA.url+'/auth/v1/user',{headers:{'apikey':SUPA.key,'Authorization':'Bearer '+refreshed.access_token}});
+      if(!res2.ok){setAuthSession(null);return null}return await res2.json();}
+      setAuthSession(null);return null}
+    return await res.json();
+  }catch(e){return null}
+}
+
+// ═══════════════════════════════════════════════════════════
+// SUBSCRIPTION & STRIPE
+// ═══════════════════════════════════════════════════════════
+const PLANS={
+  solo:{id:'solo',name:'Solo',price:39,features:['1 utilisateur','Projets illimites','Export PDF & Excel','Vue 3D + QR chantier']},
+  equipe:{id:'equipe',name:'Equipe',price:99,features:['5 utilisateurs','Partage de projets','Import DXF/DWG','Support prioritaire']},
+  entreprise:{id:'entreprise',name:'Entreprise',price:249,features:['Utilisateurs illimites','API & integrations','Export DSTV/CNC','Account manager']}
+};
+const TRIAL_DAYS=14;
+const STRIPE_CONFIG_KEY='kalepin_stripe';
+// User sets these after creating Stripe products
+function getStripeConfig(){try{return JSON.parse(localStorage.getItem(STRIPE_CONFIG_KEY)||'{}')}catch(e){return{}}}
+
+async function fetchSubscription(userId){
+  const s=getAuthSession();if(!s)return null;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions?user_id=eq.'+userId+'&select=*&order=created_at.desc&limit=1',{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return null;const data=await res.json();return data[0]||null;
+  }catch(e){return null}
+}
+
+async function createTrialSubscription(userId,email){
+  const s=getAuthSession();if(!s)return null;
+  const now=new Date();const trialEnd=new Date(now.getTime()+TRIAL_DAYS*86400000);
+  const sub={user_id:userId,email:email,plan:'solo',status:'trialing',
+    trial_start:now.toISOString(),trial_end:trialEnd.toISOString(),
+    stripe_customer_id:null,stripe_subscription_id:null};
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions',{
+      method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key,
+        'Authorization':'Bearer '+s.access_token,'Prefer':'return=representation'},
+      body:JSON.stringify(sub)
+    });
+    if(!res.ok)return null;const data=await res.json();return data[0]||sub;
+  }catch(e){return null}
+}
+
+function getSubscriptionStatus(sub){
+  if(!sub)return{active:false,status:'none',daysLeft:0};
+  if(sub.status==='active')return{active:true,status:'active',plan:sub.plan,daysLeft:null};
+  if(sub.status==='trialing'){
+    const now=new Date();const end=new Date(sub.trial_end);
+    const diff=Math.ceil((end-now)/86400000);
+    return{active:diff>0,status:'trialing',plan:sub.plan,daysLeft:Math.max(0,diff)};
+  }
+  if(sub.status==='past_due')return{active:true,status:'past_due',plan:sub.plan,daysLeft:null};
+  return{active:false,status:sub.status||'expired',daysLeft:0};
+}
+
+// ── Paywall Component ──
+function Paywall({user,onClose,currentPlan}){
+  const[billing,setBilling]=useState('monthly');
+  const[selected,setSelected]=useState('equipe');
+  const[loading,setLoading]=useState(false);
+
+  const discount=billing==='annual'?0.17:0;
+  const plans=[
+    {id:'solo',name:'Solo',monthly:39,color:'#5a5a7e',badge:null,
+     features:['1 utilisateur','Projets illimités','Export PDF & Excel','Vue 3D + QR chantier','Support email']},
+    {id:'equipe',name:'Équipe',monthly:99,color:'#c4324a',badge:'Populaire',
+     features:['5 utilisateurs','Partage de projets','Import DXF/DWG','Catalogue fabricants','Support prioritaire']},
+    {id:'entreprise',name:'Entreprise',monthly:249,color:'#0ea5e9',badge:'Best value',
+     features:['Utilisateurs illimités','API & intégrations','Export DSTV/CNC','Marque blanche','Account manager']},
+  ];
+
+  const price=(p)=>billing==='annual'?Math.round(p*(1-discount)):p;
+
+  const handleCheckout=async(planId)=>{
+    setLoading(planId);
+    const s=getAuthSession();
+    try{
+      const res=await fetch(SUPA.url+'/functions/v1/stripe-checkout',{
+        method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
+        body:JSON.stringify({plan:planId,billing,email:user.email,userId:user.id,returnUrl:window.location.origin+window.location.pathname})
+      });
+      if(res.ok){const d=await res.json();if(d.url)window.location.href=d.url;else throw new Error()}
+      else throw new Error();
+    }catch(e){
+      alert('Paiement non configuré.\nDéployez la Edge Function stripe-checkout sur Supabase.');
+    }
+    setLoading(false);
+  };
+
+  return<div className="ov" onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'#0e0e18',border:'1px solid var(--bd)',borderRadius:24,width:'min(900px,96vw)',maxHeight:'92vh',overflowY:'auto',boxShadow:'0 40px 100px rgba(0,0,0,.7)',animation:'fu .25s ease-out'}}>
+
+      {/* Header */}
+      <div style={{padding:'28px 32px 0',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+        <div>
+          <div style={{fontSize:22,fontWeight:800,color:'var(--t1)',letterSpacing:'-.02em'}}>Choisissez votre plan</div>
+          <div style={{fontSize:13,color:'var(--t3)',marginTop:4}}>Essai gratuit 14 jours — résiliez à tout moment</div>
+        </div>
+        <button onClick={onClose} style={{background:'var(--crd)',border:'1px solid var(--bd)',borderRadius:8,width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)',fontSize:18,flexShrink:0}}>×</button>
+      </div>
+
+      {/* Billing toggle */}
+      <div style={{display:'flex',justifyContent:'center',margin:'20px 0 24px',gap:0}}>
+        <div style={{display:'inline-flex',background:'var(--crd)',borderRadius:10,border:'1px solid var(--bd)',padding:3,gap:2}}>
+          {['monthly','annual'].map(b=><button key={b} onClick={()=>setBilling(b)} style={{
+            padding:'6px 20px',borderRadius:7,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',
+            background:billing===b?'var(--bl)':'transparent',color:billing===b?'#fff':'var(--t3)'
+          }}>{b==='monthly'?'Mensuel':'Annuel'}{b==='annual'&&<span style={{marginLeft:6,padding:'1px 6px',background:'rgba(16,185,129,.25)',color:'#10b981',borderRadius:20,fontSize:9,fontWeight:700}}>-17%</span>}</button>)}
+        </div>
+      </div>
+
+      {/* Plans */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,padding:'0 24px 28px'}}>
+        {plans.map(plan=>{
+          const isSel=selected===plan.id;
+          const isCur=currentPlan===plan.id;
+          return<div key={plan.id} onClick={()=>setSelected(plan.id)} style={{
+            background:isSel?'rgba(196,50,74,.06)':'var(--crd)',
+            border:`2px solid ${isSel?plan.color:isCur?'var(--gn)':'var(--bd)'}`,
+            borderRadius:16,padding:22,cursor:'pointer',transition:'all .2s',position:'relative',
+            boxShadow:isSel?`0 0 0 3px ${plan.color}22`:'none'
+          }}>
+            {plan.badge&&<div style={{position:'absolute',top:-11,left:'50%',transform:'translateX(-50%)',
+              background:plan.color,color:'#fff',padding:'3px 14px',borderRadius:20,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>
+              {plan.badge}</div>}
+            {isCur&&<div style={{position:'absolute',top:-11,right:14,
+              background:'var(--gn)',color:'#fff',padding:'2px 10px',borderRadius:20,fontSize:9,fontWeight:700}}>Plan actuel</div>}
+
+            <div style={{fontSize:11,fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8}}>{plan.name}</div>
+            <div style={{display:'flex',alignItems:'baseline',gap:4,marginBottom:4}}>
+              <span style={{fontSize:38,fontWeight:900,color:'var(--t1)',letterSpacing:'-.03em'}}>{price(plan.monthly)}</span>
+              <span style={{fontSize:13,color:'var(--t3)'}}>€/mois</span>
+            </div>
+            {billing==='annual'&&<div style={{fontSize:11,color:'#10b981',marginBottom:12}}>
+              soit {price(plan.monthly)*12} €/an — {Math.round(plan.monthly*discount*12)} € économisés
+            </div>}
+            <div style={{height:1,background:'var(--bd)',margin:'12px 0'}}/>
+            <div style={{display:'flex',flexDirection:'column',gap:7,marginBottom:20}}>
+              {plan.features.map((f,i)=><div key={i} style={{fontSize:12,color:'var(--t2)',display:'flex',alignItems:'center',gap:8}}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="6" fill={plan.color} opacity=".2"/><path d="M3.5 6l2 2 3-3" stroke={plan.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                {f}
+              </div>)}
+            </div>
+            <button onClick={e=>{e.stopPropagation();handleCheckout(plan.id)}}
+              disabled={isCur||loading===plan.id}
+              style={{width:'100%',padding:'11px',borderRadius:10,border:'none',fontSize:13,fontWeight:700,
+                cursor:isCur?'default':'pointer',fontFamily:'inherit',transition:'all .2s',
+                background:isCur?'var(--crd2)':isSel?plan.color:'var(--crd2)',
+                color:isCur?'var(--t3)':isSel?'#fff':'var(--t1)',
+                opacity:loading===plan.id?.6:1
+              }}>
+              {isCur?'Plan actuel':loading===plan.id?'…':'Commencer →'}
+            </button>
+          </div>
+        })}
+      </div>
+
+      {/* Footer */}
+      <div style={{borderTop:'1px solid var(--bd)',padding:'14px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
+        <div style={{display:'flex',gap:20}}>
+          {['🔒 Paiement sécurisé Stripe','📧 Support réactif','↩ Résiliation libre'].map(t=><span key={t} style={{fontSize:11,color:'var(--t3)'}}>{t}</span>)}
+        </div>
+        <span style={{fontSize:11,color:'var(--t3)',fontStyle:'italic'}}>Tous les prix HT</span>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── Trial Banner ──
+function TrialBanner({subStatus,onUpgrade}){
+  if(!subStatus||subStatus.status==='active')return null;
+  if(subStatus.status==='trialing'&&subStatus.daysLeft>7)return null;
+  const urgent=subStatus.daysLeft<=3;
+  const expired=!subStatus.active;
+  const col=expired?'#ef4444':urgent?'#f59e0b':'#0ea5e9';
+  return<div style={{
+    background:`${col}12`,border:`1px solid ${col}30`,
+    borderRadius:8,padding:'7px 14px',display:'flex',alignItems:'center',gap:10,fontSize:11,animation:'fu .3s ease-out'
+  }}>
+    <span style={{fontSize:14}}>{expired?'⚠️':'⏱'}</span>
+    <span style={{fontWeight:700,color:col}}>
+      {expired?'Essai terminé':subStatus.daysLeft===0?'Expire aujourd\'hui':`${subStatus.daysLeft} jour${subStatus.daysLeft>1?'s':''} restant${subStatus.daysLeft>1?'s':''}`}
+    </span>
+    <span style={{color:'var(--t2)',flex:1}}>{expired?'Abonnez-vous pour continuer à utiliser Kalepin.':'sur votre essai gratuit.'}</span>
+    <button onClick={onUpgrade} className="ba" style={{
+      padding:'5px 16px',borderRadius:6,fontSize:11,fontWeight:700,border:'none',cursor:'pointer',fontFamily:'inherit',
+      background:expired?'#c4324a':'var(--crd)',color:expired?'#fff':'var(--bl)',
+      boxShadow:expired?'0 2px 12px rgba(196,50,74,.4)':'none',flexShrink:0
+    }}>{expired?'S\'abonner maintenant':'Voir les plans'}</button>
+  </div>;
+}
+
+// ── AccountSettings Modal ──
+function AccountSettings({user,onClose}){
+  const[tab,setTab]=useState('profil');
+  const[name,setName]=useState(user?.user_metadata?.full_name||'');
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState(null);
+  const[pwd,setPwd]=useState({cur:'',next:'',confirm:''});
+  const[showPwd,setShowPwd]=useState({cur:false,next:false});
+
+  const saveName=async()=>{
+    setSaving(true);setMsg(null);
+    try{
+      const s=getAuthSession();
+      const res=await fetch(SUPA.url+'/auth/v1/user',{method:'PUT',
+        headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
+        body:JSON.stringify({data:{full_name:name}})});
+      if(res.ok)setMsg({type:'ok',text:'Nom mis à jour !'});
+      else throw new Error('Erreur serveur');
+    }catch(e){setMsg({type:'err',text:e.message})}finally{setSaving(false);}
+  };
+
+  const savePassword=async()=>{
+    if(pwd.next!==pwd.confirm){setMsg({type:'err',text:'Les mots de passe ne correspondent pas'});return}
+    if(pwd.next.length<6){setMsg({type:'err',text:'Minimum 6 caractères'});return}
+    setSaving(true);setMsg(null);
+    try{
+      const s=getAuthSession();
+      const res=await fetch(SUPA.url+'/auth/v1/user',{method:'PUT',
+        headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
+        body:JSON.stringify({password:pwd.next})});
+      if(res.ok){setMsg({type:'ok',text:'Mot de passe modifié !'});setPwd({cur:'',next:'',confirm:''});}
+      else throw new Error('Erreur — vérifiez le mot de passe actuel');
+    }catch(e){setMsg({type:'err',text:e.message})}finally{setSaving(false);}
+  };
+
+  const initials=(user?.user_metadata?.full_name||user?.email||'U').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+
+  const tabStyle=(t)=>({padding:'8px 16px',borderRadius:8,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
+    fontFamily:'inherit',transition:'all .15s',
+    background:tab===t?'var(--bl)':'transparent',color:tab===t?'#fff':'var(--t3)'});
+
+  const inpStyle={width:'100%',padding:'11px 14px',background:'var(--inp)',border:'1.5px solid var(--bd)',borderRadius:10,
+    color:'var(--t1)',fontSize:13,fontFamily:'inherit',outline:'none',boxSizing:'border-box',transition:'border .2s'};
+
+  return<div className="ov" onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:20,
+      width:'min(480px,95vw)',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 30px 80px rgba(0,0,0,.6)',animation:'fu .2s ease-out'}}>
+
+      {/* Header */}
+      <div style={{padding:'20px 24px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:14}}>
+        <div style={{width:46,height:46,borderRadius:13,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,fontWeight:800,color:'#fff',flexShrink:0,boxShadow:'0 4px 16px rgba(196,50,74,.3)'}}>
+          {initials}
+        </div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:15,fontWeight:700,color:'var(--t1)'}}>{user?.user_metadata?.full_name||'Mon compte'}</div>
+          <div style={{fontSize:11,color:'var(--t3)',marginTop:2}}>{user?.email}</div>
+        </div>
+        <button onClick={onClose} style={{background:'var(--crd)',border:'1px solid var(--bd)',borderRadius:8,width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)',fontSize:16,flexShrink:0}}>×</button>
+      </div>
+
+      {/* Tabs */}
+      <div style={{display:'flex',gap:4,padding:'12px 16px 0',borderBottom:'1px solid var(--bd)'}}>
+        {[['profil','👤 Profil'],['securite','🔒 Sécurité']].map(([t,l])=>(
+          <button key={t} onClick={()=>{setTab(t);setMsg(null);}} style={tabStyle(t)}>{l}</button>
+        ))}
+      </div>
+
+      <div style={{padding:'20px 24px'}}>
+        {msg&&<div style={{padding:'10px 14px',borderRadius:10,marginBottom:16,fontSize:13,display:'flex',alignItems:'center',gap:8,
+          background:msg.type==='ok'?'rgba(16,185,129,.1)':'rgba(239,68,68,.1)',
+          border:`1px solid ${msg.type==='ok'?'rgba(16,185,129,.25)':'rgba(239,68,68,.25)'}`,
+          color:msg.type==='ok'?'#10b981':'#ef4444'}}>
+          {msg.type==='ok'?'✓':'⚠'} {msg.text}
+        </div>}
+
+        {tab==='profil'&&<div style={{display:'flex',flexDirection:'column',gap:16}}>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:6,display:'block',textTransform:'uppercase',letterSpacing:'.06em'}}>Nom complet</label>
+            <input value={name} onChange={e=>setName(e.target.value)} style={inpStyle}
+              onFocus={e=>e.target.style.borderColor='#c4324a'} onBlur={e=>e.target.style.borderColor='var(--bd)'}
+              onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')saveName()}} placeholder="Votre nom"/>
+          </div>
+          <div>
+            <label style={{fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:6,display:'block',textTransform:'uppercase',letterSpacing:'.06em'}}>Email</label>
+            <input value={user?.email||''} disabled style={{...inpStyle,opacity:.5,cursor:'not-allowed'}}/>
+            <div style={{fontSize:10,color:'var(--t3)',marginTop:4}}>L'email ne peut pas être modifié</div>
+          </div>
+          <button onClick={saveName} disabled={saving} style={{padding:'11px',background:saving?'#5a1120':'#c4324a',color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:700,cursor:saving?'wait':'pointer',fontFamily:'inherit',transition:'all .2s'}}>
+            {saving?'Sauvegarde…':'Enregistrer'}
+          </button>
+        </div>}
+
+        {tab==='securite'&&<div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{padding:'12px 14px',background:'rgba(14,165,233,.06)',border:'1px solid rgba(14,165,233,.15)',borderRadius:10,fontSize:12,color:'var(--t3)'}}>
+            ℹ Changez votre mot de passe Kalepin. Vous serez redirigé pour vous reconnecter.
+          </div>
+          {[
+            {key:'next',label:'Nouveau mot de passe',ph:'6 caractères minimum'},
+            {key:'confirm',label:'Confirmer',ph:'Répétez le mot de passe'},
+          ].map(f=><div key={f.key}>
+            <label style={{fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:6,display:'block',textTransform:'uppercase',letterSpacing:'.06em'}}>{f.label}</label>
+            <div style={{position:'relative'}}>
+              <input type={showPwd[f.key]?'text':'password'} value={pwd[f.key]} onChange={e=>setPwd(p=>({...p,[f.key]:e.target.value}))}
+                placeholder={f.ph} style={{...inpStyle,paddingRight:42}}
+                onFocus={e=>e.target.style.borderColor='#c4324a'} onBlur={e=>e.target.style.borderColor='var(--bd)'}
+                onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')savePassword()}}/>
+              <button onClick={()=>setShowPwd(p=>({...p,[f.key]:!p[f.key]}))} style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--t3)',padding:2}}>
+                {showPwd[f.key]
+                  ?<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10 10 0 0 1 12 20c-7 0-11-8-11-8a18 18 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  :<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+              </button>
+            </div>
+          </div>)}
+          {pwd.next&&pwd.next===pwd.confirm&&<div style={{display:'flex',gap:4,marginTop:-6}}>
+            {[...Array(Math.min(4,Math.floor(pwd.next.length/2)))].map((_,i)=><div key={i} style={{height:2,flex:1,borderRadius:2,background:pwd.next.length>=8?'#10b981':pwd.next.length>=6?'#f59e0b':'#ef4444'}}/>)}
+            {[...Array(Math.max(0,4-Math.floor(pwd.next.length/2)))].map((_,i)=><div key={'e'+i} style={{height:2,flex:1,borderRadius:2,background:'var(--bd)'}}/>)}
+          </div>}
+          <button onClick={savePassword} disabled={saving} style={{padding:'11px',background:saving?'#5a1120':'#c4324a',color:'#fff',border:'none',borderRadius:10,fontSize:13,fontWeight:700,cursor:saving?'wait':'pointer',fontFamily:'inherit',transition:'all .2s'}}>
+            {saving?'Modification…':'Modifier le mot de passe'}
+          </button>
+        </div>}
+      </div>
+    </div>
+  </div>;
+}
+
+
+// ── UserMenuPanel ──
+function UserMenuPanel({user,subStatus,onUpgrade,onSettings,onSignOut,onClose}){
+  const name=user?.user_metadata?.full_name||user?.email?.split('@')[0]||'Utilisateur';
+  const initials=name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
+  const planLabel=subStatus?.status==='active'?'Actif':subStatus?.status==='trialing'?`Essai — ${subStatus.daysLeft}j`:subStatus?.status==='past_due'?'Paiement en attente':'Expiré';
+  const planColor=subStatus?.status==='active'?'var(--gn)':subStatus?.status==='trialing'?'var(--am)':'var(--rs)';
+  const planBg=subStatus?.status==='active'?'var(--gnd)':subStatus?.status==='trialing'?'var(--amd)':'var(--rsd)';
+  const planName=(subStatus?.plan||'solo').charAt(0).toUpperCase()+(subStatus?.plan||'solo').slice(1);
+
+  return<div style={{width:240,background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:14,overflow:'hidden',boxShadow:'0 20px 50px rgba(0,0,0,.5)',animation:'fu .2s ease-out'}}>
+    {/* Profile header */}
+    <div style={{padding:'16px 16px 12px',background:'linear-gradient(135deg,rgba(196,50,74,.08),transparent)'}}>
+      <div style={{display:'flex',alignItems:'center',gap:10}}>
+        <div style={{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,fontWeight:800,color:'#fff',flexShrink:0,boxShadow:'0 4px 12px rgba(196,50,74,.35)'}}>
+          {initials}
+        </div>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{name}</div>
+          <div style={{fontSize:10,color:'var(--t3)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{user?.email}</div>
+        </div>
+      </div>
+      {/* Plan badge */}
+      <div style={{marginTop:10,padding:'6px 10px',background:planBg,border:`1px solid ${planColor}30`,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <span style={{fontSize:11,fontWeight:700,color:planColor}}>{planName}</span>
+        <span style={{fontSize:10,color:planColor,opacity:.8}}>{planLabel}</span>
+      </div>
+    </div>
+
+    <div style={{height:1,background:'var(--bd)'}}/>
+
+    {/* Actions */}
+    <div style={{padding:6}}>
+      {[
+        {icon:'💳',label:'Plans & abonnement',fn:()=>{onClose();onUpgrade()},color:'var(--bl)'},
+        {icon:'⚙️',label:'Paramètres compte',fn:()=>{onClose();onSettings();},color:'var(--t2)'},
+      ].map(a=><button key={a.label} onClick={a.fn} style={{
+        width:'100%',display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:8,
+        background:'transparent',border:'none',cursor:'pointer',fontFamily:'inherit',
+        color:a.color,fontSize:12,fontWeight:500,transition:'background .15s',textAlign:'left'
+      }}
+      onMouseEnter={e=>e.currentTarget.style.background='var(--crd)'}
+      onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+      ><span style={{fontSize:14}}>{a.icon}</span>{a.label}</button>)}
+    </div>
+
+    <div style={{height:1,background:'var(--bd)'}}/>
+
+    <div style={{padding:6}}>
+      <button onClick={()=>{onClose();onSignOut();}} style={{
+        width:'100%',display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:8,
+        background:'transparent',border:'none',cursor:'pointer',fontFamily:'inherit',
+        color:'var(--rs)',fontSize:12,fontWeight:500,transition:'background .15s',textAlign:'left'
+      }}
+      onMouseEnter={e=>e.currentTarget.style.background='var(--rsd)'}
+      onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+      ><span style={{fontSize:14}}>🚪</span>Se déconnecter</button>
+    </div>
+  </div>;
+}
+
+// ── Auth Gate Component ──
+function AuthGate({children}){
+  const[user,setUser]=useState(null);
+  const[loading,setLoading]=useState(true);
+  const[subStatus,setSubStatus]=useState(null);
+  const[mode,setMode]=useState('login');
+  const[email,setEmail]=useState('');const[password,setPassword]=useState('');const[name,setName]=useState('');
+  const[showPwd,setShowPwd]=useState(false);
+  const[error,setError]=useState('');const[info,setInfo]=useState('');const[submitting,setSubmitting]=useState(false);
+
+  useEffect(()=>{authGetUser().then(async u=>{
+    setUser(u);
+    if(u){
+      let sub=await fetchSubscription(u.id);
+      if(!sub)sub=await createTrialSubscription(u.id,u.email);
+      setSubStatus(getSubscriptionStatus(sub));
+    }
+    setLoading(false);
+  });},[]);
+
+  const switchMode=(m)=>{setMode(m);setError('');setInfo('');};
+
+  const handleLogin=async()=>{
+    setError('');setSubmitting(true);
+    try{
+      const data=await authSignIn(email,password);
+      setUser(data.user);
+      let sub=await fetchSubscription(data.user.id);
+      if(!sub)sub=await createTrialSubscription(data.user.id,data.user.email);
+      setSubStatus(getSubscriptionStatus(sub));
+    }catch(e){setError(e.message||'Email ou mot de passe incorrect')}finally{setSubmitting(false)}
+  };
+  const handleSignup=async()=>{
+    if(password.length<6){setError('Mot de passe : 6 caractères minimum');return;}
+    setError('');setSubmitting(true);
+    try{
+      const data=await authSignUp(email,password,name);
+      if(data.user?.id){
+        setUser(data.user);
+        const sub=await createTrialSubscription(data.user.id,data.user.email);
+        setSubStatus(getSubscriptionStatus(sub));
+      }else if(data.user){
+        setUser(data.user);
+        const sub=await createTrialSubscription(data.user.id,data.user.email);
+        setSubStatus(getSubscriptionStatus(sub));
+      }
+    }catch(e){setError(e.message)}finally{setSubmitting(false)}
+  };
+  const handleForgot=async()=>{
+    setError('');setInfo('');setSubmitting(true);
+    try{
+      const res=await fetch(SUPA.url+'/auth/v1/recover',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key},body:JSON.stringify({email})});
+      if(res.ok)setInfo('Lien de réinitialisation envoyé à '+email);
+      else{const d=await res.json();setError(d.error_description||'Erreur')}
+    }catch(e){setError(e.message)}finally{setSubmitting(false)}
+  };
+
+  if(loading)return<div style={{height:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'var(--bg)'}}>
+    <div style={{textAlign:'center'}}>
+      <div style={{width:52,height:52,borderRadius:15,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',fontSize:24,color:'#fff',fontWeight:900,boxShadow:'0 8px 40px rgba(196,50,74,.3)',animation:'pg 2s infinite'}}>K</div>
+      <div style={{fontSize:13,color:'var(--t3)'}}>Chargement…</div>
+    </div>
+  </div>;
+
+  if(user)return typeof children==='function'?children({user,signOut:async()=>{await authSignOut();setUser(null);setSubStatus(null)},subStatus}):children;
+
+  // ── Écran de connexion ──
+  const isLogin=mode==='login',isSignup=mode==='signup',isForgot=mode==='forgot';
+
+  return<div style={{minHeight:'100vh',display:'flex',background:'#080810',fontFamily:'DM Sans,sans-serif',position:'relative',overflow:'hidden'}}>
+
+    {/* Fond animé */}
+    <div style={{position:'absolute',inset:0,backgroundImage:'radial-gradient(rgba(196,50,74,.07) 1px,transparent 1px)',backgroundSize:'32px 32px'}}/>
+    <div style={{position:'absolute',top:'-20%',left:'30%',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.12),transparent 65%)',filter:'blur(80px)',pointerEvents:'none'}}/>
+    <div style={{position:'absolute',bottom:'-15%',right:'10%',width:400,height:400,borderRadius:'50%',background:'radial-gradient(circle,rgba(14,165,233,.06),transparent 65%)',filter:'blur(80px)',pointerEvents:'none'}}/>
+
+    {/* Panneau gauche — branding (masqué sur mobile) */}
+    <div style={{flex:'1',display:'flex',flexDirection:'column',justifyContent:'center',padding:'60px',position:'relative',minWidth:0}}>
+      <div style={{maxWidth:480}}>
+        <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:48}} className="wc-d0">
+          <div style={{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,fontWeight:900,color:'#fff',boxShadow:'0 6px 30px rgba(196,50,74,.4)'}}>K</div>
+          <span style={{fontSize:22,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Kale<span style={{color:'#c4324a'}}>pin</span></span>
+        </div>
+        <div style={{fontSize:38,fontWeight:800,color:'#f0ece6',lineHeight:1.2,letterSpacing:'-.02em',marginBottom:16}} className="wc-d1">
+          Le calepinage bardage<br/><span style={{color:'#c4324a'}}>pensé pour le terrain.</span>
+        </div>
+        <div style={{fontSize:15,color:'#5a5a6e',lineHeight:1.6,marginBottom:40}} className="wc-d2">
+          De la 2D au rendu 3D, du métré à l'export PDF — tout ce qu'il faut pour gagner du temps sur chaque chantier.
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:12}} className="wc-d3">
+          {[
+            {icon:'⚡',text:'Calepinage en quelques minutes'},
+            {icon:'📐',text:'Vue 3D + QR code chantier partageable'},
+            {icon:'📊',text:'Export PDF, Excel, métrés automatiques'},
+          ].map(f=><div key={f.text} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.06)',borderRadius:10}}>
+            <span style={{fontSize:18}}>{f.icon}</span>
+            <span style={{fontSize:13,color:'#8a8a9e',fontWeight:500}}>{f.text}</span>
+          </div>)}
+        </div>
+      </div>
+    </div>
+
+    {/* Séparateur vertical */}
+    <div style={{width:1,background:'linear-gradient(to bottom,transparent,rgba(255,255,255,.06),transparent)',margin:'60px 0',flexShrink:0}}/>
+
+    {/* Panneau droit — formulaire */}
+    <div style={{width:'min(440px,100vw)',display:'flex',flexDirection:'column',justifyContent:'center',padding:'40px 40px',flexShrink:0,zIndex:1}}>
+
+      {/* Tabs login / signup */}
+      {!isForgot&&<div style={{display:'flex',background:'var(--crd)',borderRadius:12,border:'1px solid var(--bd)',padding:3,marginBottom:28,gap:2}}>
+        {[['login','Connexion'],['signup','Créer un compte']].map(([m,l])=><button key={m} onClick={()=>switchMode(m)} style={{
+          flex:1,padding:'8px',borderRadius:9,fontSize:13,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',
+          background:mode===m?'var(--bl)':'transparent',color:mode===m?'#fff':'var(--t3)'
+        }}>{l}</button>)}
+      </div>}
+
+      {isForgot&&<div style={{marginBottom:24}}>
+        <button onClick={()=>switchMode('login')} style={{display:'flex',alignItems:'center',gap:6,background:'none',border:'none',color:'var(--t3)',cursor:'pointer',fontSize:12,fontFamily:'inherit',padding:0}}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Retour à la connexion
+        </button>
+        <div style={{fontSize:20,fontWeight:700,color:'var(--t1)',marginTop:12}}>Mot de passe oublié</div>
+        <div style={{fontSize:13,color:'var(--t3)',marginTop:4}}>On vous envoie un lien de réinitialisation</div>
+      </div>}
+
+      {/* Messages */}
+      {error&&<div style={{background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.25)',borderRadius:10,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#ef4444',display:'flex',alignItems:'center',gap:8}}>
+        <span style={{fontSize:16,flexShrink:0}}>⚠</span>{error}
+      </div>}
+      {info&&<div style={{background:'rgba(16,185,129,.1)',border:'1px solid rgba(16,185,129,.25)',borderRadius:10,padding:'10px 14px',marginBottom:16,fontSize:13,color:'#10b981',display:'flex',alignItems:'center',gap:8}}>
+        <span style={{fontSize:16,flexShrink:0}}>✓</span>{info}
+      </div>}
+
+      <div style={{display:'flex',flexDirection:'column',gap:14}}>
+        {isSignup&&<div>
+          <label style={{fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:6,display:'block',textTransform:'uppercase',letterSpacing:'.06em'}}>Nom complet</label>
+          <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Jean Dupont" className="idark"
+            style={{width:'100%',padding:'12px 14px',borderRadius:10,fontSize:14,boxSizing:'border-box'}}
+            onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')handleSignup()}}/>
+        </div>}
+
+        <div>
+          <label style={{fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:6,display:'block',textTransform:'uppercase',letterSpacing:'.06em'}}>Email</label>
+          <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@entreprise.com" className="idark"
+            style={{width:'100%',padding:'12px 14px',borderRadius:10,fontSize:14,boxSizing:'border-box'}}
+            onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){isForgot?handleForgot():isLogin?handleLogin():handleSignup()}}}/>
+        </div>
+
+        {!isForgot&&<div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <label style={{fontSize:11,fontWeight:600,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.06em'}}>Mot de passe</label>
+            {isLogin&&<button onClick={()=>switchMode('forgot')} style={{background:'none',border:'none',color:'var(--t3)',fontSize:11,cursor:'pointer',fontFamily:'inherit',padding:0,textDecoration:'underline',textUnderlineOffset:2}}>Oublié ?</button>}
+          </div>
+          <div style={{position:'relative'}}>
+            <input type={showPwd?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)}
+              placeholder={isSignup?'6 caractères minimum':'Votre mot de passe'} className="idark"
+              style={{width:'100%',padding:'12px 42px 12px 14px',borderRadius:10,fontSize:14,boxSizing:'border-box'}}
+              onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){isLogin?handleLogin():handleSignup()}}}/>
+            <button onClick={()=>setShowPwd(v=>!v)} style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'var(--t3)',padding:2,display:'flex',alignItems:'center'}}>
+              {showPwd
+                ?<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                :<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
+            </button>
+          </div>
+        </div>}
+
+        <button onClick={isForgot?handleForgot:isLogin?handleLogin:handleSignup}
+          disabled={submitting}
+          style={{width:'100%',padding:'14px',background:submitting?'#5a1120':'#c4324a',color:'#fff',border:'none',borderRadius:12,
+            fontSize:15,fontWeight:700,cursor:submitting?'wait':'pointer',fontFamily:'inherit',transition:'all .2s',
+            boxShadow:'0 4px 20px rgba(196,50,74,.35)',marginTop:4}}>
+          {submitting?'…':isForgot?'Envoyer le lien':isLogin?'Se connecter →':'Démarrer l\'essai gratuit →'}
+        </button>
+      </div>
+
+      {isSignup&&<div style={{marginTop:14,padding:'12px 14px',background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.15)',borderRadius:10,display:'flex',alignItems:'center',gap:10}}>
+        <span style={{fontSize:20}}>🎁</span>
+        <div>
+          <div style={{fontSize:12,fontWeight:700,color:'#10b981'}}>14 jours gratuits, sans CB</div>
+          <div style={{fontSize:11,color:'var(--t3)'}}>Accès complet à toutes les fonctionnalités</div>
+        </div>
+      </div>}
+
+      <div style={{marginTop:24,fontSize:11,color:'var(--t3)',textAlign:'center',lineHeight:1.7}}>
+        En continuant, vous acceptez nos <span style={{color:'var(--t2)',textDecoration:'underline',cursor:'pointer'}}>conditions d'utilisation</span> et notre <span style={{color:'var(--t2)',textDecoration:'underline',cursor:'pointer'}}>politique de confidentialité</span>
+      </div>
+    </div>
+  </div>;
+}
+
 
 async function supaUpload(zoneData){
   const cfg=getSupaConfig();if(!cfg.url||!cfg.key)return null;
@@ -1005,6 +1874,78 @@ async function supaFetch(viewId,cfgOverride){
     if(!res.ok)return null;
     const data=await res.json();return data[0]||null;
   }catch(e){console.error('Supabase fetch:',e);return null}
+}
+
+// ═══════════════════════════════════════════════════════════
+// CLOUD PROJECTS CRUD
+// ═══════════════════════════════════════════════════════════
+async function cloudProjectsList(){
+  const s=getAuthSession();if(!s)return[];
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?select=id,name,updated_at,zones_count,total_surface&order=updated_at.desc',{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return[];return await res.json();
+  }catch(e){return[]}
+}
+
+async function cloudProjectSave(projectData,existingId){
+  const s=getAuthSession();if(!s)return null;
+  const user=await authGetUser();if(!user)return null;
+  const zonesCount=projectData.zones?.length||0;
+  const totalSurf=projectData.zones?.reduce((a,z)=>(a+(z.L||0)*(z.H||0)/1e6),0)||0;
+  const body={user_id:user.id,name:projectData.name||'Projet',data:projectData,
+    zones_count:zonesCount,total_surface:Math.round(totalSurf*100)/100,updated_at:new Date().toISOString()};
+
+  if(existingId){
+    // Update
+    try{
+      const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?id=eq.'+existingId,{
+        method:'PATCH',headers:{'Content-Type':'application/json','apikey':SUPA.key,
+          'Authorization':'Bearer '+s.access_token,'Prefer':'return=representation'},
+        body:JSON.stringify({name:body.name,data:body.data,zones_count:body.zones_count,total_surface:body.total_surface,updated_at:body.updated_at})
+      });
+      if(!res.ok){const e=await res.text();console.error('Cloud save update:',e);return null}
+      const d=await res.json();return d[0]||{id:existingId};
+    }catch(e){return null}
+  }else{
+    // Insert
+    try{
+      const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects',{
+        method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key,
+          'Authorization':'Bearer '+s.access_token,'Prefer':'return=representation'},
+        body:JSON.stringify(body)
+      });
+      if(!res.ok){const e=await res.text();console.error('Cloud save insert:',e);return null}
+      const d=await res.json();return d[0]||null;
+    }catch(e){return null}
+  }
+}
+
+async function cloudProjectLoad(projectId){
+  const s=getAuthSession();if(!s)return null;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?id=eq.'+projectId+'&select=*',{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return null;const d=await res.json();return d[0]||null;
+  }catch(e){return null}
+}
+
+async function cloudProjectDelete(projectId){
+  const s=getAuthSession();if(!s)return false;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?id=eq.'+projectId,{
+      method:'DELETE',headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    return res.ok;
+  }catch(e){return false}
+}
+
+async function cloudProjectDuplicate(projectId){
+  const orig=await cloudProjectLoad(projectId);if(!orig)return null;
+  const newData={...orig.data,name:(orig.name||'Projet')+' (copie)'};
+  return await cloudProjectSave(newData,null);
 }
 
 function makeQRDataURL(text,sizeMM){
@@ -1051,7 +1992,7 @@ function ViewerApp({viewId}){
   </div>;
 }
 
-function App(){
+function App({user,signOut,subStatus}){
   const[step,setStep]=useState('welcome');
   const[projectName,setProjectName]=useState('Projet facade');
   const[bgSrc,setBgSrc]=useState(null);const[bgW,setBgW]=useState(0);const[bgH,setBgH]=useState(0);
@@ -1102,6 +2043,14 @@ function App(){
   const[measures,setMeasures]=useState([]);// stored measurements
   // Métré panel
   const[metreOpen,setMetreOpen]=useState(false);
+  const[userMenu,setUserMenu]=useState(false);
+  const[showPaywall,setShowPaywall]=useState(false);
+  const[showAccount,setShowAccount]=useState(false);
+  const[showProjects,setShowProjects]=useState(false);
+  const[showMasse,setShowMasse]=useState(false);
+  const[cloudProjId,setCloudProjId]=useState(null);
+  const[saving,setSaving]=useState(false);
+  const[lastSaved,setLastSaved]=useState(null);
   const[metreSelZones,setMetreSelZones]=useState({});
   // RAL Colors
   const RAL_COLORS=[
@@ -1194,6 +2143,8 @@ function App(){
   ];
   const RAL_CATS=[...new Set(RAL_COLORS.map(r=>r.cat))];
   const[ralIdx,setRalIdx]=useState(2);// default RAL 7016
+  // Sync global RAL with active zone's RAL when switching zones
+  useEffect(()=>{const z=zones[activeZoneIdx];if(z&&z.ralIdx!=null)setRalIdx(z.ralIdx)},[activeZoneIdx,zones]);
   const[ralCat,setRalCat]=useState('RAL');
   const[show3D,setShow3D]=useState(false);
   const[show3DWall,setShow3DWall]=useState(true);
@@ -1264,7 +2215,7 @@ function App(){
       if(e.key==='d'||e.key==='D'){setModeDraw(v=>!v);setMeasureMode(false)}
       if(e.key==='m'||e.key==='M'){setMeasureMode(v=>!v);setModeDraw(false);setMeasurePts([])}
       if(e.key==='Delete'&&az){if(selIds.size>0){updateAZ(z=>({...z,ouvs:z.ouvs.filter(o=>!selIds.has(o.id))}));setSelIds(new Set())}else if(selId){updateAZ(z=>({...z,ouvs:z.ouvs.filter(o=>o.id!==selId)}));setSelId(null)}}
-      if(e.key==='Escape'){setModeDraw(false);setMeasureMode(false);setMeasurePts([]);setSelId(null);setSelIds(new Set());setShowAlignPanel(false);setPolyPts([]);setEditPanel(null);setMergeSrc(null);setExcludeMode(false);if(show3D)setShow3D(false)}
+      if(e.key==='Escape'){setModeDraw(false);setMeasureMode(false);setMeasurePts([]);setSelId(null);setSelIds(new Set());setShowAlignPanel(false);setPolyPts([]);setEditPanel(null);setMergeSrc(null);setExcludeMode(false);setUserMenu(false);if(show3D)setShow3D(false)}
       // Ctrl+A = ouvrir panneau d'alignement (si sélection) ou sélectionner toutes
       if((e.ctrlKey||e.metaKey)&&e.key==='a'&&az){e.preventDefault();
         if(selIds.size>=2){setShowAlignPanel(v=>!v);}
@@ -1294,6 +2245,17 @@ function App(){
 
   const C=useMemo(()=>az?calcZone({...az,fix}):null,[az,fix]);
   const allCalcs=useMemo(()=>zones.map(z=>calcZone({...z,fix})),[zones,fix]);
+
+  // ── Auto-save cloud every 3 min ──
+  useEffect(()=>{
+    if(!cloudProjId||step!=='work'||zones.length===0)return;
+    const timer=setInterval(()=>{
+      const data={v:16,name:projectName,zones,activeZoneIdx,ralIdx,
+        bgSrc:null,mmPerPx,manualScale:0.06,savedAt:new Date().toISOString()};
+      cloudProjectSave(data,cloudProjId).then(r=>{if(r)setLastSaved(new Date())});
+    },180000);// 3 min
+    return()=>clearInterval(timer);
+  },[cloudProjId,step,zones,projectName,activeZoneIdx,ralIdx,mmPerPx]);
 
   /* ── FILE ── */
   const loadFile=file=>{if(!file)return;const ext=file.name.split('.').pop().toLowerCase();
@@ -1340,7 +2302,7 @@ function App(){
             const newZ={id:Date.now(),name:`Zone ${zones.length+1}`,L:Math.round(b.w/50)*50||2000,H:Math.round(b.h/50)*50||2000,
               facOrigin:{x:polyPts[0].sx-b.x/sc,y:polyPts[0].sy-b.y/sc},
               poly:poly.map(p=>({x:Math.round(p.x-b.x),y:Math.round(p.y-b.y)})),
-              pan_:{l:2000,w:600,nom:''},vert:true,oss:{eM:600,eL:1200},ouvs:[],offX:0,offY:0,rot:0,jointH:0,jointV:0,jointsH:[],jointsV:[],colWidths:[],rowHeights:[],exclusions:[]};
+              pan_:{l:2000,w:600,nom:''},vert:true,oss:{eM:600,eL:1200},ouvs:[],offX:0,offY:0,rot:0,jointH:0,jointV:0,jointsH:[],jointsV:[],colWidths:[],rowHeights:[],exclusions:[],ralIdx:ralIdx};
             newZ.L=Math.round(b.w/50)*50||2000;newZ.H=Math.round(b.h/50)*50||2000;
             setZones(prev=>[...prev,newZ]);setActiveZoneIdx(zones.length);setPolyPts([]);return;
           }
@@ -1450,7 +2412,7 @@ function App(){
       const wScreen=wPx*zoom,hScreen=hPx*zoom;
       if(wScreen>25&&hScreen>25){const wMm=Math.max(500,Math.round(wPx*sc/50)*50),hMm=Math.max(500,Math.round(hPx*sc/50)*50);
         const newZ={id:Date.now(),name:`Zone ${zones.length+1}`,L:wMm,H:hMm,facOrigin:{x:x1,y:y1},poly:null,
-          pan_:{l:2000,w:600,nom:''},vert:true,oss:{eM:600,eL:1200},ouvs:[],offX:0,offY:0,rot:0,jointH:0,jointV:0,jointsH:[],jointsV:[],colWidths:[],rowHeights:[],exclusions:[]};
+          pan_:{l:2000,w:600,nom:''},vert:true,oss:{eM:600,eL:1200},ouvs:[],offX:0,offY:0,rot:0,jointH:0,jointV:0,jointsH:[],jointsV:[],colWidths:[],rowHeights:[],exclusions:[],ralIdx:ralIdx};
         setZones(prev=>[...prev,newZ]);setActiveZoneIdx(zones.length);}
       setZoneStart(null);setZoneCur(null);return;}
     if(drawRect&&drawRect.w>=200&&drawRect.h>=200&&az){const nO={id:Date.now(),t:'Menuiserie',x:drawRect.x,y:drawRect.y,w:drawRect.w,h:drawRect.h};
@@ -1476,14 +2438,30 @@ function App(){
 
   /* ── EXPORT ALL ZONES PNG ── */
   // ── PROJECT SAVE / LOAD ──
-  const saveProject=()=>{
-    const data={v:15,name:projectName,zones,activeZoneIdx,ralIdx,
+  const saveProject=async(forceNew)=>{
+    const data={v:16,name:projectName,zones,activeZoneIdx,ralIdx,
       bgSrc:null,mmPerPx,manualScale:0.06,savedAt:new Date().toISOString()};
-    // Don't save bgSrc if it's a large data URL — just save calibration
-    const json=JSON.stringify(data,null,2);
-    const blob=new Blob([json],{type:'application/json'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;
+    setSaving(true);
+    try{
+      const result=await cloudProjectSave(data,forceNew?null:cloudProjId);
+      if(result){
+        if(!cloudProjId||forceNew)setCloudProjId(result.id);
+        setLastSaved(new Date());
+      }else{
+        // Fallback: local JSON
+        const json=JSON.stringify(data,null,2);const blob=new Blob([json],{type:'application/json'});
+        const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
+        a.download=`Kalepin_${projectName.replace(/\W/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();URL.revokeObjectURL(url);
+      }
+    }catch(e){console.error('Save:',e)}
+    setSaving(false);
+  };
+  const exportProjectJSON=()=>{
+    const data={v:16,name:projectName,zones,activeZoneIdx,ralIdx,
+      bgSrc:null,mmPerPx,manualScale:0.06,savedAt:new Date().toISOString()};
+    const json=JSON.stringify(data,null,2);const blob=new Blob([json],{type:'application/json'});
+    const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
     a.download=`Kalepin_${projectName.replace(/\W/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
     a.click();URL.revokeObjectURL(url);
   };
@@ -1688,11 +2666,26 @@ function App(){
         setActiveZoneIdx(data.activeZoneIdx||0);
         if(data.ralIdx!=null)setRalIdx(data.ralIdx);
         if(data.mmPerPx)setMmPerPx(data.mmPerPx);
+        setCloudProjId(null);// loaded from file, not cloud
         setStep('work');
         setTimeout(autoFit,200);
-        alert('Projet chargé: '+data.zones.length+' zone(s)');
       }catch(e){alert('Erreur lecture fichier: '+e.message)}
     };reader.readAsText(file);
+  };
+  const openCloudProject=async(projId)=>{
+    const proj=await cloudProjectLoad(projId);
+    if(!proj||!proj.data){alert('Projet introuvable');return}
+    const data=proj.data;
+    setProjectName(data.name||proj.name||'Projet');
+    setZones(data.zones||[]);
+    setActiveZoneIdx(data.activeZoneIdx||0);
+    if(data.ralIdx!=null)setRalIdx(data.ralIdx);
+    if(data.mmPerPx)setMmPerPx(data.mmPerPx);
+    setCloudProjId(projId);
+    setLastSaved(new Date(proj.updated_at));
+    setShowProjects(false);
+    setStep('work');
+    setTimeout(autoFit,200);
   };
 
   const exportAllZones=async()=>{
@@ -1777,10 +2770,10 @@ function App(){
 
       // Panels (with RAL color + void handling)
       ctx.save();drawFacadeOutline(fX,fY,fW,fH,z,sc);ctx.clip();
-      const ralHex=RAL_COLORS[ralIdx]?.hex||'#383E42';
+      const ralHex=RAL_COLORS[z.ralIdx??ralIdx]?.hex||'#383E42';
       zC.panelMap.forEach(pm=>{
         const px=fX+pm.pLeft*1000*sc,py=fY+pm.pTop*1000*sc,pw2=pm.pWa*1000*sc,ph2=pm.pHa*1000*sc;
-        if(pm.isVoid){ctx.fillStyle='rgba(0,0,0,.2)';ctx.fillRect(px,py,pw2,ph2);return}
+        if(pm.isVoid){ctx.fillStyle='rgba(255,255,255,.06)';ctx.fillRect(px,py,pw2,ph2);return}
         ctx.fillStyle=ralHex;ctx.globalAlpha=0.88;ctx.fillRect(px+.5,py+.5,pw2-1,ph2-1);ctx.globalAlpha=1;
         ctx.strokeStyle=pm.isImpacted?'rgba(251,191,36,.7)':'rgba(255,255,255,.15)';ctx.lineWidth=pm.isImpacted?1.2:.4;ctx.strokeRect(px+.5,py+.5,pw2-1,ph2-1);
         if(pw2>16&&ph2>10){ctx.fillStyle='rgba(255,255,255,.6)';ctx.font=`bold ${Math.min(8,pw2/5)}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';
@@ -2551,7 +3544,7 @@ function App(){
         {isActive&&<g clipPath={`url(#${clipId})`}>{zCalc.panelMap.map((pm,pi)=>{
           const px=pm.pLeft*1000*ppZ,py=pm.pTop*1000*ppZ,pw=pm.pWa*1000*ppZ,ph=pm.pHa*1000*ppZ;
           if(pw<1||ph<1)return null;
-          const ralColor=RAL_COLORS[ralIdx]?.hex||'#383E42';
+          const ralColor=RAL_COLORS[az.ralIdx??ralIdx]?.hex||'#383E42';
           if(pm.isVoid){
             // Void cell (inside opening) - show as empty/hatched
             return<g key={`p${pm.col}-${pm.row}`}>
@@ -2600,11 +3593,11 @@ function App(){
               opacity={isEditing?1:.85}/>
             {/* Panel ref label */}
             {pw>14&&ph>10&&<text x={px+3} y={py+9} fontSize={Math.min(7,pw/6,ph/3)} fontWeight="700" fontFamily="JetBrains Mono"
-              fill="rgba(42,26,30,.8)" style={{pointerEvents:'none'}}>{pm.subRef}</text>}
+              fill="rgba(255,255,255,.85)" style={{pointerEvents:'none'}}>{pm.subRef}</text>}
             {/* Dimensions */}
             {pw>45&&ph>22&&<text x={px+pw/2} y={py+ph/2+2} textAnchor="middle" dominantBaseline="middle"
               fontSize={Math.min(7,pw/8,ph/3.5)} fontWeight="500" fontFamily="JetBrains Mono"
-              fill="rgba(42,26,30,.55)" style={{pointerEvents:'none'}}>{panW}×{panH}</text>}
+              fill="rgba(255,255,255,.6)" style={{pointerEvents:'none'}}>{panW}×{panH}</text>}
             {/* Impacted marker */}
             {isImp&&pw>20&&ph>14&&<text x={px+pw-3} y={py+9} textAnchor="end" fontSize={Math.min(7,pw/7)}
               fill="rgba(251,191,36,.9)" fontWeight="700" style={{pointerEvents:'none'}}>✂</text>}
@@ -2831,29 +3824,29 @@ function App(){
 
   /* ── WELCOME ── */
   const Welcome=()=>(
-    <div className="h-full w-full flex items-center justify-center relative overflow-hidden" style={{background:'linear-gradient(160deg,#f5f2ee,#efe8e0 40%,#f0e6e0 70%,#f5f2ee)'}}>
+    <div className="h-full w-full flex items-center justify-center relative overflow-hidden" style={{background:'linear-gradient(160deg,#0a0a0f,#0e0e1a 40%,#110e18 70%,#0a0a0f)'}}>
       {/* Animated bg */}
       <div style={{position:'absolute',inset:0,overflow:'hidden',pointerEvents:'none'}}>
         <svg width="100%" height="100%" style={{opacity:.03}}>
-          {Array.from({length:20}).map((_,i)=><line key={`v${i}`} x1={`${i*5.2}%`} y1="0" x2={`${i*5.2}%`} y2="100%" stroke="#8b1a2b" strokeWidth=".5"/>)}
-          {Array.from({length:14}).map((_,i)=><line key={`h${i}`} x1="0" y1={`${i*7.5}%`} x2="100%" y2={`${i*7.5}%`} stroke="#8b1a2b" strokeWidth=".5"/>)}
+          {Array.from({length:20}).map((_,i)=><line key={`v${i}`} x1={`${i*5.2}%`} y1="0" x2={`${i*5.2}%`} y2="100%" stroke="#c4324a" strokeWidth=".5"/>)}
+          {Array.from({length:14}).map((_,i)=><line key={`h${i}`} x1="0" y1={`${i*7.5}%`} x2="100%" y2={`${i*7.5}%`} stroke="#c4324a" strokeWidth=".5"/>)}
         </svg>
-        <div style={{position:'absolute',top:'15%',left:'20%',width:220,height:220,borderRadius:'50%',background:'radial-gradient(circle,rgba(139,26,43,.05),transparent 70%)',animation:'float 7s ease-in-out infinite'}}/>
+        <div style={{position:'absolute',top:'15%',left:'20%',width:220,height:220,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.08),transparent 70%)',animation:'float 7s ease-in-out infinite'}}/>
         <div style={{position:'absolute',bottom:'20%',right:'15%',width:160,height:160,borderRadius:'50%',background:'radial-gradient(circle,rgba(8,145,178,.04),transparent 70%)',animation:'float 5s ease-in-out infinite 2s'}}/>
-        <div style={{position:'absolute',top:'50%',left:'50%',width:400,height:400,marginTop:-200,marginLeft:-200,borderRadius:'50%',background:'radial-gradient(circle,rgba(139,26,43,.03),transparent 60%)',animation:'float 9s ease-in-out infinite 1s'}}/>
+        <div style={{position:'absolute',top:'50%',left:'50%',width:400,height:400,marginTop:-200,marginLeft:-200,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.06),transparent 60%)',animation:'float 9s ease-in-out infinite 1s'}}/>
       </div>
       <div className="flex flex-col items-center" style={{maxWidth:480,width:'100%',padding:'0 32px',textAlign:'center',position:'relative',zIndex:2}}>
         {/* Logo with orbiting dots + pulse rings */}
         <div className="wc-d0 mb-8 relative" style={{width:88,height:88}}>
-          <div style={{position:'absolute',inset:-8,borderRadius:'50%',border:'1.5px solid rgba(139,26,43,.12)',animation:'pulse-ring 3s cubic-bezier(.215,.61,.355,1) infinite'}}/>
+          <div style={{position:'absolute',inset:-8,borderRadius:'50%',border:'1.5px solid rgba(196,50,74,.15)',animation:'pulse-ring 3s cubic-bezier(.215,.61,.355,1) infinite'}}/>
           <div style={{position:'absolute',inset:-8,borderRadius:'50%',border:'1.5px solid rgba(8,145,178,.08)',animation:'pulse-ring 3s cubic-bezier(.215,.61,.355,1) infinite',animationDelay:'1s'}}/>
-          <div className="wc-logo flex items-center justify-center" style={{width:88,height:88,borderRadius:22,background:'linear-gradient(135deg,#8b1a2b,#a0243a,#c0392b)',boxShadow:'0 8px 40px rgba(139,26,43,.25),0 0 80px rgba(139,26,43,.08)',position:'relative',zIndex:1}}>
+          <div className="wc-logo flex items-center justify-center" style={{width:88,height:88,borderRadius:22,background:'linear-gradient(135deg,#c4324a,#a0243a,#c0392b)',boxShadow:'0 8px 40px rgba(196,50,74,.3),0 0 80px rgba(196,50,74,.12)',position:'relative',zIndex:1}}>
             <svg width="42" height="42" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".95"/><rect x="23" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="3" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="23" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".55"/></svg>
           </div>
           <div style={{position:'absolute',top:'50%',left:'50%',width:7,height:7,marginTop:-3.5,marginLeft:-3.5,borderRadius:'50%',background:'#0891b2',boxShadow:'0 0 10px #0891b2',animation:'orbit 8s linear infinite'}}/>
-          <div style={{position:'absolute',top:'50%',left:'50%',width:5,height:5,marginTop:-2.5,marginLeft:-2.5,borderRadius:'50%',background:'#8b1a2b',boxShadow:'0 0 8px #8b1a2b',animation:'orbit 6s linear infinite reverse',animationDelay:'-2s'}}/>
+          <div style={{position:'absolute',top:'50%',left:'50%',width:5,height:5,marginTop:-2.5,marginLeft:-2.5,borderRadius:'50%',background:'#c4324a',boxShadow:'0 0 8px #c4324a',animation:'orbit 6s linear infinite reverse',animationDelay:'-2s'}}/>
         </div>
-        <h1 className="wc-d1 text-3xl font-bold mb-2" style={{background:'linear-gradient(135deg,#2a1a1e,#8b1a2b)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',letterSpacing:'-0.02em'}}>Kalepin</h1>
+        <h1 className="wc-d1 text-3xl font-bold mb-2" style={{background:'linear-gradient(135deg,#f0ece6,#c4324a)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',letterSpacing:'-0.02em'}}>Kalepin</h1>
         <p className="wc-d1 text-sm mb-1.5" style={{color:'var(--t2)'}}>Calepinage, découpe & visualisation 3D</p>
         <p className="wc-d1 text-[10px] mn mb-10" style={{color:'var(--t3)'}}>v16 — PDF fournisseur • Zones ajustables • Plan transparent</p>
         <div className="wc-d2 w-full" style={{marginBottom:24}}>
@@ -2865,15 +3858,18 @@ function App(){
               {I.up(28)}
             </div>
             <div className="text-left"><div className="text-sm font-semibold mb-1.5">Déposer un plan</div>
-            <div className="flex gap-1.5">{['PDF','PNG','JPG','DXF'].map(t=><span key={t} className="px-2.5 py-0.5 rounded-md text-[10px] font-bold mn" style={{background:t==='DXF'?'rgba(8,145,178,.1)':'rgba(139,26,43,.08)',color:t==='DXF'?'#0891b2':'#8b1a2b'}}>{t}</span>)}</div></div>
+            <div className="flex gap-1.5">{['PDF','PNG','JPG','DXF'].map(t=><span key={t} className="px-2.5 py-0.5 rounded-md text-[10px] font-bold mn" style={{background:t==='DXF'?'rgba(8,145,178,.1)':'rgba(196,50,74,.12)',color:t==='DXF'?'#0891b2':'#c4324a'}}>{t}</span>)}</div></div>
           </div></div>
         <div className="wc-d3 flex items-center gap-3 mb-6 w-full"><div className="flex-1 h-px" style={{background:'var(--bd)'}}/><span className="text-[11px]" style={{color:'var(--t3)'}}>ou</span><div className="flex-1 h-px" style={{background:'var(--bd)'}}/></div>
+        <button onClick={()=>setShowProjects(true)} className="wc-d3 ba w-full py-3.5 rounded-xl text-sm font-semibold mb-3"
+          style={{background:'linear-gradient(135deg,rgba(79,110,247,.1),rgba(79,110,247,.05))',border:'1px solid rgba(79,110,247,.25)',color:'var(--bl)',transition:'all .3s'}}>
+          ☁ Mes projets</button>
         <button onClick={startManual} className="wc-d3 ba w-full py-3.5 rounded-xl text-sm font-semibold" 
-          style={{background:'linear-gradient(135deg,#f0ece6,#e8e0d8)',border:'1px solid var(--bd2)',color:'var(--t1)',
+          style={{background:'linear-gradient(135deg,var(--crd),var(--crd2))',border:'1px solid var(--bd2)',color:'var(--t1)',
             backgroundSize:'200% auto',transition:'all .3s'}}>
           Saisie manuelle des dimensions</button>
         <div className="wc-d4 flex flex-wrap justify-center gap-2.5 mt-10">
-          {[{c:'#0891b2',t:'DXF/PDF',i:'📐'},{c:'#8b1a2b',t:'Découpe',i:'✂'},{c:'#a0243a',t:'3D & RAL',i:'🧊'},{c:'#0d9488',t:'Métré',i:'📊'}].map(f=>
+          {[{c:'#0891b2',t:'DXF/PDF',i:'📐'},{c:'#c4324a',t:'Découpe',i:'✂'},{c:'#a0243a',t:'3D & RAL',i:'🧊'},{c:'#0d9488',t:'Métré',i:'📊'}].map(f=>
             <div key={f.t} className="px-3.5 py-2 rounded-xl text-center" style={{background:`color-mix(in srgb,${f.c} 8%,transparent)`,border:`1px solid color-mix(in srgb,${f.c} 15%,transparent)`}}>
               <div className="text-[10px] font-bold" style={{color:f.c}}>{f.i} {f.t}</div></div>)}
         </div>
@@ -2939,7 +3935,7 @@ function App(){
           </div>
         </div>)}
       </div>
-      <div className="mt-3 p-2 rounded-lg text-center" style={{background:'rgba(139,26,43,.05)',border:'1px solid rgba(139,26,43,.12)'}}>
+      <div className="mt-3 p-2 rounded-lg text-center" style={{background:'rgba(196,50,74,.08)',border:'1px solid rgba(196,50,74,.15)'}}>
         <span className="text-sm font-bold" style={{color:'var(--bl)'}}>Total: </span>
         <span className="mn text-sm font-bold" style={{color:'var(--bl)'}}>
           {((r.tG+fv+10)*o.h/1e6+(r.tD+fv+10)*o.h/1e6+(r.lin+fv+10)*o.w/1e6+(r.app+fv+10)*o.w/1e6).toFixed(3)} m²
@@ -2957,20 +3953,30 @@ function App(){
       {/* ── LIGNE 1 : Logo + projet + outils ── */}
       <div className="flex items-center px-3 flex-shrink-0" style={{height:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)'}}>
         <div className="flex items-center gap-2 flex-shrink-0">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'linear-gradient(135deg,#8b1a2b,#a0243a)'}}>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'linear-gradient(135deg,#c4324a,#a0243a)'}}>
             <svg width="14" height="14" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
           </div><span className="font-bold text-sm">Kalepin</span></div>
         {step==='work'&&<>
           <div className="mx-2 h-5 w-px flex-shrink-0" style={{background:'var(--bd)'}}/>
           <input type="text" value={projectName} onChange={e=>setProjectName(e.target.value)} className="bg-transparent border-none outline-none text-sm font-medium flex-shrink-0" style={{color:'var(--t2)',width:130}} onKeyDown={e=>e.stopPropagation()}/>
           <div className="flex gap-1 ml-1 flex-shrink-0">
-            <button onClick={saveProject} className="ba px-2 py-1 rounded text-[9px] font-bold"
-              style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)'}}
-              title="Sauvegarder le projet (JSON)">💾 Sauver</button>
-            <label className="ba px-2 py-1 rounded text-[9px] font-bold cursor-pointer"
+            <button onClick={()=>saveProject(false)} className="ba px-2 py-1 rounded text-[9px] font-bold"
+              style={{background:saving?'rgba(52,211,153,.2)':'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)',opacity:saving?.6:1}}
+              title={cloudProjId?'Sauvegarder dans le cloud':'Nouveau projet cloud'}>{saving?'⏳':'☁'} {saving?'...':'Sauver'}</button>
+            <button onClick={()=>setShowProjects(true)} className="ba px-2 py-1 rounded text-[9px] font-bold"
               style={{background:'rgba(79,110,247,.1)',border:'1px solid rgba(79,110,247,.3)',color:'var(--bl)'}}
-              title="Charger un projet sauvegardé">
-              📂 Charger<input type="file" accept=".json" className="hidden" onChange={e=>{if(e.target.files[0])loadProject(e.target.files[0]);e.target.value=''}}/></label>
+              title="Mes projets cloud">📂 Projets</button>
+            <div style={{position:'relative'}} className="flex-shrink-0">
+              <button onClick={e=>{e.currentTarget.nextSibling.style.display=e.currentTarget.nextSibling.style.display==='block'?'none':'block'}}
+                className="ba px-1.5 py-1 rounded text-[9px]" style={{border:'1px solid var(--bd)',color:'var(--t3)',background:'var(--crd)'}}>⋯</button>
+              <div style={{display:'none',position:'absolute',top:'100%',left:0,marginTop:4,background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:8,padding:4,minWidth:140,boxShadow:'0 10px 30px rgba(0,0,0,.4)',zIndex:200}}>
+                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';saveProject(true)}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>☁ Sauver comme nouveau</button>
+                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';exportProjectJSON()}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>💾 Exporter JSON</button>
+                <label className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2 cursor-pointer" style={{color:'var(--t2)'}}>
+                  📥 Importer JSON<input type="file" accept=".json" className="hidden" onChange={e=>{e.currentTarget.closest('div').style.display='none';if(e.target.files[0])loadProject(e.target.files[0]);e.target.value=''}}/></label>
+              </div>
+            </div>
+            {lastSaved&&<span className="text-[8px] self-center ml-1" style={{color:'var(--t3)'}}>☁ {lastSaved.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span>}
           </div>
           {/* ── ONGLETS ── */}
           <div className="flex-1 min-w-0 mx-2 self-stretch flex items-end">
@@ -3043,6 +4049,8 @@ function App(){
               className={`ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0 ${measureMode?'apg':''}`}
               style={{background:measureMode?'rgba(245,158,11,.15)':'var(--inp)',border:`1px solid ${measureMode?'#f59e0b':'var(--bd)'}`,color:measureMode?'#f59e0b':'var(--t2)'}}>📏</button>
             {measures.length>0&&<button onClick={()=>setMeasures([])} className="text-[9px] px-1.5 py-1 rounded flex-shrink-0" style={{color:'var(--rs)'}}>✕ {measures.length}</button>}
+            <button onClick={()=>setShowMasse(true)} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
+              style={{background:'rgba(14,165,233,.1)',border:'1px solid rgba(14,165,233,.3)',color:'#0ea5e9'}}>🗺 Masse</button>
             <button onClick={()=>setMetreOpen(true)} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)'}}>📊 Métré</button>
             <button onClick={()=>setRightTab('ral')} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
               style={{background:rightTab==='ral'?'rgba(167,139,250,.2)':'transparent',border:`1px solid ${rightTab==='ral'?'var(--pp)':'rgba(167,139,250,.2)'}`,color:'var(--pp)'}}>
@@ -3052,9 +4060,37 @@ function App(){
               🧊 {show3D?'2D':'3D'}</button>
             <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setExpSel(s);setExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(79,110,247,.1)',border:'1px solid rgba(79,110,247,.3)',color:'var(--bl)'}}>{I.prn(12)} PDF</button>
             <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setXlsxExpSel(s);setXlsxExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)'}}>📊 Excel</button>
+            <div className="mx-1 h-5 w-px flex-shrink-0" style={{background:'var(--bd)'}}/>
+            <div style={{position:'relative'}} className="flex-shrink-0">
+              <button onClick={()=>setUserMenu(v=>!v)} className="ba flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{background:userMenu?'var(--crd2)':'var(--crd)',border:'1px solid var(--bd)'}}>
+                <div style={{width:26,height:26,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:'#fff',flexShrink:0}}>
+                  {(user?.user_metadata?.full_name||user?.email||'U')[0].toUpperCase()}
+                </div>
+                <span style={{fontSize:11,color:'var(--t2)',maxWidth:80,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                  {user?.user_metadata?.full_name||user?.email?.split('@')[0]||'User'}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--t3)',transform:userMenu?'rotate(180deg)':'rotate(0)',transition:'transform .2s',flexShrink:0}}><path d="M6 9l6 6 6-6"/></svg>
+              </button>
+              {userMenu&&<div style={{position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:200}}>
+                <UserMenuPanel user={user} subStatus={subStatus} onUpgrade={()=>setShowPaywall(true)} onSettings={()=>setShowAccount(true)} onSignOut={signOut} onClose={()=>setUserMenu(false)}/>
+              </div>}
+            </div>
           </div>
         </>}
+        {step!=='work'&&<div style={{marginLeft:'auto',position:'relative'}} className="flex-shrink-0">
+          <button onClick={()=>setUserMenu(v=>!v)} className="ba flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{background:userMenu?'var(--crd2)':'var(--crd)',border:'1px solid var(--bd)'}}>
+            <div style={{width:26,height:26,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:'#fff'}}>
+              {(user?.user_metadata?.full_name||user?.email||'U')[0].toUpperCase()}
+            </div>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color:'var(--t3)',transform:userMenu?'rotate(180deg)':'rotate(0)',transition:'transform .2s'}}><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          {userMenu&&<div style={{position:'absolute',top:'calc(100% + 6px)',right:0,zIndex:200}}>
+            <UserMenuPanel user={user} subStatus={subStatus} onUpgrade={()=>setShowPaywall(true)} onSettings={()=>setShowAccount(true)} onSignOut={signOut} onClose={()=>setUserMenu(false)}/>
+          </div>}
+        </div>}
       </div>
+      {/* ── TRIAL BANNER ── */}
+      {step==='work'&&<div style={{padding:'0 8px'}}><TrialBanner subStatus={subStatus} onUpgrade={()=>setShowPaywall(true)}/></div>}
       {/* ══ BARRE MULTI-SÉLECTION OUVERTURES ══ */}
       {step==='work'&&selIds.size>0&&az&&(()=>{
         const selOuvs=az.ouvs.filter(o=>selIds.has(o.id));
@@ -3103,37 +4139,37 @@ function App(){
         };
         // SVG alignment icons
         const AlignIcon=({type})=>{
-          const sq=(x,y,w=18,h=18,fill='#8b1a2b')=><rect x={x} y={y} width={w} height={h} rx="2" fill={fill}/>;
-          const line=(x1,y1,x2,y2)=><line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#8b1a2b" strokeWidth="2" strokeDasharray="3,2"/>;
+          const sq=(x,y,w=18,h=18,fill='#c4324a')=><rect x={x} y={y} width={w} height={h} rx="2" fill={fill}/>;
+          const line=(x1,y1,x2,y2)=><line x1={x1} y1={y1} x2={x2} y2={y2} stroke="#c4324a" strokeWidth="2" strokeDasharray="3,2"/>;
           const s=28;
-          if(type==='left')   return<svg width={s} height={s} viewBox="0 0 28 28">{line(6,2,6,26)}{sq(7,4,8,8,'#8b1a2b')}{sq(7,11,14,6,'rgba(139,26,43,.4)')}{sq(7,18,10,7,'rgba(139,26,43,.6)')}</svg>;
-          if(type==='right')  return<svg width={s} height={s} viewBox="0 0 28 28">{line(22,2,22,26)}{sq(6,4,14,8,'rgba(139,26,43,.4)')}{sq(12,13,8,6,'#8b1a2b')}{sq(9,20,11,6,'rgba(139,26,43,.6)')}</svg>;
-          if(type==='cH')     return<svg width={s} height={s} viewBox="0 0 28 28">{line(14,2,14,26)}{sq(6,4,16,7,'rgba(139,26,43,.4)')}{sq(9,12,10,7,'#8b1a2b')}{sq(7,20,14,6,'rgba(139,26,43,.6)')}</svg>;
-          if(type==='top')    return<svg width={s} height={s} viewBox="0 0 28 28">{line(2,6,26,6)}{sq(4,7,8,10,'#8b1a2b')}{sq(15,7,9,16,'rgba(139,26,43,.4)')}</svg>;
-          if(type==='bottom') return<svg width={s} height={s} viewBox="0 0 28 28">{line(2,22,26,22)}{sq(4,6,8,16,'rgba(139,26,43,.4)')}{sq(15,12,9,10,'#8b1a2b')}</svg>;
-          if(type==='cV')     return<svg width={s} height={s} viewBox="0 0 28 28">{line(2,14,26,14)}{sq(4,5,8,18,'rgba(139,26,43,.4)')}{sq(15,8,9,12,'#8b1a2b')}</svg>;
-          if(type==='dH')     return<svg width={s} height={s} viewBox="0 0 28 28"><text x="14" y="18" textAnchor="middle" fontSize="14" fill="#8b1a2b" fontWeight="bold">⇿</text></svg>;
-          if(type==='dV')     return<svg width={s} height={s} viewBox="0 0 28 28"><text x="14" y="18" textAnchor="middle" fontSize="14" fill="#8b1a2b" fontWeight="bold">⇳</text></svg>;
+          if(type==='left')   return<svg width={s} height={s} viewBox="0 0 28 28">{line(6,2,6,26)}{sq(7,4,8,8,'#c4324a')}{sq(7,11,14,6,'rgba(139,26,43,.4)')}{sq(7,18,10,7,'rgba(139,26,43,.6)')}</svg>;
+          if(type==='right')  return<svg width={s} height={s} viewBox="0 0 28 28">{line(22,2,22,26)}{sq(6,4,14,8,'rgba(139,26,43,.4)')}{sq(12,13,8,6,'#c4324a')}{sq(9,20,11,6,'rgba(139,26,43,.6)')}</svg>;
+          if(type==='cH')     return<svg width={s} height={s} viewBox="0 0 28 28">{line(14,2,14,26)}{sq(6,4,16,7,'rgba(139,26,43,.4)')}{sq(9,12,10,7,'#c4324a')}{sq(7,20,14,6,'rgba(139,26,43,.6)')}</svg>;
+          if(type==='top')    return<svg width={s} height={s} viewBox="0 0 28 28">{line(2,6,26,6)}{sq(4,7,8,10,'#c4324a')}{sq(15,7,9,16,'rgba(139,26,43,.4)')}</svg>;
+          if(type==='bottom') return<svg width={s} height={s} viewBox="0 0 28 28">{line(2,22,26,22)}{sq(4,6,8,16,'rgba(139,26,43,.4)')}{sq(15,12,9,10,'#c4324a')}</svg>;
+          if(type==='cV')     return<svg width={s} height={s} viewBox="0 0 28 28">{line(2,14,26,14)}{sq(4,5,8,18,'rgba(139,26,43,.4)')}{sq(15,8,9,12,'#c4324a')}</svg>;
+          if(type==='dH')     return<svg width={s} height={s} viewBox="0 0 28 28"><text x="14" y="18" textAnchor="middle" fontSize="14" fill="#c4324a" fontWeight="bold">⇿</text></svg>;
+          if(type==='dV')     return<svg width={s} height={s} viewBox="0 0 28 28"><text x="14" y="18" textAnchor="middle" fontSize="14" fill="#c4324a" fontWeight="bold">⇳</text></svg>;
           return null;
         };
         const AB2=(type,label,fn,disabled=false)=>(
           <button key={type} title={label} onClick={disabled?undefined:fn} disabled={disabled}
             className="ba flex flex-col items-center gap-0.5 px-1.5 py-1 rounded"
-            style={{background:'rgba(139,26,43,.07)',border:'1px solid rgba(139,26,43,.2)',color:'var(--bl)',opacity:disabled?.35:1,cursor:disabled?'not-allowed':'pointer',minWidth:34}}>
+            style={{background:'rgba(139,26,43,.07)',border:'1px solid rgba(196,50,74,.25)',color:'var(--bl)',opacity:disabled?.35:1,cursor:disabled?'not-allowed':'pointer',minWidth:34}}>
             <AlignIcon type={type}/>
             <span style={{fontSize:7,color:'var(--t3)',lineHeight:1}}>{label}</span>
           </button>
         );
         return(
-          <div className="flex-shrink-0" style={{borderBottom:'1px solid rgba(139,26,43,.2)'}}>
+          <div className="flex-shrink-0" style={{borderBottom:'1px solid rgba(196,50,74,.25)'}}>
             {/* Ligne 1 : info + actions basiques */}
-            <div className="flex items-center gap-2 px-3 py-1" style={{background:'rgba(139,26,43,.06)'}}>
+            <div className="flex items-center gap-2 px-3 py-1" style={{background:'rgba(196,50,74,.08)'}}>
               <span className="text-[11px] font-bold" style={{color:'var(--bl)'}}>{selIds.size} ouverture{selIds.size>1?'s':''} sélectionnée{selIds.size>1?'s':''}</span>
               <span className="text-[9px] opacity-50" style={{color:'var(--t2)'}}>Ctrl+clic · Maj+clic · Lasso · Glisser=déplacer</span>
               <div className="flex-1"/>
               <button onClick={()=>setShowAlignPanel(v=>!v)}
                 className="ba flex items-center gap-1 px-2 py-1 rounded text-[9px] font-bold"
-                style={{background:showAlignPanel?'rgba(139,26,43,.2)':'rgba(139,26,43,.08)',border:'1px solid rgba(139,26,43,.3)',color:'var(--bl)'}}>
+                style={{background:showAlignPanel?'rgba(196,50,74,.25)':'rgba(196,50,74,.12)',border:'1px solid rgba(196,50,74,.35)',color:'var(--bl)'}}>
                 ⊹ Aligner <span className="opacity-50 ml-0.5">Ctrl+A</span>
               </button>
               <button onClick={()=>{const dx=parseInt(prompt('Décalage X (mm):','0')||'0'),dy=parseInt(prompt('Décalage Y (mm):','0')||'0');updateAZ(z=>({...z,ouvs:z.ouvs.map(o=>selIds.has(o.id)?{...o,x:Math.max(0,Math.min(o.x+(dx||0),z.L-o.w)),y:Math.max(0,Math.min(o.y+(dy||0),z.H-o.h))}:o)}));}}
@@ -3146,16 +4182,16 @@ function App(){
             </div>
             {/* Ligne 2 : alignement */}
             {showAlignPanel&&selIds.size>=2&&(
-              <div className="flex items-center gap-1 px-3 py-1.5" style={{background:'rgba(139,26,43,.04)',borderTop:'1px solid rgba(139,26,43,.12)'}}>
+              <div className="flex items-center gap-1 px-3 py-1.5" style={{background:'rgba(196,50,74,.08)',borderTop:'1px solid rgba(196,50,74,.15)'}}>
                 <span className="text-[8px] font-bold mr-0.5" style={{color:'var(--t3)'}}>ALIGNER</span>
                 {AB2('left','Gauche',()=>doAlign('left'))}
                 {AB2('cH','Centrer H',()=>doAlign('centerH'))}
                 {AB2('right','Droite',()=>doAlign('right'))}
-                <div className="w-px h-6 mx-0.5" style={{background:'rgba(139,26,43,.2)'}}/>
+                <div className="w-px h-6 mx-0.5" style={{background:'rgba(196,50,74,.25)'}}/>
                 {AB2('top','Haut',()=>doAlign('top'))}
                 {AB2('cV','Centrer V',()=>doAlign('centerV'))}
                 {AB2('bottom','Bas',()=>doAlign('bottom'))}
-                <div className="w-px h-6 mx-0.5" style={{background:'rgba(139,26,43,.2)'}}/>
+                <div className="w-px h-6 mx-0.5" style={{background:'rgba(196,50,74,.25)'}}/>
                 <span className="text-[8px] font-bold mr-0.5" style={{color:'var(--t3)'}}>DISTRIBUER</span>
                 {AB2('dH','Horiz.',()=>doAlign('distH'),selIds.size<3)}
                 {AB2('dV','Vert.',()=>doAlign('distV'),selIds.size<3)}
@@ -3378,7 +4414,7 @@ function App(){
           <Instructions/>
           <div ref={cvRef} className="flex-1 overflow-hidden cvbg" style={{cursor,position:'relative'}} onMouseDown={handleDown} onMouseMove={handleMove} onMouseUp={handleUp} onMouseLeave={()=>{handleUp();setDragZone(null);setResizeZone(null)}} onContextMenu={e=>e.preventDefault()}>
 
-            {show3D&&az&&C&&<Facade3D zone={az} calc={C} ralColor={RAL_COLORS[ralIdx]?.hex} ralFinish={RAL_COLORS[ralIdx]?.finish||'mat'}
+            {show3D&&az&&C&&<Facade3D zone={az} calc={C} ralColor={RAL_COLORS[az.ralIdx??ralIdx]?.hex} ralFinish={RAL_COLORS[az.ralIdx??ralIdx]?.finish||'mat'}
               showWall={show3DWall}
               onToggle={k=>{if(k==='wall')setShow3DWall(v=>!v)}}
               onClose={()=>setShow3D(false)}/>}
@@ -3546,7 +4582,7 @@ function App(){
                   </div>
                   {/* Color grid filtered by category */}
                   <div className="grid grid-cols-6 gap-1.5">
-                    {RAL_COLORS.map((r,i)=>r.cat===ralCat?<button key={r.code} onClick={()=>setRalIdx(i)}
+                    {RAL_COLORS.map((r,i)=>r.cat===ralCat?<button key={r.code} onClick={()=>{setRalIdx(i);updateAZ(z=>({...z,ralIdx:i}))}}
                       className="ba relative" title={`${r.code} — ${r.name}${r.finish?' ('+r.finish+')':''}`}
                       style={{width:34,height:34,borderRadius:8,background:r.hex,border:i===ralIdx?'3px solid var(--bl)':'2px solid rgba(255,255,255,.08)',
                         boxShadow:i===ralIdx?'0 0 12px rgba(79,110,247,.4)':'none',transform:i===ralIdx?'scale(1.12)':'scale(1)',transition:'.15s'}}>
@@ -3668,7 +4704,7 @@ function App(){
                         </div>)}
                       </div>
                       {/* Totaux */}
-                      <div className="rounded-lg p-2 mb-2" style={{background:'var(--ppd)',border:'1px solid rgba(139,26,43,.2)'}}>
+                      <div className="rounded-lg p-2 mb-2" style={{background:'var(--ppd)',border:'1px solid rgba(196,50,74,.25)'}}>
                         <div className="flex justify-between text-[10px] mb-1"><span style={{color:'var(--pp)',fontWeight:700}}>Total plis</span><span className="mn font-bold" style={{color:'var(--pp)'}}>{C.totCassettes.pliees} pcs</span></div>
                         <div className="flex justify-between text-[10px] mb-1"><span style={{color:'var(--t3)'}}>Panneaux concernés</span><span className="mn font-bold" style={{color:'var(--am)'}}>{uniquePans.size} pan.</span></div>
                         <div className="flex justify-between text-[10px] mb-1"><span style={{color:'var(--t3)'}}>Surface cassettes</span><span className="mn font-bold" style={{color:'var(--pp)'}}>{C.totCassettes.surfTot.toFixed(2)} m²</span></div>
@@ -3802,7 +4838,7 @@ function App(){
         if(!pm||pm.isVoid){setEditPanel(null);return null}
         const panW=Math.round(pm.pWa*1000),panH=Math.round(pm.pHa*1000);
         const pCol=pm.parentCol,pRow=pm.parentRow;
-        const ralHex=RAL_COLORS[ralIdx]?.hex||'#383E42';
+        const ralHex=RAL_COLORS[az?.ralIdx??ralIdx]?.hex||'#383E42';
         // Compute screen position from panel coords + zoom/pan
         const ppZ=zoom*(pxPerMm_eff||manualScale||0.15);
         const scrX=(pm.pLeft*ppZ+pan.x+(az.facOrigin?.x||0)*zoom)*1+30;
@@ -3832,7 +4868,7 @@ function App(){
           </div>
           {/* Dims row */}
           <div className="flex gap-1 px-2 py-1.5" style={{borderBottom:'1px solid var(--bd)'}}>
-            <div className="flex-1 text-center py-1 rounded" style={{background:'rgba(139,26,43,.06)'}}>
+            <div className="flex-1 text-center py-1 rounded" style={{background:'rgba(196,50,74,.08)'}}>
               <div className="text-[7px] font-bold" style={{color:'var(--t3)'}}>L</div>
               <div className="text-[11px] font-bold mn" style={{color:'var(--bl)'}}>{panW}</div></div>
             <div className="flex-1 text-center py-1 rounded" style={{background:'rgba(13,148,136,.06)'}}>
@@ -4215,7 +5251,642 @@ function App(){
         <button onClick={()=>setMetreOpen(false)} className="ba w-full mt-4 py-2.5 rounded-lg text-sm font-medium" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t2)'}}>Fermer</button>
         <button onClick={()=>{setMetreOpen(false);const s={};zones.forEach((_,i)=>s[i]=true);setXlsxExpSel(s);setXlsxExpMod(true)}} className="ba w-full mt-2 py-2.5 rounded-lg text-sm font-medium" style={{background:'rgba(52,211,153,.12)',border:'1px solid rgba(52,211,153,.35)',color:'var(--gn)'}}>📊 Exporter Excel (métrés + détails)</button>
       </div></div>}
+      {/* ── PAYWALL MODAL ── */}
+      {showPaywall&&<Paywall user={user} currentPlan={subStatus?.plan} onClose={()=>setShowPaywall(false)}/>}
+      {/* ── ACCOUNT SETTINGS ── */}
+      {showAccount&&<AccountSettings user={user} onClose={()=>setShowAccount(false)}/>}
+      {/* ── PLAN DE MASSE ── */}
+      {showMasse&&<PlanMasse zones={zones} setZones={setZones} activeZoneIdx={activeZoneIdx} setActiveZoneIdx={setActiveZoneIdx}
+        pxPerMm={pxPerMm_eff} onClose={()=>setShowMasse(false)} ZONE_COLORS={ZONE_COLORS} RAL_COLORS={RAL_COLORS} ralIdx={ralIdx}/>}
+      {/* ── PROJECTS MODAL ── */}
+      {showProjects&&<ProjectsModal onClose={()=>setShowProjects(false)} onOpen={openCloudProject} currentProjectId={cloudProjId}/>}
     </div>);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════
+// PLAN DE MASSE — Vue de dessus avec angles indépendants
+// ══════════════════════════════════════════════════════════════
+function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClose,ZONE_COLORS,RAL_COLORS,ralIdx}){
+  const svgRef=useRef();
+  const[vb,setVb]=useState({x:-8,y:-8,w:30,h:22});
+  const[panSt,setPanSt]=useState(null);
+  const[selIdx,setSelIdx]=useState(activeZoneIdx);
+  const[show3D,setShow3D]=useState(false);
+  // Angles INDÉPENDANTS pour le plan de masse (n'impactent PAS la vue 2D)
+  const[angles,setAngles]=useState(()=>zones.map(()=>0));
+  // Échafaudages multiples, positionnés librement
+  const[scaffs,setScaffs]=useState([]);
+  const[selSc,setSelSc]=useState(-1);
+  const[dragSc,setDragSc]=useState(null);// {idx,start,orig}
+  // Pièces d'angle ON/OFF
+  const[showCorners,setShowCorners]=useState(true);
+
+  // Sync angles array length with zones
+  useEffect(()=>{
+    setAngles(prev=>{
+      if(prev.length===zones.length)return prev;
+      const n=[...prev];while(n.length<zones.length)n.push(n.length*90);
+      return n.slice(0,zones.length);
+    });
+  },[zones.length]);
+
+  const setAngle=(i,v)=>setAngles(a=>a.map((x,j)=>j===i?v:x));
+
+  // Compute chain: facades are segments chained end-to-end
+  // angle = direction of the outward normal (0 = up in SVG = towards -Y)
+  const computeChain=()=>{
+    const ch=[];let cx=0,cy=0;
+    zones.forEach((z,i)=>{
+      const a=(angles[i]||0)*Math.PI/180;
+      const dir=a+Math.PI/2;// segment direction (perpendicular to normal)
+      const L=z.L/1000,H=z.H/1000;
+      const x2=cx+Math.cos(dir)*L,y2=cy+Math.sin(dir)*L;
+      ch.push({i,x1:cx,y1:cy,x2,y2,nx:Math.cos(a),ny:Math.sin(a),L,H,dir});
+      cx=x2;cy=y2;
+    });
+    return ch;
+  };
+  const chain=computeChain();
+
+  // Auto-fit viewbox on chain change
+  useEffect(()=>{
+    if(!chain.length)return;
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;
+    chain.forEach(c=>{
+      [c.x1,c.x2].forEach(x=>{x0=Math.min(x0,x-1.5);x1=Math.max(x1,x+1.5)});
+      [c.y1,c.y2].forEach(y=>{y0=Math.min(y0,y-1.5);y1=Math.max(y1,y+1.5)});
+    });
+    scaffs.forEach(s=>{
+      const ci=chain[s.facIdx||0];if(!ci)return;
+      const cx=(ci.x1+ci.x2)/2+s.ox,cy=(ci.y1+ci.y2)/2+s.oy;
+      x0=Math.min(x0,cx-3);x1=Math.max(x1,cx+3);y0=Math.min(y0,cy-3);y1=Math.max(y1,cy+3);
+    });
+    const w=Math.max(x1-x0,12),h=Math.max(w*0.65,y1-y0);
+    setVb({x:x0-2,y:y0-2,w:w+4,h:h+4});
+  },[angles.join(','),zones.map(z=>z.L).join(','),scaffs.length]);// eslint-disable-line
+
+  // SVG coordinates helper
+  const svgPt=(e)=>{
+    const svg=svgRef.current;if(!svg)return{x:0,y:0};
+    const r=svg.getBoundingClientRect();
+    return{x:vb.x+(e.clientX-r.left)/r.width*vb.w,y:vb.y+(e.clientY-r.top)/r.height*vb.h};
+  };
+  const onDown=(e)=>{if(e.button!==0)return;setPanSt({s:svgPt(e),v:{...vb}})};
+  const onMove=(e)=>{
+    const p=svgPt(e);
+    if(dragSc){
+      const dx=p.x-dragSc.start.x,dy=p.y-dragSc.start.y;
+      setScaffs(sc=>sc.map((s,i)=>i===dragSc.idx?{...s,ox:dragSc.orig.x+dx,oy:dragSc.orig.y+dy}:s));
+      return;
+    }
+    if(panSt){setVb({...panSt.v,x:panSt.v.x+(panSt.s.x-p.x),y:panSt.v.y+(panSt.s.y-p.y)});}
+  };
+  const onUp=()=>{setPanSt(null);setDragSc(null)};
+  const onWheel=(e)=>{e.preventDefault();const f=e.deltaY>0?1.12:0.9;const p=svgPt(e);
+    setVb(v=>{const nw=Math.max(4,Math.min(200,v.w*f)),nh=nw*(v.h/v.w);
+      return{x:p.x-(p.x-v.x)/v.w*nw,y:p.y-(p.y-v.y)/v.h*nh,w:nw,h:nh}})};
+
+  const addScaff=()=>{
+    setScaffs(s=>[...s,{facIdx:selIdx>=0?selIdx:0,ox:0,oy:0,nBays:3,nLvl:3,bayW:2.57,lvlH:2.0,dist:0.3,scaffW:0.73}]);
+    setSelSc(scaffs.length);
+  };
+
+  return<div style={{position:'fixed',inset:0,zIndex:150,background:'rgba(0,0,0,.75)',backdropFilter:'blur(6px)',display:'flex',flexDirection:'column'}}>
+    {/* Header */}
+    <div style={{height:52,background:'var(--pnl)',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',padding:'0 16px',gap:8,flexShrink:0}}>
+      <div style={{width:30,height:30,borderRadius:8,background:'rgba(14,165,233,.15)',border:'1px solid rgba(14,165,233,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}}>🗺</div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Plan de masse</div>
+        <div style={{fontSize:10,color:'var(--t3)'}}>{zones.length} facade{zones.length>1?'s':''} · Drag = pan · Molette = zoom</div>
+      </div>
+      <button onClick={addScaff} style={{padding:'6px 12px',borderRadius:8,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'rgba(16,185,129,.1)',color:'#34d399'}}>+ 🏗</button>
+      <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'var(--t3)',cursor:'pointer'}}>
+        <input type="checkbox" checked={showCorners} onChange={e=>setShowCorners(e.target.checked)} style={{accentColor:'#a78bfa'}}/>Angles</label>
+      {zones.length>=2&&<button onClick={()=>setShow3D(v=>!v)} style={{padding:'6px 14px',borderRadius:8,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',
+        background:show3D?'rgba(167,139,250,.3)':'rgba(167,139,250,.1)',color:'var(--pp)'}}>{show3D?'↩ Plan':'🧊 3D'}</button>}
+      <button onClick={onClose} style={{padding:'6px 14px',borderRadius:8,fontSize:11,fontWeight:700,border:'1px solid var(--bd)',cursor:'pointer',fontFamily:'inherit',background:'var(--crd)',color:'var(--t1)'}}>Fermer</button>
+    </div>
+
+    <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+      {/* ─── SVG plan ─── */}
+      {!show3D&&<div style={{flex:1,position:'relative',overflow:'hidden',background:'#080810'}}>
+        <svg ref={svgRef} width="100%" height="100%"
+          viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+          style={{cursor:dragSc?'grabbing':panSt?'grabbing':'grab',userSelect:'none'}}
+          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp} onWheel={onWheel}>
+          {/* Grille */}
+          <defs>
+            <pattern id="pm1" width="1" height="1" patternUnits="userSpaceOnUse">
+              <path d="M1 0L0 0 0 1" fill="none" stroke="rgba(255,255,255,.035)" strokeWidth=".02"/></pattern>
+            <pattern id="pm5" width="5" height="5" patternUnits="userSpaceOnUse">
+              <rect width="5" height="5" fill="url(#pm1)"/>
+              <path d="M5 0L0 0 0 5" fill="none" stroke="rgba(255,255,255,.07)" strokeWidth=".04"/></pattern>
+          </defs>
+          <rect x={vb.x-100} y={vb.y-100} width={vb.w+200} height={vb.h+200} fill="url(#pm5)"/>
+
+          {/* ── Facades (segments) ── */}
+          {chain.map(c=>{
+            const col=ZONE_COLORS[c.i%ZONE_COLORS.length];
+            const sel=c.i===selIdx;
+            const wt=0.22,bt=0.07;// wall thickness, bardage thickness
+            const dx=Math.cos(c.dir),dy=Math.sin(c.dir);
+            // Wall rectangle (inside)
+            const inx=-c.nx,iny=-c.ny;
+            const wallP=[[c.x1,c.y1],[c.x2,c.y2],[c.x2+inx*wt,c.y2+iny*wt],[c.x1+inx*wt,c.y1+iny*wt]].map(p=>p.join(',')).join(' ');
+            // Bardage rectangle (outside)
+            const bardP=[[c.x1+c.nx*bt,c.y1+c.ny*bt],[c.x2+c.nx*bt,c.y2+c.ny*bt],[c.x2,c.y2],[c.x1,c.y1]].map(p=>p.join(',')).join(' ');
+            const mx=(c.x1+c.x2)/2,my=(c.y1+c.y2)/2;
+            // Joints on bardage
+            const panW=(zones[c.i].pan_?.l||600)/1000;const nJ=Math.round(c.L/panW);
+            return<g key={c.i} onClick={()=>{setSelIdx(c.i);setActiveZoneIdx(c.i);setSelSc(-1)}} style={{cursor:'pointer'}}>
+              <polygon points={wallP} fill={sel?'rgba(130,130,140,.45)':'rgba(130,130,140,.25)'} stroke="rgba(255,255,255,.12)" strokeWidth=".02"/>
+              <polygon points={bardP} fill={sel?`${col}60`:`${col}35`} stroke={col} strokeWidth={sel?.06:.03}/>
+              {Array.from({length:nJ-1}).map((_,j)=>{const t=(j+1)/nJ;
+                const px=c.x1+dx*c.L*t,py=c.y1+dy*c.L*t;
+                return<line key={j} x1={px} y1={py} x2={px+c.nx*bt} y2={py+c.ny*bt} stroke={col} strokeWidth=".012" opacity=".35"/>})}
+              {/* Normal arrow */}
+              <line x1={mx} y1={my} x2={mx+c.nx*.8} y2={my+c.ny*.8} stroke={col} strokeWidth=".035" opacity=".5"/>
+              <circle cx={mx+c.nx*.8} cy={my+c.ny*.8} r=".07" fill={col} opacity=".6"/>
+              {/* Labels */}
+              <text x={mx+c.nx*.45} y={my+c.ny*.45-.18} textAnchor="middle" dominantBaseline="middle"
+                fontSize=".3" fill={col} fontWeight="700" fontFamily="DM Sans">{zones[c.i].name}</text>
+              <text x={mx-c.nx*.2} y={my-c.ny*.2} textAnchor="middle" dominantBaseline="middle"
+                fontSize=".2" fill="rgba(255,255,255,.3)" fontFamily="monospace">{c.L.toFixed(2)}m</text>
+              {sel&&<><circle cx={c.x1} cy={c.y1} r=".1" fill={col}/><circle cx={c.x2} cy={c.y2} r=".08" fill={col} opacity=".5"/></>}
+            </g>;
+          })}
+
+          {/* ── Junction angles ── */}
+          {chain.length>1&&chain.slice(1).map((c,k)=>{
+            const prev=chain[k];
+            const d=((angles[c.i]||0)-(angles[prev.i]||0)+360)%360;
+            const disp=d>180?d-360:d;
+            return<g key={`a${k}`}>
+              <circle cx={c.x1} cy={c.y1} r=".12" fill="rgba(14,165,233,.35)" stroke="#0ea5e9" strokeWidth=".03"/>
+              {showCorners&&<rect x={c.x1-.06} y={c.y1-.06} width=".12" height=".12" fill="rgba(167,139,250,.5)" stroke="#a78bfa" strokeWidth=".02" rx=".02"/>}
+              <text x={c.x1} y={c.y1-.3} textAnchor="middle" fontSize=".24" fill="#0ea5e9" fontWeight="700" fontFamily="monospace">{disp>0?'+':''}{disp.toFixed(0)}°</text>
+            </g>;
+          })}
+
+          {/* ── Scaffolds (draggable) ── */}
+          {scaffs.map((s,si)=>{
+            const ci=chain[s.facIdx]||chain[0];if(!ci)return null;
+            const tw=s.nBays*s.bayW,td=s.scaffW;
+            const dx=Math.cos(ci.dir),dy=Math.sin(ci.dir);
+            const cx=(ci.x1+ci.x2)/2+s.ox,cy=(ci.y1+ci.y2)/2+s.oy;
+            const d0=s.dist+0.01;
+            const pts=[[cx-dx*tw/2+ci.nx*d0,cy-dy*tw/2+ci.ny*d0],
+              [cx+dx*tw/2+ci.nx*d0,cy+dy*tw/2+ci.ny*d0],
+              [cx+dx*tw/2+ci.nx*(d0+td),cy+dy*tw/2+ci.ny*(d0+td)],
+              [cx-dx*tw/2+ci.nx*(d0+td),cy-dy*tw/2+ci.ny*(d0+td)]].map(p=>p.join(',')).join(' ');
+            const isSel=si===selSc;
+            return<g key={`sc${si}`} style={{cursor:'grab'}}
+              onMouseDown={e=>{e.stopPropagation();e.preventDefault();setSelSc(si);setSelIdx(-1);
+                setDragSc({idx:si,start:svgPt(e),orig:{x:s.ox,y:s.oy}})}}>
+              <polygon points={pts} fill={isSel?'rgba(16,185,129,.18)':'rgba(16,185,129,.08)'}
+                stroke="#34d399" strokeWidth={isSel?.06:.03} strokeDasharray={isSel?'none':'.12,.08'}/>
+              <text x={cx+ci.nx*(d0+td/2)} y={cy+ci.ny*(d0+td/2)} textAnchor="middle" dominantBaseline="middle"
+                fontSize=".25" fill="#34d399" fontWeight="700">🏗{si+1}</text>
+              {/* Resize handles */}
+              {isSel&&<>
+                <circle cx={cx-dx*tw/2+ci.nx*(d0+td/2)} cy={cy-dy*tw/2+ci.ny*(d0+td/2)} r=".12" fill="#34d399" opacity=".6"/>
+                <circle cx={cx+dx*tw/2+ci.nx*(d0+td/2)} cy={cy+dy*tw/2+ci.ny*(d0+td/2)} r=".12" fill="#34d399" opacity=".6"/>
+              </>}
+            </g>;
+          })}
+
+          {/* Nord */}
+          <g transform={`translate(${vb.x+vb.w-1.5},${vb.y+1})`}>
+            <circle r=".45" fill="rgba(0,0,0,.7)" stroke="rgba(255,255,255,.12)" strokeWidth=".025"/>
+            <polygon points="0,-.3 -.07,.05 .07,.05" fill="white" opacity=".8"/>
+            <text x="0" y="-.1" textAnchor="middle" fontSize=".17" fill="white" fontWeight="700">N</text>
+          </g>
+        </svg>
+      </div>}
+
+      {/* ─── 3D multi-zones ─── */}
+      {show3D&&<div style={{flex:1,position:'relative',overflow:'hidden'}}>
+        <Facade3DMulti zones={zones} chain={chain} ZONE_COLORS={ZONE_COLORS} scaffs={scaffs} showCorners={showCorners} RAL_COLORS={RAL_COLORS} ralIdx={ralIdx}/>
+      </div>}
+
+      {/* ─── Sidebar ─── */}
+      <div style={{width:260,background:'var(--pnl)',borderLeft:'1px solid var(--bd)',overflowY:'auto',flexShrink:0,display:'flex',flexDirection:'column'}}>
+        {/* Facades list */}
+        <div style={{padding:'10px 14px 6px',borderBottom:'1px solid var(--bd)'}}>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.08em'}}>Facades — {zones.length}</div>
+        </div>
+        {zones.map((z,i)=>{
+          const col=ZONE_COLORS[i%ZONE_COLORS.length];
+          const sel=i===selIdx;
+          const c=chain[i];
+          return<div key={z.id} onClick={()=>{setSelIdx(i);setActiveZoneIdx(i);setSelSc(-1)}} style={{
+            padding:'8px 14px',borderBottom:'1px solid var(--bd)',cursor:'pointer',
+            background:sel?`${col}10`:'transparent',borderLeft:`3px solid ${sel?col:'transparent'}`}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <span style={{fontSize:11,fontWeight:700,color:sel?col:'var(--t1)'}}>{z.name}</span>
+              <span style={{fontSize:9,color:'var(--t3)',fontFamily:'monospace'}}>{(z.L/1000).toFixed(1)}×{(z.H/1000).toFixed(1)}m</span>
+            </div>
+            {sel&&<div style={{marginTop:6,display:'flex',flexDirection:'column',gap:6}}>
+              <div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+                  <span style={{fontSize:9,fontWeight:600,color:'var(--t3)'}}>Orientation plan</span>
+                  <div style={{display:'flex',alignItems:'center',gap:3}}>
+                    <input type="number" value={angles[i]||0}
+                      onChange={e=>setAngle(i,parseFloat(e.target.value)||0)}
+                      onKeyDown={e=>e.stopPropagation()}
+                      style={{width:48,padding:'2px 4px',background:'var(--inp)',border:'1px solid var(--bd)',borderRadius:4,color:'#f59e0b',fontSize:10,fontFamily:'monospace',textAlign:'center',outline:'none'}}/>
+                    <span style={{fontSize:9,color:'var(--t3)'}}>°</span>
+                  </div>
+                </div>
+                <input type="range" min="-180" max="180" step="1" value={angles[i]||0}
+                  onChange={e=>setAngle(i,parseFloat(e.target.value))}
+                  style={{width:'100%',accentColor:'#f59e0b',height:2}}/>
+                <div style={{display:'flex',gap:3,marginTop:3}}>
+                  {[0,90,180,270].map(v=><button key={v} onClick={e=>{e.stopPropagation();setAngle(i,v)}}
+                    style={{flex:1,padding:'2px 0',fontSize:8,borderRadius:3,border:'1px solid var(--bd)',
+                      background:Math.abs((angles[i]||0)-v)<1?'rgba(245,158,11,.2)':'var(--inp)',
+                      color:'var(--t3)',cursor:'pointer',fontFamily:'monospace'}}>{v}°</button>)}
+                </div>
+              </div>
+              {i>0&&(()=>{const d=((angles[i]||0)-(angles[i-1]||0)+360)%360;const disp=d>180?d-360:d;
+                return<div style={{padding:'4px 8px',background:'rgba(14,165,233,.07)',borderRadius:6,border:'1px solid rgba(14,165,233,.1)',fontSize:9,color:'var(--t3)'}}>
+                  ∠ {zones[i-1].name}: <span style={{color:'#0ea5e9',fontWeight:700,fontFamily:'monospace'}}>{disp>0?'+':''}{disp}°</span></div>})()}
+              {/* RAL per zone */}
+              <div>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+                  <span style={{fontSize:9,fontWeight:600,color:'var(--t3)'}}>RAL</span>
+                  <span style={{fontSize:9,color:'var(--t3)',fontFamily:'monospace'}}>{RAL_COLORS[z.ralIdx??ralIdx]?.code}</span>
+                </div>
+                <div style={{display:'flex',flexWrap:'wrap',gap:2}}>
+                  {RAL_COLORS.slice(0,20).map((r,ri)=><button key={ri} onClick={e=>{e.stopPropagation();
+                    setZones(zs=>zs.map((zz,j)=>j===i?{...zz,ralIdx:ri}:zz))}}
+                    title={r.code+' '+r.name}
+                    style={{width:16,height:16,borderRadius:3,background:r.hex,border:(z.ralIdx??ralIdx)===ri?'2px solid #fff':'1px solid rgba(255,255,255,.1)',
+                      cursor:'pointer',flexShrink:0}}/>)}
+                  <details style={{width:'100%'}}><summary style={{fontSize:8,color:'var(--t3)',cursor:'pointer'}}>+ voir tout</summary>
+                    <div style={{display:'flex',flexWrap:'wrap',gap:2,marginTop:3}}>
+                      {RAL_COLORS.slice(20).map((r,ri)=><button key={ri+20} onClick={e=>{e.stopPropagation();
+                        setZones(zs=>zs.map((zz,j)=>j===i?{...zz,ralIdx:ri+20}:zz))}}
+                        title={r.code+' '+r.name}
+                        style={{width:14,height:14,borderRadius:2,background:r.hex,border:(z.ralIdx??ralIdx)===ri+20?'2px solid #fff':'1px solid rgba(255,255,255,.08)',
+                          cursor:'pointer'}}/>)}
+                    </div>
+                  </details>
+                </div>
+              </div>
+              <div style={{fontSize:9,color:'var(--t3)',opacity:.5}}>Ouvertures: {z.ouvs.length}</div>
+            </div>}
+          </div>;
+        })}
+
+        {/* Scaffolds config */}
+        {scaffs.length>0&&<div style={{borderTop:'1px solid rgba(16,185,129,.2)'}}>
+          <div style={{padding:'8px 14px 4px'}}>
+            <span style={{fontSize:10,fontWeight:700,color:'#34d399'}}>🏗 Échafaudages ({scaffs.length})</span>
+          </div>
+          {scaffs.map((s,si)=>{
+            const sel=si===selSc;
+            return<div key={si} onClick={()=>{setSelSc(si);setSelIdx(-1)}} style={{
+              padding:'8px 14px',borderBottom:'1px solid var(--bd)',cursor:'pointer',
+              background:sel?'rgba(16,185,129,.05)':'transparent',borderLeft:`3px solid ${sel?'#34d399':'transparent'}`}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontSize:10,fontWeight:600,color:sel?'#34d399':'var(--t2)'}}>🏗 {si+1}</span>
+                <div style={{display:'flex',gap:4,alignItems:'center'}}>
+                  <span style={{fontSize:8,color:'var(--t3)',fontFamily:'monospace'}}>{(s.nBays*s.bayW).toFixed(1)}×{(s.nLvl*s.lvlH).toFixed(1)}m</span>
+                  <button onClick={e=>{e.stopPropagation();setScaffs(sc=>sc.filter((_,j)=>j!==si));setSelSc(-1)}}
+                    style={{background:'rgba(239,68,68,.15)',border:'none',color:'#f87171',borderRadius:3,padding:'1px 4px',fontSize:8,cursor:'pointer'}}>✕</button>
+                </div>
+              </div>
+              {sel&&<div style={{marginTop:6,display:'flex',flexDirection:'column',gap:3}}>
+                <div><label style={{fontSize:8,color:'var(--t3)'}}>Facade</label>
+                  <select value={s.facIdx} onChange={e=>setScaffs(sc=>sc.map((x,j)=>j===si?{...x,facIdx:+e.target.value}:x))}
+                    style={{width:'100%',padding:'2px 6px',background:'var(--inp)',border:'1px solid var(--bd)',borderRadius:4,color:'var(--t1)',fontSize:9}}>
+                    {zones.map((z,k)=><option key={k} value={k}>{z.name}</option>)}</select></div>
+                {[{l:'Travées',k:'nBays',min:1,max:15,step:1},
+                  {l:'Niveaux',k:'nLvl',min:1,max:12,step:1},
+                  {l:'L.travée',k:'bayW',min:.73,max:4,step:.05},
+                  {l:'H.niveau',k:'lvlH',min:1,max:3,step:.1},
+                  {l:'Prof.',k:'scaffW',min:.6,max:1.5,step:.05},
+                  {l:'Dist.',k:'dist',min:.1,max:3,step:.05},
+                ].map(p=><div key={p.k} style={{display:'flex',alignItems:'center',gap:3}}>
+                  <span style={{fontSize:8,color:'var(--t3)',width:44,flexShrink:0}}>{p.l}</span>
+                  <input type="range" min={p.min} max={p.max} step={p.step} value={s[p.k]||0}
+                    onChange={e=>setScaffs(sc=>sc.map((x,j)=>j===si?{...x,[p.k]:+e.target.value}:x))}
+                    style={{flex:1,accentColor:'#34d399',height:2}}/>
+                  <span style={{fontSize:8,color:'#34d399',width:28,textAlign:'right',fontFamily:'monospace'}}>{s[p.k]%1?s[p.k].toFixed(1):s[p.k]}</span>
+                </div>)}
+                <div style={{fontSize:8,color:'var(--t3)',opacity:.5}}>Drag rectangle pour déplacer</div>
+              </div>}
+            </div>;
+          })}
+        </div>}
+
+        {/* Legend */}
+        <div style={{padding:'10px 14px',marginTop:'auto',borderTop:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,color:'var(--t3)',lineHeight:1.8}}>
+            ↑ = face bardage · Molette = zoom<br/>
+            Drag fond = pan · Drag 🏗 = déplacer<br/>
+            Les angles n'impactent pas la vue 2D
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+// ══════════════════════════════════════════════════════════════
+// FACADE 3D MULTI-ZONES — Facades jointes avec ouvertures
+// ══════════════════════════════════════════════════════════════
+function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ralIdx}){
+  const mountRef=useRef();const frameRef=useRef();
+  const rotRef=useRef({x:-.3,y:.5});const dragRef=useRef(null);
+  const zoomRef=useRef(10);const panRef=useRef({x:0,y:2});
+
+  useEffect(()=>{
+    if(!zones.length||!chain||!chain.length||!mountRef.current)return;
+    const W=mountRef.current.clientWidth,H=mountRef.current.clientHeight;
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1e2e);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
+    renderer.shadowMap.enabled=true;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+    mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
+    renderer.domElement.style.pointerEvents='auto';renderer.domElement.style.cursor='grab';
+
+    scene.add(new THREE.AmbientLight(0xe8e8f0,0.5));
+    const sun=new THREE.DirectionalLight(0xfff5e0,1.0);sun.position.set(8,15,10);sun.castShadow=true;scene.add(sun);
+    const fill=new THREE.DirectionalLight(0x8ab0ff,0.3);fill.position.set(-5,-2,4);scene.add(fill);
+
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x1a1a2a,roughness:.9}));
+    ground.rotation.x=-Math.PI/2;ground.position.y=-.01;ground.receiveShadow=true;scene.add(ground);
+
+    // Centroid
+    let sx=0,sz=0;chain.forEach(c=>{sx+=(c.x1+c.x2)/2;sz+=(c.y1+c.y2)/2});
+    const cx0=sx/chain.length,cz0=sz/chain.length;
+
+    // Shared materials
+    const frameMat=new THREE.MeshStandardMaterial({color:0x3a3a42,metalness:.8,roughness:.15});
+    const glassBackMat=new THREE.MeshStandardMaterial({color:0x1a2a3a,roughness:.95,transparent:true,opacity:.6,side:2});
+    const glassMat=new THREE.MeshStandardMaterial({color:0x9cc8e8,metalness:.4,roughness:.02,transparent:true,opacity:.35,side:2});
+    const ossMat=new THREE.MeshStandardMaterial({color:0x8a8a8a,metalness:.7,roughness:.3});
+
+    // ── Build each facade ──
+    chain.forEach(c=>{
+      const zone=zones[c.i],Lm=c.L,Hm=c.H;
+      const zRal=RAL_COLORS[zone.ralIdx??ralIdx]||{hex:'#383E42',finish:'mat'};
+      const baseColor=new THREE.Color(zRal.hex);
+      const fin=zRal.finish||'mat';
+      const grp=new THREE.Group();
+      grp.position.set((c.x1+c.x2)/2-cx0,0,(c.y1+c.y2)/2-cz0);
+      grp.rotation.y=Math.PI-c.dir;// +Z local = vers l'extérieur (normale)
+
+      const metalness=fin==='brillant'?.65:fin==='satine'?.5:.35;
+      const roughness=fin==='brillant'?.15:fin==='satine'?.35:.55;
+      const panMat=new THREE.MeshStandardMaterial({color:baseColor,metalness,roughness});
+      const retMat=new THREE.MeshStandardMaterial({color:baseColor,metalness,roughness:roughness+.1,
+        polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
+      const wallMat=new THREE.MeshStandardMaterial({color:0x787878,roughness:.95,transparent:true,opacity:.5});
+      const ouvs=zone.ouvs||[];
+      const depth=0.008;
+
+      // Panels (skip where openings are)
+      const panW=(zone.pan_?.l||600)/1000,panH=(zone.pan_?.w||600)/1000;
+      const jH=(zone.jointH||6)/1000,jV=(zone.jointV||6)/1000;
+      const nC=Math.max(1,Math.round(Lm/panW)),nR=Math.max(1,Math.round(Hm/panH));
+      const rW=Lm/nC,rH=Hm/nR;
+      for(let cc=0;cc<nC;cc++)for(let r=0;r<nR;r++){
+        const pw=rW-jV,ph=rH-jH;if(pw<.01||ph<.01)continue;
+        const px=-Lm/2+cc*rW+rW/2,py=r*rH+rH/2;
+        const pL=px-pw/2,pR=px+pw/2,pB=py-ph/2,pT=py+ph/2;
+        let skip=false;
+        ouvs.forEach(o=>{const oL=o.x/1000-Lm/2,oR=oL+o.w/1000,oB=o.y/1000,oT=oB+o.h/1000;
+          if(px>oL&&px<oR&&py>oB&&py<oT)skip=true;});
+        if(skip)continue;
+        const m=new THREE.Mesh(new THREE.BoxGeometry(pw,ph,.006),panMat);
+        m.position.set(px,py,.003);m.castShadow=true;grp.add(m);
+      }
+
+      // Openings
+      ouvs.forEach(o=>{
+        const ox=o.x/1000-Lm/2,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
+        const rt=o.retours||{tG:150,tD:150,lin:150,app:150};
+        const fv=(o.faceVis||50)/1000,st=.003;
+        const rG=rt.tG/1000,rD=rt.tD/1000,rL=rt.lin/1000,rA=rt.app/1000;
+        // Depth returns
+        if(rG>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(st,oh,rG),retMat);m.position.set(ox-st/2,oy+oh/2,-rG/2);grp.add(m);}
+        if(rD>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(st,oh,rD),retMat);m.position.set(ox+ow+st/2,oy+oh/2,-rD/2);grp.add(m);}
+        if(rL>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow,st,rL),retMat);m.position.set(ox+ow/2,oy+oh+st/2,-rL/2);grp.add(m);}
+        if(rA>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow,st,rA),retMat);m.position.set(ox+ow/2,oy-st/2,-rA/2);grp.add(m);}
+        // Face visible
+        if(fv>.001){
+          if(rG>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,st),retMat);m.position.set(ox-fv/2,oy+oh/2,depth+.001);grp.add(m);}
+          if(rD>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,st),retMat);m.position.set(ox+ow+fv/2,oy+oh/2,depth+.001);grp.add(m);}
+          if(rL>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,st),retMat);m.position.set(ox+ow/2,oy+oh+fv/2,depth+.001);grp.add(m);}
+          if(rA>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,st),retMat);m.position.set(ox+ow/2,oy-fv/2,depth+.001);grp.add(m);}
+        }
+        // Glass
+        const maxR=Math.max(rG,rD,rL,rA,.05);const gz=-maxR*.65;
+        const gb=new THREE.Mesh(new THREE.PlaneGeometry(ow-.008,oh-.008),glassBackMat);
+        gb.position.set(ox+ow/2,oy+oh/2,gz-.003);grp.add(gb);
+        const gm=new THREE.Mesh(new THREE.PlaneGeometry(ow-.006,oh-.006),glassMat);
+        gm.position.set(ox+ow/2,oy+oh/2,gz);grp.add(gm);
+        // Alu frame
+        const ft=.032,fd=.045;
+        const fT=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd),frameMat);fT.position.set(ox+ow/2,oy+oh+ft/2,gz);grp.add(fT);
+        const fB=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd),frameMat);fB.position.set(ox+ow/2,oy-ft/2,gz);grp.add(fB);
+        const fLf=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd),frameMat);fLf.position.set(ox-ft/2,oy+oh/2,gz);grp.add(fLf);
+        const fRf=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd),frameMat);fRf.position.set(ox+ow+ft/2,oy+oh/2,gz);grp.add(fRf);
+      });
+
+      // Studs (with exclusion around openings)
+      const eM=(zone.oss?.eM||600)/1000,hM=.035;
+      const excl=ouvs.map(o=>({l:o.x/1000-Lm/2-hM,r:(o.x+o.w)/1000-Lm/2+hM,t:o.y/1000-hM,b:(o.y+o.h)/1000+hM}));
+      for(let mx=0;mx<=Lm+.001;mx+=eM){
+        const xp=-Lm/2+mx;let segs=[{a:0,b:Hm}];
+        excl.forEach(ex=>{if(xp<ex.l||xp>ex.r)return;
+          const ns=[];segs.forEach(s=>{if(ex.t>=s.b||ex.b<=s.a){ns.push(s);return}
+            if(s.a<ex.t)ns.push({a:s.a,b:ex.t});if(ex.b<s.b)ns.push({a:ex.b,b:s.b});});segs=ns;});
+        segs.forEach(s=>{const h=s.b-s.a;if(h<.02)return;
+          const m=new THREE.Mesh(new THREE.BoxGeometry(.05,h,.04),ossMat);m.position.set(xp,s.a+h/2,-.025);grp.add(m);});
+      }
+
+      // Concrete wall
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(Lm+.02,Hm+.02,.18),wallMat);
+      wall.position.set(0,Hm/2,-.12);wall.receiveShadow=true;grp.add(wall);
+      scene.add(grp);
+    });
+
+    // ── Corner pieces ──
+    if(showCorners&&chain.length>1){
+      const cMat=new THREE.MeshStandardMaterial({color:0x505058,metalness:.7,roughness:.2});
+      chain.slice(1).forEach((c,k)=>{
+        const prev=chain[k];const jx=c.x1-cx0,jz=c.y1-cz0;
+        const h=Math.min(prev.H,c.H);const cw=.06,aL=.15;
+        // Vertical post
+        const post=new THREE.Mesh(new THREE.BoxGeometry(cw,h,cw),cMat);
+        post.position.set(jx,h/2,jz);scene.add(post);
+        // Fins along each facade
+        const a1=new THREE.Mesh(new THREE.BoxGeometry(aL,h,.003),cMat);
+        a1.position.set(jx-Math.cos(prev.dir)*aL/2,h/2,jz-Math.sin(prev.dir)*aL/2);
+        a1.rotation.y=Math.PI-prev.dir;scene.add(a1);
+        const a2=new THREE.Mesh(new THREE.BoxGeometry(aL,h,.003),cMat);
+        a2.position.set(jx+Math.cos(c.dir)*aL/2,h/2,jz+Math.sin(c.dir)*aL/2);
+        a2.rotation.y=Math.PI-c.dir;scene.add(a2);
+      });
+    }
+
+    // ── Scaffoldings ──
+    const sMat=new THREE.MeshStandardMaterial({color:0xb8b8c0,metalness:.7,roughness:.25});
+    const pMat=new THREE.MeshStandardMaterial({color:0x9B7424,roughness:.9});
+    const gMat=new THREE.MeshStandardMaterial({color:0xe8d020,metalness:.45,roughness:.25});
+    const tubR=.024,tubS=6;
+
+    const makeTube=(grp,p1,p2,r,mat)=>{
+      const dx=p2[0]-p1[0],dy=p2[1]-p1[1],dz=p2[2]-p1[2];
+      const len=Math.sqrt(dx*dx+dy*dy+dz*dz);if(len<.001)return;
+      const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,tubS),mat);
+      m.position.set((p1[0]+p2[0])/2,(p1[1]+p2[1])/2,(p1[2]+p2[2])/2);
+      const dir=new THREE.Vector3(dx,dy,dz).normalize();
+      const up=new THREE.Vector3(0,1,0);
+      if(Math.abs(dir.dot(up))<.9999)m.quaternion.setFromUnitVectors(up,dir);
+      grp.add(m);
+    };
+
+    (scaffs||[]).forEach(s=>{
+      const ci=chain[s.facIdx||0];if(!ci)return;
+      const sg=new THREE.Group();
+      sg.position.set((ci.x1+ci.x2)/2-cx0+s.ox,0,(ci.y1+ci.y2)/2-cz0+s.oy);
+      sg.rotation.y=Math.PI-ci.dir;
+      const {nBays,nLvl,bayW,lvlH,dist,scaffW}=s;
+      const tw=nBays*bayW,th=nLvl*lvlH;
+      const zB=.01+dist,zF=zB+scaffW;
+      const oX=-tw/2;
+      // Verticals
+      for(let bi=0;bi<=nBays;bi++){const mx=oX+bi*bayW;
+        [zF,zB].forEach(zz=>{
+          makeTube(sg,[mx,0,zz],[mx,th+.3,zz],tubR,sMat);
+          const plate=new THREE.Mesh(new THREE.BoxGeometry(.15,.008,.15),sMat);
+          plate.position.set(mx,.004,zz);sg.add(plate);
+        });}
+      // Levels
+      for(let li=0;li<=nLvl;li++){const ly=li*lvlH;
+        [zF,zB].forEach(zz=>makeTube(sg,[oX,ly,zz],[oX+tw,ly,zz],tubR,sMat));
+        for(let bi=0;bi<=nBays;bi++)makeTube(sg,[oX+bi*bayW,ly,zB],[oX+bi*bayW,ly,zF],tubR,sMat);
+        if(li>0){
+          const plank=new THREE.Mesh(new THREE.BoxGeometry(tw,.035,scaffW-.06),pMat);
+          plank.position.set(oX+tw/2,ly+.017,(zF+zB)/2);sg.add(plank);
+          [.5,1].forEach(gh=>makeTube(sg,[oX,ly+gh,zF],[oX+tw,ly+gh,zF],tubR*.65,gMat));
+        }
+        if(li<nLvl)for(let bi=0;bi<nBays;bi++){const x1=oX+bi*bayW,x2=oX+(bi+1)*bayW;
+          if((bi+li)%2===0)makeTube(sg,[x1,ly,zF],[x2,ly+lvlH,zF],tubR*.5,sMat);
+          else makeTube(sg,[x2,ly,zF],[x1,ly+lvlH,zF],tubR*.5,sMat);}
+      }
+      scene.add(sg);
+    });
+
+    // ── Animate ──
+    const animate=()=>{
+      frameRef.current=requestAnimationFrame(animate);
+      const r=rotRef.current,z=zoomRef.current,p=panRef.current;
+      camera.position.set(p.x+z*Math.sin(r.y)*Math.cos(r.x),p.y+z*Math.sin(r.x),z*Math.cos(r.y)*Math.cos(r.x));
+      camera.lookAt(p.x,p.y,0);renderer.render(scene,camera);
+    };animate();
+
+    // ── Controls ──
+    const canvas=renderer.domElement;
+    const onMD=e=>{if(e.shiftKey||e.button===2)dragRef.current={t:'p',sx:e.clientX,sy:e.clientY,px:panRef.current.x,py:panRef.current.y};
+      else dragRef.current={t:'r',sx:e.clientX,sy:e.clientY,rx:rotRef.current.x,ry:rotRef.current.y}};
+    const onMM=e=>{const d=dragRef.current;if(!d)return;const dx=e.clientX-d.sx,dy=e.clientY-d.sy;
+      if(d.t==='r')rotRef.current={x:Math.max(-1.4,Math.min(1.4,d.rx-dy*.006)),y:d.ry+dx*.006};
+      if(d.t==='p')panRef.current={x:d.px-dx*.015*zoomRef.current/10,y:d.py+dy*.015*zoomRef.current/10}};
+    const onMU=()=>dragRef.current=null;
+    const onWH=e=>{e.preventDefault();zoomRef.current=Math.max(1,Math.min(80,zoomRef.current*(1+e.deltaY*.001)))};
+    canvas.addEventListener('mousedown',onMD);canvas.addEventListener('mousemove',onMM);
+    canvas.addEventListener('mouseup',onMU);canvas.addEventListener('mouseleave',onMU);
+    canvas.addEventListener('wheel',onWH,{passive:false});canvas.addEventListener('contextmenu',e=>e.preventDefault());
+    return()=>{cancelAnimationFrame(frameRef.current);renderer.dispose();if(mountRef.current)mountRef.current.innerHTML=''}
+  },[zones,chain,scaffs,showCorners,ralIdx]);// eslint-disable-line
+
+  return<div ref={mountRef} style={{width:'100%',height:'100%',touchAction:'none'}}/>;
+}
+
+function ProjectsModal({onClose,onOpen,currentProjectId}){
+  const[projects,setProjects]=useState([]);const[loading,setLoading]=useState(true);
+  const[deleting,setDeleting]=useState(null);const[search,setSearch]=useState('');
+
+  const refresh=()=>{setLoading(true);cloudProjectsList().then(p=>{setProjects(p||[]);setLoading(false)})};
+  useEffect(()=>{refresh()},[]);
+
+  const filtered=projects.filter(p=>!search||p.name.toLowerCase().includes(search.toLowerCase()));
+
+  const handleDelete=async(id)=>{
+    if(!confirm('Supprimer ce projet definitivement ?'))return;
+    setDeleting(id);const ok=await cloudProjectDelete(id);
+    if(ok)setProjects(prev=>prev.filter(p=>p.id!==id));
+    setDeleting(null);
+  };
+  const handleDuplicate=async(id)=>{
+    const dup=await cloudProjectDuplicate(id);if(dup)refresh();
+  };
+
+  const fmtDate=(d)=>{try{const dt=new Date(d);return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}catch(e){return'-'}};
+
+  return<div className="ov" onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:20,width:560,maxWidth:'95vw',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 25px 60px rgba(0,0,0,.5)'}}>
+      {/* Header */}
+      <div style={{padding:'20px 24px 16px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+          <div style={{fontSize:17,fontWeight:700,color:'var(--t1)'}}>☁ Mes projets</div>
+          <button onClick={onClose} style={{background:'var(--crd)',border:'1px solid var(--bd)',borderRadius:8,width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)',fontSize:14}}>×</button>
+        </div>
+        <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher un projet..."
+          style={{width:'100%',padding:'10px 14px',background:'var(--inp)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--t1)',fontSize:13,fontFamily:'inherit',outline:'none',boxSizing:'border-box'}}
+          onFocus={e=>e.target.style.borderColor='var(--bdf)'} onBlur={e=>e.target.style.borderColor='var(--bd)'} onKeyDown={e=>e.stopPropagation()}/>
+      </div>
+
+      {/* List */}
+      <div style={{flex:1,overflowY:'auto',padding:'8px 12px'}}>
+        {loading?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>Chargement...</div>
+        :filtered.length===0?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>
+          {projects.length===0?'Aucun projet sauvegarde. Creez votre premier projet !':'Aucun resultat pour "'+search+'"'}
+        </div>
+        :filtered.map(p=><div key={p.id} className="group" style={{
+          display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,cursor:'pointer',
+          transition:'all .15s',border:'1px solid transparent',marginBottom:4,
+          background:p.id===currentProjectId?'rgba(196,50,74,.08)':'transparent',
+          borderColor:p.id===currentProjectId?'rgba(196,50,74,.2)':'transparent'
+        }}
+          onMouseOver={e=>{if(p.id!==currentProjectId)e.currentTarget.style.background='var(--crd)'}}
+          onMouseOut={e=>{if(p.id!==currentProjectId)e.currentTarget.style.background='transparent'}}
+          onClick={()=>onOpen(p.id)}>
+          {/* Icon */}
+          <div style={{width:40,height:40,borderRadius:10,background:'linear-gradient(135deg,var(--crd),var(--crd2))',border:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🏗</div>
+          {/* Info */}
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+              {p.name}{p.id===currentProjectId&&<span style={{fontSize:9,color:'var(--gn)',marginLeft:8,fontWeight:700}}>● OUVERT</span>}
+            </div>
+            <div style={{fontSize:10,color:'var(--t3)',marginTop:2,display:'flex',gap:12}}>
+              <span>{fmtDate(p.updated_at)}</span>
+              <span>{p.zones_count||0} zone{(p.zones_count||0)>1?'s':''}</span>
+              <span>{(p.total_surface||0).toFixed(1)} m²</span>
+            </div>
+          </div>
+          {/* Actions */}
+          <div style={{display:'flex',gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+            <button onClick={()=>handleDuplicate(p.id)} title="Dupliquer" className="ba" style={{width:28,height:28,borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center'}}>📋</button>
+            <button onClick={()=>handleDelete(p.id)} title="Supprimer" className="ba" style={{width:28,height:28,borderRadius:7,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'var(--rs)',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',opacity:deleting===p.id?.5:1}}>🗑</button>
+          </div>
+        </div>)}
+      </div>
+
+      {/* Footer */}
+      <div style={{padding:'12px 16px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
+        <button onClick={onClose} className="ba" style={{flex:1,padding:'10px',borderRadius:10,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Fermer</button>
+      </div>
+    </div>
+  </div>;
 }
 
 function AddPC({type,onClose,onAdd}){
@@ -4235,7 +5906,20 @@ function AddPC({type,onClose,onAdd}){
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 // Detect viewer mode from URL
 const _viewParam=new URLSearchParams(window.location.search).get('view');
-ReactDOM.createRoot(document.getElementById('root')).render(_viewParam?<ViewerApp viewId={_viewParam}/>:<App/>);
+ReactDOM.createRoot(document.getElementById('root')).render(
+  _viewParam?<ViewerApp viewId={_viewParam}/>:
+  <AuthGate>{({user,signOut,subStatus})=><App user={user} signOut={signOut} subStatus={subStatus}/>}</AuthGate>
+);
+</script>
+<script>
+// PWA Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.log('SW registration failed:', err));
+  });
+}
 </script>
 </body>
 </html>
