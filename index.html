@@ -1297,7 +1297,7 @@ async function fetchUserProfile(userId){
     if(!res.ok){
       const body=await res.json().catch(()=>({}));
       console.warn('[Kalepin] fetchProfile HTTP',res.status,body);
-      if(body?.code==='42P01'||body?.message?.includes('does not exist'))return{data:null,error:'table_missing'};
+      if(body?.code==='42P01'||body?.message?.includes('does not exist')||body?.message?.includes('schema cache'))return{data:null,error:'table_missing'};
       return{data:null,error:'rls',details:'HTTP '+res.status+': '+(body?.message||body?.hint||JSON.stringify(body))};
     }
     const d=await res.json();return{data:d[0]||null,error:null};
@@ -1330,7 +1330,7 @@ async function ensureProfile(user){
     if(!res.ok){
       const body=await res.json().catch(()=>({}));
       console.warn('[Kalepin] insertProfile HTTP',res.status,body);
-      if(body?.code==='42P01'||body?.message?.includes('does not exist'))return{data:null,error:'table_missing'};
+      if(body?.code==='42P01'||body?.message?.includes('does not exist')||body?.message?.includes('schema cache'))return{data:null,error:'table_missing'};
       if(res.status===409||body?.code==='23505'){
         const retry=await fetchUserProfile(user.id);
         return retry;
@@ -2280,10 +2280,18 @@ function AuthGate({children}){
         <div style={{width:60,height:60,borderRadius:16,background:'rgba(14,165,233,.12)',border:'1px solid rgba(14,165,233,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 20px'}}>🔧</div>
         <div style={{fontSize:20,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Configuration requise</div>
         <div style={{fontSize:13,color:'#5a5a7e',lineHeight:1.7,marginBottom:24}}>
-          La table <code style={{background:'rgba(255,255,255,.08)',padding:'1px 6px',borderRadius:4,color:'#f0ece6'}}>kalepin_profiles</code> n'existe pas dans Supabase.<br/>
-          Exécute le script SQL fourni pour finaliser la configuration.
+          La table <code style={{background:'rgba(255,255,255,.08)',padding:'1px 6px',borderRadius:4,color:'#f0ece6'}}>kalepin_profiles</code> n'est pas accessible par l'API Supabase.<br/>
+          Exécute le script SQL fourni, puis recharge le cache :
         </div>
-        <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Se déconnecter</button>
+        <div style={{textAlign:'left',fontSize:12,color:'#5a5a7e',lineHeight:2,marginBottom:20,padding:'14px 18px',background:'rgba(14,165,233,.04)',border:'1px solid rgba(14,165,233,.1)',borderRadius:12}}>
+          <div><span style={{color:'#0ea5e9',fontWeight:700}}>1.</span> SQL Editor → colle le script SQL → <strong style={{color:'#f0ece6'}}>Run</strong></div>
+          <div><span style={{color:'#0ea5e9',fontWeight:700}}>2.</span> Settings → API → clic <strong style={{color:'#f0ece6'}}>Reload</strong> (schema cache)</div>
+          <div><span style={{color:'#0ea5e9',fontWeight:700}}>3.</span> Reviens ici et clique <strong style={{color:'#f0ece6'}}>Réessayer</strong></div>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+          <button onClick={async()=>{setLoading(true);await loadUserData(user);setLoading(false)}} style={{padding:'10px 24px',borderRadius:10,border:'none',background:'#0ea5e9',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Réessayer</button>
+          <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Se déconnecter</button>
+        </div>
       </div>
     </div>;
   }
