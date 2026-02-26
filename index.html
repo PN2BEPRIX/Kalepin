@@ -1926,7 +1926,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         </div>
       </div>}
 
-      {/* ══ USERS TABLE ══ */}
+              {/* ══ USERS TABLE ══ */}
       {(tab==='users')&&<div>
         <div style={{display:'flex',gap:10,marginBottom:16,alignItems:'center'}}>
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Rechercher par nom ou email…"
@@ -1944,36 +1944,90 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         :<div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,overflow:'hidden'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead><tr style={{background:'rgba(0,0,0,.2)',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
-              {['','Utilisateur','Email','Rôle','Statut','Inscrit le','Actions'].map(h=><th key={h} style={{textAlign:'left',padding:'12px 14px',color:'#3a3a5a',fontWeight:700,fontSize:9,textTransform:'uppercase',letterSpacing:'.07em'}}>{h}</th>)}
+              {['','Utilisateur','Email','Statut','Rôle','Inscrit le','Accès','Rôle'].map((h,i)=><th key={i} style={{textAlign:'left',padding:'12px 14px',color:'#3a3a5a',fontWeight:700,fontSize:9,textTransform:'uppercase',letterSpacing:'.07em'}}>{h}</th>)}
             </tr></thead>
             <tbody>{filteredUsers.map((u,i)=>{
               const isActing=acting===u.id;
+              const isSelf=u.id===currentUser?.id;
+              const isSuperadminRow=u.role==='superadmin';
               return<tr key={u.id} style={{borderBottom:'1px solid rgba(255,255,255,.04)',background:i%2===0?'transparent':'rgba(255,255,255,.01)'}}>
+                {/* Avatar */}
                 <td style={{padding:'10px 14px',width:36}}>
                   <div style={{width:32,height:32,borderRadius:9,background:`linear-gradient(135deg,rgba(196,50,74,.2),rgba(196,50,74,.05))`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:'#c4324a'}}>
                     {(u.full_name||u.email||'?')[0].toUpperCase()}
                   </div>
                 </td>
-                <td style={{padding:'10px 6px'}}><div style={{fontWeight:600,color:'#d0d0e0'}}>{u.full_name||'—'}</div></td>
-                <td style={{padding:'10px 6px',color:'#5a5a7e',fontSize:11}}>{u.email}</td>
+                {/* Nom */}
                 <td style={{padding:'10px 6px'}}>
-                  <span style={{padding:'2px 8px',borderRadius:5,fontSize:9,fontWeight:700,
-                    background:u.role==='superadmin'?'rgba(196,50,74,.2)':u.role==='admin'?'rgba(245,158,11,.12)':'rgba(100,100,130,.15)',
-                    color:u.role==='superadmin'?'#c4324a':u.role==='admin'?'#f59e0b':'#6a6a9a'}}>
-                    {u.role==='superadmin'?'★ Superadmin':u.role==='admin'?'Admin':'Utilisateur'}
+                  <div style={{fontWeight:600,color:'#d0d0e0'}}>{u.full_name||'—'}</div>
+                  {isSelf&&<div style={{fontSize:8,color:'#c4324a',fontWeight:700,marginTop:2}}>C'est vous</div>}
+                </td>
+                {/* Email */}
+                <td style={{padding:'10px 6px',color:'#5a5a7e',fontSize:11}}>{u.email}</td>
+                {/* Badge statut */}
+                <td style={{padding:'10px 6px'}}>
+                  <span style={{padding:'3px 9px',borderRadius:6,fontSize:9,fontWeight:700,background:STATUS_BG[u.status]||STATUS_BG.pending,color:STATUS_COLOR[u.status]||STATUS_COLOR.pending}}>
+                    {STATUS_LABEL[u.status]||'?'}
                   </span>
                 </td>
+                {/* Badge rôle */}
                 <td style={{padding:'10px 6px'}}>
-                  <span style={{padding:'2px 8px',borderRadius:5,fontSize:9,fontWeight:700,background:STATUS_BG[u.status]||STATUS_BG.pending,color:STATUS_COLOR[u.status]||STATUS_COLOR.pending}}>{STATUS_LABEL[u.status]||'?'}</span>
+                  <span style={{padding:'3px 9px',borderRadius:6,fontSize:9,fontWeight:700,
+                    background:isSuperadminRow?'rgba(196,50,74,.2)':u.role==='admin'?'rgba(245,158,11,.15)':'rgba(100,100,130,.12)',
+                    color:isSuperadminRow?'#c4324a':u.role==='admin'?'#f59e0b':'#6a6a9a'}}>
+                    {isSuperadminRow?'⭐ Superadmin':u.role==='admin'?'🔑 Admin':'👤 Utilisateur'}
+                  </span>
                 </td>
-                <td style={{padding:'10px 6px',color:'#3a3a5a',fontSize:10,whiteSpace:'nowrap'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'—'}</td>
+                {/* Date */}
+                <td style={{padding:'10px 6px',color:'#3a3a5a',fontSize:10,whiteSpace:'nowrap'}}>
+                  {u.created_at?new Date(u.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'—'}
+                </td>
+                {/* Actions ACCÈS (statut) */}
                 <td style={{padding:'10px 6px'}}>
-                  <div style={{display:'flex',gap:4}}>
-                    {u.status!=='approved'&&<button onClick={()=>act(u.id,'approve')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(16,185,129,.3)',background:'rgba(16,185,129,.08)',color:'#10b981',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>✓ Approuver</button>}
-                    {u.status!=='rejected'&&<button onClick={()=>act(u.id,'reject')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#ef4444',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>✗ Refuser</button>}
-                    {u.status!=='pending'&&<button onClick={()=>act(u.id,'pending')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'#5a5a7e',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>⏸</button>}
-                    {u.role==='user'&&isSuperAdmin&&<button onClick={()=>act(u.id,'admin')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(196,50,74,.3)',background:'rgba(196,50,74,.08)',color:'#c4324a',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>★</button>}
-                  </div>
+                  {isSuperadminRow||isSelf?<span style={{fontSize:9,color:'#3a3a5a'}}>—</span>
+                  :<div style={{display:'flex',gap:3}}>
+                    <button onClick={()=>act(u.id,'approve')} disabled={isActing||u.status==='approved'} title="Approuver l'accès"
+                      style={{padding:'4px 10px',borderRadius:5,border:'1px solid rgba(16,185,129,.3)',fontSize:9,fontWeight:700,cursor:u.status==='approved'?'default':'pointer',fontFamily:'inherit',transition:'all .15s',
+                        background:u.status==='approved'?'rgba(16,185,129,.25)':'rgba(16,185,129,.06)',
+                        color:u.status==='approved'?'#10b981':'#5a9a7a',
+                        opacity:isActing?.4:1}}>
+                      ✓ Approuvé
+                    </button>
+                    <button onClick={()=>act(u.id,'pending')} disabled={isActing||u.status==='pending'} title="Remettre en attente"
+                      style={{padding:'4px 10px',borderRadius:5,border:'1px solid rgba(245,158,11,.3)',fontSize:9,fontWeight:700,cursor:u.status==='pending'?'default':'pointer',fontFamily:'inherit',transition:'all .15s',
+                        background:u.status==='pending'?'rgba(245,158,11,.2)':'rgba(245,158,11,.05)',
+                        color:u.status==='pending'?'#f59e0b':'#6a6a4a',
+                        opacity:isActing?.4:1}}>
+                      ⏸ Attente
+                    </button>
+                    <button onClick={()=>act(u.id,'reject')} disabled={isActing||u.status==='rejected'} title="Refuser l'accès"
+                      style={{padding:'4px 10px',borderRadius:5,border:'1px solid rgba(239,68,68,.3)',fontSize:9,fontWeight:700,cursor:u.status==='rejected'?'default':'pointer',fontFamily:'inherit',transition:'all .15s',
+                        background:u.status==='rejected'?'rgba(239,68,68,.2)':'rgba(239,68,68,.05)',
+                        color:u.status==='rejected'?'#ef4444':'#6a4a4a',
+                        opacity:isActing?.4:1}}>
+                      ✗ Refusé
+                    </button>
+                  </div>}
+                </td>
+                {/* Actions RÔLE */}
+                <td style={{padding:'10px 6px'}}>
+                  {isSuperadminRow||isSelf?<span style={{fontSize:9,color:'#3a3a5a'}}>—</span>
+                  :<div style={{display:'flex',gap:3}}>
+                    <button onClick={()=>act(u.id,'user')} disabled={isActing||u.role==='user'} title="Rétrograder en utilisateur"
+                      style={{padding:'4px 10px',borderRadius:5,border:'1px solid rgba(100,100,180,.3)',fontSize:9,fontWeight:700,cursor:u.role==='user'?'default':'pointer',fontFamily:'inherit',transition:'all .15s',
+                        background:u.role==='user'?'rgba(100,100,180,.2)':'rgba(100,100,180,.05)',
+                        color:u.role==='user'?'#8888cc':'#4a4a6a',
+                        opacity:isActing?.4:1}}>
+                      👤 User
+                    </button>
+                    <button onClick={()=>act(u.id,'admin')} disabled={isActing||u.role==='admin'} title="Promouvoir en admin"
+                      style={{padding:'4px 10px',borderRadius:5,border:'1px solid rgba(245,158,11,.3)',fontSize:9,fontWeight:700,cursor:u.role==='admin'?'default':'pointer',fontFamily:'inherit',transition:'all .15s',
+                        background:u.role==='admin'?'rgba(245,158,11,.2)':'rgba(245,158,11,.05)',
+                        color:u.role==='admin'?'#f59e0b':'#6a5a2a',
+                        opacity:isActing?.4:1}}>
+                      🔑 Admin
+                    </button>
+                  </div>}
                 </td>
               </tr>;
             })}</tbody>
@@ -2006,11 +2060,11 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
                     <div style={{fontSize:11,color:'#5a5a7e',marginTop:2}}>{u.email}</div>
                     <div style={{fontSize:10,color:'#3a3a5a',marginTop:2}}>Inscrit le {u.created_at?new Date(u.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}):'—'}</div>
                   </div>
-                  <div style={{display:'flex',gap:8}}>
-                    <button onClick={()=>act(u.id,'approve')} disabled={acting===u.id} style={{padding:'8px 20px',borderRadius:9,border:'none',background:'linear-gradient(135deg,#10b981,#059669)',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:acting===u.id?.5:1,boxShadow:'0 4px 12px rgba(16,185,129,.25)'}}>
+                  <div style={{display:'flex',gap:8,flexShrink:0}}>
+                    <button onClick={()=>act(u.id,'approve')} disabled={acting===u.id} style={{padding:'9px 22px',borderRadius:9,border:'none',background:'linear-gradient(135deg,#10b981,#059669)',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:acting===u.id?.5:1,boxShadow:'0 4px 12px rgba(16,185,129,.25)'}}>
                       ✓ Approuver
                     </button>
-                    <button onClick={()=>act(u.id,'reject')} disabled={acting===u.id} style={{padding:'8px 20px',borderRadius:9,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#ef4444',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:acting===u.id?.5:1}}>
+                    <button onClick={()=>act(u.id,'reject')} disabled={acting===u.id} style={{padding:'9px 22px',borderRadius:9,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#ef4444',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:acting===u.id?.5:1}}>
                       ✗ Refuser
                     </button>
                   </div>
@@ -2542,6 +2596,10 @@ function ViewerApp({viewId}){
 
 function App({user,profile,signOut,subStatus}){
   const[step,setStep]=useState('dashboard');
+  // Garde de sécurité : si un user non-superadmin se retrouve sur le step admin, on le renvoie
+  useEffect(()=>{
+    if(step==='admin'&&profile?.role!=='superadmin'){setStep('dashboard');}
+  },[step,profile]);
   const[projectName,setProjectName]=useState('Projet facade');
   const[bgSrc,setBgSrc]=useState(null);const[bgW,setBgW]=useState(0);const[bgH,setBgH]=useState(0);
   const[bgOp,setBgOp]=useState(.35);const[bgVis,setBgVis]=useState(true);
@@ -2598,9 +2656,10 @@ function App({user,profile,signOut,subStatus}){
   const[showMasse,setShowMasse]=useState(false);
   const[showAdmin,setShowAdmin]=useState(false);
   // Admin check: by role (si table créée) OU par email hardcodé (fallback)
-  // Sécurité : rôle admin uniquement depuis Supabase — aucun email hardcodé dans le code
-  const isAdmin=profile?.role==='admin'||profile?.role==='superadmin';
-  const isSuperAdmin=profile?.role==='superadmin';
+  // Sécurité : seul le rôle 'superadmin' (défini dans Supabase) donne accès au panel admin
+  // Un profil null, undefined, ou role='user'/'admin' n'y a JAMAIS accès
+  const isAdmin=profile!==null && profile!==undefined && profile.role==='superadmin';
+  const isSuperAdmin=isAdmin;
   const[projectType,setProjectType]=useState('facade');// 'facade' or 'carrelage'
   const[dashProjects,setDashProjects]=useState([]);const[dashLoading,setDashLoading]=useState(true);
   useEffect(()=>{if(step==='dashboard')cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})},[step]);
@@ -4972,7 +5031,7 @@ function App({user,profile,signOut,subStatus}){
         {step==='welcome'&&<Welcome/>}
         {step==='carrelage'&&<CarrelageApp onBack={()=>setStep('dashboard')} user={user}/>}
         {step==='brique'&&<BriqueApp onBack={()=>setStep('dashboard')} user={user}/>}
-        {step==='admin'&&isAdmin&&<AdminApp onBack={()=>setStep('dashboard')} currentUser={user} isSuperAdmin={isSuperAdmin}/>}
+        {step==='admin'&&profile?.role==='superadmin'&&<AdminApp onBack={()=>setStep('dashboard')} currentUser={user} isSuperAdmin={true}/>}
         {/* LEFT */}
         {step==='work'&&az&&(
           <div className="w-[250px] flex-shrink-0 border-r flex flex-col" style={{borderColor:'var(--bd)',background:'var(--pnl)'}}>
