@@ -1287,23 +1287,29 @@ async function authGetUser(){
 // ═══════════════════════════════════════════════════════════
 // BETA APPROVAL + PROFILE
 // ═══════════════════════════════════════════════════════════
+// Retourne {data, error:'table_missing'|'rls'|'network'|null}
 async function fetchUserProfile(userId){
-  const s=getAuthSession();if(!s)return null;
+  const s=getAuthSession();if(!s)return{data:null,error:'no_session'};
   try{
     const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?id=eq.'+userId+'&select=*&limit=1',{
       headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
     });
-    if(!res.ok)return null;
-    const d=await res.json();return d[0]||null;
-  }catch(e){return null}
+    if(!res.ok){
+      const body=await res.json().catch(()=>({}));
+      // Code Postgres 42P01 = table n'existe pas
+      if(body?.code==='42P01'||body?.message?.includes('does not exist'))return{data:null,error:'table_missing'};
+      return{data:null,error:'rls'};
+    }
+    const d=await res.json();return{data:d[0]||null,error:null};
+  }catch(e){return{data:null,error:'network'}}
 }
 
 async function ensureProfile(user){
-  // Called after login/signup — creates profile if missing
-  const s=getAuthSession();if(!s)return null;
-  const existing=await fetchUserProfile(user.id);
-  if(existing)return existing;
-  // Insert new pending profile
+  const s=getAuthSession();if(!s)return{data:null,error:'no_session'};
+  const {data:existing,error}=await fetchUserProfile(user.id);
+  if(error==='table_missing')return{data:null,error:'table_missing'};
+  if(existing)return{data:existing,error:null};
+  // Profil absent → on le crée
   try{
     const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles',{
       method:'POST',
@@ -1313,9 +1319,18 @@ async function ensureProfile(user){
         full_name:user.user_metadata?.full_name||user.email.split('@')[0],
         status:'pending',role:'user'})
     });
-    if(!res.ok){const e=await res.text();console.warn('ensureProfile:',e);return null;}
-    const d=await res.json();return d[0]||null;
-  }catch(e){return null}
+    if(!res.ok){
+      const body=await res.json().catch(()=>({}));
+      if(body?.code==='42P01'||body?.message?.includes('does not exist'))return{data:null,error:'table_missing'};
+      // Conflit (profil déjà créé par le trigger entre-temps) → relire
+      if(res.status===409||body?.code==='23505'){
+        const retry=await fetchUserProfile(user.id);
+        return retry;
+      }
+      return{data:null,error:'insert_failed'};
+    }
+    const d=await res.json();return{data:d[0]||null,error:null};
+  }catch(e){return{data:null,error:'network'}}
 }
 
 // Admin functions
@@ -2062,6 +2077,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
 function AuthGate({children}){
   const[user,setUser]=useState(null);
   const[profile,setProfile]=useState(null);
+  const[profileError,setProfileError]=useState(null);
   const[loading,setLoading]=useState(true);
   const[subStatus,setSubStatus]=useState(null);
   const[mode,setMode]=useState('login');
@@ -2072,10 +2088,14 @@ function AuthGate({children}){
   const loadUserData=async(u)=>{
     if(!u)return;
     setUser(u);
-    let prof=null;
-    try{ prof=await ensureProfile(u); }catch(e){ console.warn('Profile fetch failed:',e); }
+    let prof=null,profErr=null;
+    try{
+      const result=await ensureProfile(u);
+      prof=result.data;
+      profErr=result.error;
+    }catch(e){profErr='network';}
     setProfile(prof);
-    // Charge l'abonnement uniquement si le profil est approuvé ou admin
+    setProfileError(profErr);
     const canAccess=prof?.status==='approved'||prof?.role==='admin'||prof?.role==='superadmin';
     if(canAccess){
       let sub=await fetchSubscription(u.id);
@@ -2125,7 +2145,7 @@ function AuthGate({children}){
 
   // ── Écran BETA EN ATTENTE ──
   if(user && profile?.status==='pending'){
-    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null);};
+    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null);};
     return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
       <div style={{maxWidth:460,width:'100%',textAlign:'center'}}>
         <div style={{width:64,height:64,borderRadius:18,background:'linear-gradient(135deg,rgba(245,158,11,.2),rgba(245,158,11,.05))',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,margin:'0 auto 24px'}}>⏳</div>
@@ -2149,7 +2169,7 @@ function AuthGate({children}){
 
   // ── Écran REFUSÉ ──
   if(user && profile?.status==='rejected'){
-    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null);};
+    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null);};
     return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
       <div style={{maxWidth:420,width:'100%',textAlign:'center'}}>
         <div style={{width:64,height:64,borderRadius:18,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,margin:'0 auto 24px'}}>🚫</div>
@@ -2163,15 +2183,34 @@ function AuthGate({children}){
     </div>;
   }
 
-  // ── Table Supabase pas encore configurée ──
-  if(user && profile===null){
-    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null);};
+  // ── Erreur réseau / RLS → écran retry ──
+  if(user && profile===null && profileError && profileError!=='table_missing'){
+    const doRetry=async()=>{setLoading(true);await loadUserData(user);setLoading(false);};
+    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null);};
+    return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
+      <div style={{maxWidth:420,width:'100%',textAlign:'center'}}>
+        <div style={{width:60,height:60,borderRadius:16,background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 20px'}}>⚠️</div>
+        <div style={{fontSize:18,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Problème de connexion</div>
+        <div style={{fontSize:13,color:'#5a5a7e',lineHeight:1.7,marginBottom:24}}>
+          Impossible de charger ton profil.<br/>Vérifie ta connexion et réessaie.
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+          <button onClick={doRetry} style={{padding:'10px 24px',borderRadius:10,border:'none',background:'#c4324a',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Réessayer</button>
+          <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Se déconnecter</button>
+        </div>
+      </div>
+    </div>;
+  }
+
+  // ── Table Supabase absente (erreur 42P01) ──
+  if(user && profile===null && profileError==='table_missing'){
+    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null);};
     return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
       <div style={{maxWidth:440,width:'100%',textAlign:'center'}}>
         <div style={{width:60,height:60,borderRadius:16,background:'rgba(14,165,233,.12)',border:'1px solid rgba(14,165,233,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 20px'}}>🔧</div>
         <div style={{fontSize:20,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Configuration requise</div>
         <div style={{fontSize:13,color:'#5a5a7e',lineHeight:1.7,marginBottom:24}}>
-          La table <code style={{background:'rgba(255,255,255,.08)',padding:'1px 6px',borderRadius:4,color:'#f0ece6'}}>kalepin_profiles</code> n'existe pas encore dans Supabase.<br/>
+          La table <code style={{background:'rgba(255,255,255,.08)',padding:'1px 6px',borderRadius:4,color:'#f0ece6'}}>kalepin_profiles</code> n'existe pas dans Supabase.<br/>
           Exécute le script SQL fourni pour finaliser la configuration.
         </div>
         <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Se déconnecter</button>
@@ -2181,7 +2220,7 @@ function AuthGate({children}){
 
   // ── App ouverte (approved ou admin) ──
   const isApproved=profile?.status==='approved'||profile?.role==='admin'||profile?.role==='superadmin';
-  if(user && isApproved)return typeof children==='function'?children({user,profile,signOut:async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null)},subStatus}):children;
+  if(user && isApproved)return typeof children==='function'?children({user,profile,signOut:async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null)},subStatus}):children;
   
 
   // ── Écran de connexion ──
