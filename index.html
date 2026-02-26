@@ -1287,29 +1287,37 @@ async function authGetUser(){
 // ═══════════════════════════════════════════════════════════
 // BETA APPROVAL + PROFILE
 // ═══════════════════════════════════════════════════════════
-// Retourne {data, error:'table_missing'|'rls'|'network'|null}
+// Retourne {data, error:'table_missing'|'rls'|'network'|null, details?}
 async function fetchUserProfile(userId){
   const s=getAuthSession();if(!s)return{data:null,error:'no_session'};
   try{
     const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?id=eq.'+userId+'&select=*&limit=1',{
-      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token,'Accept':'application/json'}
     });
     if(!res.ok){
       const body=await res.json().catch(()=>({}));
-      // Code Postgres 42P01 = table n'existe pas
+      console.warn('[Kalepin] fetchProfile HTTP',res.status,body);
       if(body?.code==='42P01'||body?.message?.includes('does not exist'))return{data:null,error:'table_missing'};
-      return{data:null,error:'rls'};
+      return{data:null,error:'rls',details:'HTTP '+res.status+': '+(body?.message||body?.hint||JSON.stringify(body))};
     }
     const d=await res.json();return{data:d[0]||null,error:null};
-  }catch(e){return{data:null,error:'network'}}
+  }catch(e){console.warn('[Kalepin] fetchProfile network',e);return{data:null,error:'network',details:e.message}}
 }
 
 async function ensureProfile(user){
   const s=getAuthSession();if(!s)return{data:null,error:'no_session'};
-  const {data:existing,error}=await fetchUserProfile(user.id);
-  if(error==='table_missing')return{data:null,error:'table_missing'};
-  if(existing)return{data:existing,error:null};
-  // Profil absent → on le crée
+  // Try fetching profile up to 2 times (handles transient RLS/timing issues)
+  let fetchResult=null;
+  for(let attempt=0;attempt<2;attempt++){
+    fetchResult=await fetchUserProfile(user.id);
+    if(fetchResult.error==='table_missing')return{data:null,error:'table_missing'};
+    if(fetchResult.data)return{data:fetchResult.data,error:null};
+    if(fetchResult.error==='rls'&&attempt===0){await new Promise(r=>setTimeout(r,1000));continue}
+    break;
+  }
+  // SELECT itself returned an error → don't attempt INSERT
+  if(fetchResult.error&&fetchResult.error!=='network'){return fetchResult}
+  // Profil absent (SELECT 200 empty) → create it
   try{
     const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles',{
       method:'POST',
@@ -1321,16 +1329,16 @@ async function ensureProfile(user){
     });
     if(!res.ok){
       const body=await res.json().catch(()=>({}));
+      console.warn('[Kalepin] insertProfile HTTP',res.status,body);
       if(body?.code==='42P01'||body?.message?.includes('does not exist'))return{data:null,error:'table_missing'};
-      // Conflit (profil déjà créé par le trigger entre-temps) → relire
       if(res.status===409||body?.code==='23505'){
         const retry=await fetchUserProfile(user.id);
         return retry;
       }
-      return{data:null,error:'insert_failed'};
+      return{data:null,error:'insert_failed',details:'HTTP '+res.status+': '+(body?.message||body?.hint||JSON.stringify(body))};
     }
     const d=await res.json();return{data:d[0]||null,error:null};
-  }catch(e){return{data:null,error:'network'}}
+  }catch(e){return{data:null,error:'network',details:e.message}}
 }
 
 // Admin functions
@@ -2088,14 +2096,15 @@ function AuthGate({children}){
   const loadUserData=async(u)=>{
     if(!u)return;
     setUser(u);
-    let prof=null,profErr=null;
+    let prof=null,profErr=null,profDetails=null;
     try{
       const result=await ensureProfile(u);
       prof=result.data;
       profErr=result.error;
-    }catch(e){profErr='network';}
+      profDetails=result.details||null;
+    }catch(e){profErr='network';profDetails=e.message;}
     setProfile(prof);
-    setProfileError(profErr);
+    setProfileError(profErr?{code:profErr,details:profDetails}:null);
     const canAccess=prof?.status==='approved'||prof?.role==='admin'||prof?.role==='superadmin';
     if(canAccess){
       let sub=await fetchSubscription(u.id);
@@ -2184,16 +2193,23 @@ function AuthGate({children}){
   }
 
   // ── Erreur réseau / RLS → écran retry ──
-  if(user && profile===null && profileError && profileError!=='table_missing'){
+  if(user && profile===null && profileError && profileError.code!=='table_missing'){
     const doRetry=async()=>{setLoading(true);await loadUserData(user);setLoading(false);};
     const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null);};
     return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
       <div style={{maxWidth:420,width:'100%',textAlign:'center'}}>
         <div style={{width:60,height:60,borderRadius:16,background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 20px'}}>⚠️</div>
         <div style={{fontSize:18,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Problème de connexion</div>
-        <div style={{fontSize:13,color:'#5a5a7e',lineHeight:1.7,marginBottom:24}}>
+        <div style={{fontSize:13,color:'#5a5a7e',lineHeight:1.7,marginBottom:16}}>
           Impossible de charger ton profil.<br/>Vérifie ta connexion et réessaie.
         </div>
+        {profileError.details&&<div style={{fontSize:10,color:'#f59e0b',background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)',borderRadius:10,padding:'10px 14px',marginBottom:20,textAlign:'left',fontFamily:'JetBrains Mono,monospace',wordBreak:'break-all'}}>
+          <div style={{fontWeight:700,marginBottom:4}}>Erreur : {profileError.code}</div>
+          {profileError.details}
+        </div>}
+        {profileError.code==='rls'&&<div style={{fontSize:11,color:'#5a5a7e',lineHeight:1.6,marginBottom:16,textAlign:'left',background:'rgba(14,165,233,.04)',border:'1px solid rgba(14,165,233,.1)',borderRadius:10,padding:'10px 14px'}}>
+          💡 <strong style={{color:'#0ea5e9'}}>Possible cause :</strong> les policies RLS sur <code style={{color:'#f0ece6'}}>kalepin_profiles</code> bloquent la lecture. Exécutez le script SQL corrigé dans Supabase → SQL Editor.
+        </div>}
         <div style={{display:'flex',gap:10,justifyContent:'center'}}>
           <button onClick={doRetry} style={{padding:'10px 24px',borderRadius:10,border:'none',background:'#c4324a',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Réessayer</button>
           <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Se déconnecter</button>
@@ -2203,7 +2219,7 @@ function AuthGate({children}){
   }
 
   // ── Table Supabase absente (erreur 42P01) ──
-  if(user && profile===null && profileError==='table_missing'){
+  if(user && profile===null && profileError?.code==='table_missing'){
     const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null);};
     return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
       <div style={{maxWidth:440,width:'100%',textAlign:'center'}}>
