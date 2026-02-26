@@ -22,7 +22,7 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <script>
     window.onerror=function(msg,url,line,col,err){
-      document.body.innerHTML='<div style="color:red;padding:20px;font-family:monospace;white-space:pre-wrap"><h2>ERREUR JS</h2>'+msg+'\nLine: '+line+' Col: '+col+'\n'+(err&&err.stack||'')+'</div>';
+      document.body.innerHTML='<div style="color:#ff6b6b;padding:20px;font-family:monospace;white-space:pre-wrap;background:#1a1a2e"><h2 style=color:#ff4444>ERREUR JS</h2>'+msg+'\nLine: '+line+' Col: '+col+'\n'+(err&&err.stack||'')+'</div>';
     };
     window._jspdfReady=new Promise((resolve)=>{
       const urls=['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js','https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js','https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'];
@@ -82,7 +82,7 @@
 <body>
 <div id="root"></div>
 
-<script type="text/babel">
+<script id="app-source" type="text/plain">
 const{useState,useMemo,useRef,useCallback,useEffect}=React;
 
 /* ─── ICONS ─── */
@@ -1285,6 +1285,76 @@ async function authGetUser(){
 }
 
 // ═══════════════════════════════════════════════════════════
+// BETA APPROVAL + PROFILE
+// ═══════════════════════════════════════════════════════════
+async function fetchUserProfile(userId){
+  const s=getAuthSession();if(!s)return null;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?id=eq.'+userId+'&select=*&limit=1',{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return null;
+    const d=await res.json();return d[0]||null;
+  }catch(e){return null}
+}
+
+async function ensureProfile(user){
+  // Called after login/signup — creates profile if missing
+  const s=getAuthSession();if(!s)return null;
+  const existing=await fetchUserProfile(user.id);
+  if(existing)return existing;
+  // Insert new pending profile
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPA.key,
+        'Authorization':'Bearer '+s.access_token,'Prefer':'return=representation'},
+      body:JSON.stringify({id:user.id,email:user.email,
+        full_name:user.user_metadata?.full_name||user.email.split('@')[0],
+        status:'pending',role:'user'})
+    });
+    if(!res.ok){const e=await res.text();console.warn('ensureProfile:',e);return null;}
+    const d=await res.json();return d[0]||null;
+  }catch(e){return null}
+}
+
+// Admin functions
+async function adminListUsers(filterStatus){
+  const s=getAuthSession();if(!s)return[];
+  const q=filterStatus?'&status=eq.'+filterStatus:'';
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?select=*&order=created_at.desc'+q,{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return[];return await res.json();
+  }catch(e){return[]}
+}
+
+async function adminSetUserStatus(userId,status){
+  const s=getAuthSession();if(!s)return false;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?id=eq.'+userId,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
+      body:JSON.stringify({status,updated_at:new Date().toISOString()})
+    });
+    return res.ok;
+  }catch(e){return false}
+}
+
+async function adminSetUserRole(userId,role){
+  const s=getAuthSession();if(!s)return false;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?id=eq.'+userId,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
+      body:JSON.stringify({role,updated_at:new Date().toISOString()})
+    });
+    return res.ok;
+  }catch(e){return false}
+}
+
+// ═══════════════════════════════════════════════════════════
 // SUBSCRIPTION & STRIPE
 // ═══════════════════════════════════════════════════════════
 const PLANS={
@@ -1660,8 +1730,338 @@ function UserMenuPanel({user,subStatus,onUpgrade,onSettings,onSignOut,onClose}){
 }
 
 // ── Auth Gate Component ──
+// ══════════════════════════════════════════════════════════
+// ADMIN DASHBOARD — pleine page, stats riches, gestion users
+// ══════════════════════════════════════════════════════════
+function AdminApp({onBack,currentUser,isSuperAdmin}){
+  const[tab,setTab]=useState('overview');
+  const[users,setUsers]=useState([]);
+  const[loadingUsers,setLoadingUsers]=useState(true);
+  const[acting,setActing]=useState(null);
+  const[search,setSearch]=useState('');
+  const[filterStatus,setFilterStatus]=useState('all');
+
+  const loadUsers=async()=>{
+    setLoadingUsers(true);
+    const all=await adminListUsers(null);
+    setUsers(all||[]);setLoadingUsers(false);
+  };
+  useEffect(()=>{loadUsers();},[]);
+
+  const act=async(userId,action)=>{
+    setActing(userId);
+    if(action==='approve')await adminSetUserStatus(userId,'approved');
+    else if(action==='reject')await adminSetUserStatus(userId,'rejected');
+    else if(action==='pending')await adminSetUserStatus(userId,'pending');
+    else if(action==='admin')await adminSetUserRole(userId,'admin');
+    else if(action==='user')await adminSetUserRole(userId,'user');
+    await loadUsers();setActing(null);
+  };
+
+  // ── Computed stats ──
+  const total=users.length;
+  const approved=users.filter(u=>u.status==='approved').length;
+  const pending=users.filter(u=>u.status==='pending').length;
+  const rejected=users.filter(u=>u.status==='rejected').length;
+  const admins=users.filter(u=>u.role==='admin'||u.role==='superadmin').length;
+  const today=new Date().toDateString();
+  const newToday=users.filter(u=>new Date(u.created_at).toDateString()===today).length;
+  const thisWeek=users.filter(u=>{const d=new Date(u.created_at);return(Date.now()-d)<7*86400000;}).length;
+  const thisMonth=users.filter(u=>{const d=new Date(u.created_at);return(Date.now()-d)<30*86400000;}).length;
+
+  // ── By day last 14 days ──
+  const signupsByDay=Array.from({length:14},(_,i)=>{
+    const d=new Date();d.setDate(d.getDate()-13+i);const ds=d.toDateString();
+    return{label:d.toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'}),count:users.filter(u=>new Date(u.created_at).toDateString()===ds).length};
+  });
+  const maxBar=Math.max(1,...signupsByDay.map(d=>d.count));
+
+  // ── Filtered users ──
+  const filteredUsers=users.filter(u=>{
+    const matchStatus=filterStatus==='all'||u.status===filterStatus;
+    const matchSearch=!search||(u.email||'').toLowerCase().includes(search.toLowerCase())||(u.full_name||'').toLowerCase().includes(search.toLowerCase());
+    return matchStatus&&matchSearch;
+  });
+
+  const STATUS_COLOR={pending:'#f59e0b',approved:'#10b981',rejected:'#ef4444'};
+  const STATUS_BG={pending:'rgba(245,158,11,.12)',approved:'rgba(16,185,129,.12)',rejected:'rgba(239,68,68,.12)'};
+  const STATUS_LABEL={pending:'En attente',approved:'Approuvé',rejected:'Refusé'};
+
+  const StatCard=({icon,label,value,sub,color='#c4324a',onClick})=>(
+    <div onClick={onClick} style={{padding:'18px 20px',borderRadius:14,background:'rgba(255,255,255,.03)',border:`1px solid ${color}22`,cursor:onClick?'pointer':'default',transition:'all .2s'}}
+      onMouseOver={e=>{if(onClick)e.currentTarget.style.borderColor=color+'55'}}
+      onMouseOut={e=>{if(onClick)e.currentTarget.style.borderColor=color+'22'}}>
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+        <div style={{width:36,height:36,borderRadius:10,background:`${color}18`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>{icon}</div>
+        <span style={{fontSize:11,color:'#5a5a7e',fontWeight:600}}>{label}</span>
+      </div>
+      <div style={{fontSize:28,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em',lineHeight:1}}>{value}</div>
+      {sub&&<div style={{fontSize:11,color:'#4a4a6a',marginTop:5}}>{sub}</div>}
+    </div>
+  );
+
+  return<div style={{height:'100vh',display:'flex',flexDirection:'column',background:'#080810',fontFamily:'DM Sans,sans-serif',overflow:'hidden'}}>
+    {/* ── Header ── */}
+    <div style={{padding:'14px 28px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',gap:14,flexShrink:0,background:'rgba(255,255,255,.02)'}}>
+      <button onClick={onBack} style={{width:34,height:34,borderRadius:9,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'#6a6a8a',fontSize:18,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>←</button>
+      <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#c4324a,#8b1a2b)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>⚡</div>
+      <div>
+        <div style={{fontSize:15,fontWeight:800,color:'#f0ece6',letterSpacing:'-.01em'}}>Dashboard Admin</div>
+        <div style={{fontSize:11,color:'#4a4a6a'}}>Kalepin Bêta — {currentUser?.email}</div>
+      </div>
+      <div style={{flex:1}}/>
+      <div style={{display:'flex',gap:2,background:'rgba(255,255,255,.05)',borderRadius:10,padding:3}}>
+        {[{k:'overview',ic:'📊',l:'Vue d\'ensemble'},{k:'users',ic:'👥',l:'Utilisateurs'},{k:'pending',ic:'⏳',l:`Approbations${pending?' ('+pending+')':''}`},{k:'stats',ic:'📈',l:'Statistiques'}].map(t=>(
+          <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:'7px 14px',borderRadius:8,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .15s',
+            background:tab===t.k?'rgba(196,50,74,.25)':'transparent',color:tab===t.k?'#f0ece6':'#5a5a7e'}}>
+            {t.ic} {t.l}
+          </button>
+        ))}
+      </div>
+    </div>
+
+    {/* ── Content ── */}
+    <div style={{flex:1,overflowY:'auto',padding:'28px 32px'}}>
+
+      {/* ══ OVERVIEW ══ */}
+      {tab==='overview'&&<div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:24}}>
+          <StatCard icon="👥" label="Total inscrits" value={total} sub={`+${newToday} aujourd'hui`} color="#0ea5e9" onClick={()=>setTab('users')}/>
+          <StatCard icon="✅" label="Accès accordé" value={approved} sub={`${total?Math.round(approved/total*100):0}% du total`} color="#10b981" onClick={()=>{setTab('users');setFilterStatus('approved')}}/>
+          <StatCard icon="⏳" label="En attente" value={pending} sub={pending>0?'Action requise':'Tout est traité'} color="#f59e0b" onClick={()=>setTab('pending')}/>
+          <StatCard icon="📁" label="Refusés" value={rejected} sub="" color="#ef4444" onClick={()=>{setTab('users');setFilterStatus('rejected')}}/>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:14,marginBottom:24}}>
+          <StatCard icon="📅" label="Inscrits aujourd'hui" value={newToday} color="#c4324a"/>
+          <StatCard icon="📆" label="Inscrits cette semaine" value={thisWeek} color="#8b5cf6"/>
+          <StatCard icon="🗓" label="Inscrits ce mois" value={thisMonth} color="#06b6d4"/>
+        </div>
+
+        {/* ── Graphique inscriptions 14j ── */}
+        <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px',marginBottom:20}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:16}}>📈 Inscriptions — 14 derniers jours</div>
+          <div style={{display:'flex',alignItems:'flex-end',gap:6,height:80}}>
+            {signupsByDay.map((d,i)=>(
+              <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
+                <div style={{fontSize:8,color:'#c4324a',fontWeight:700,opacity:d.count>0?1:0}}>{d.count}</div>
+                <div style={{width:'100%',borderRadius:'3px 3px 0 0',background:d.count>0?'linear-gradient(to top,#c4324a,#e8607a)':'rgba(255,255,255,.06)',
+                  height:Math.max(3,d.count/maxBar*60)+'px',transition:'height .3s',minHeight:3}}/>
+                <div style={{fontSize:7,color:'#3a3a5a',whiteSpace:'nowrap',transform:'rotate(-35deg)',transformOrigin:'top center',marginTop:4}}>{d.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Répartition statuts ── */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+          <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:14}}>🥧 Répartition statuts</div>
+            {[{s:'approved',l:'Approuvés',v:approved},{s:'pending',l:'En attente',v:pending},{s:'rejected',l:'Refusés',v:rejected}].map(({s,l,v})=>(
+              <div key={s} style={{marginBottom:10}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+                  <span style={{fontSize:11,color:'#6a6a8a'}}>{l}</span>
+                  <span style={{fontSize:11,fontWeight:700,color:STATUS_COLOR[s]}}>{v}</span>
+                </div>
+                <div style={{height:6,borderRadius:3,background:'rgba(255,255,255,.06)',overflow:'hidden'}}>
+                  <div style={{height:'100%',width:`${total?v/total*100:0}%`,borderRadius:3,background:STATUS_COLOR[s],transition:'width .5s'}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:14}}>🔑 Rôles</div>
+            {[{l:'Superadmin',v:users.filter(u=>u.role==='superadmin').length,c:'#c4324a'},{l:'Admin',v:users.filter(u=>u.role==='admin').length,c:'#f59e0b'},{l:'Utilisateurs',v:users.filter(u=>u.role==='user'||!u.role).length,c:'#0ea5e9'}].map(({l,v,c})=>(
+              <div key={l} style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+                <div style={{width:10,height:10,borderRadius:3,background:c,flexShrink:0}}/>
+                <span style={{fontSize:11,color:'#6a6a8a',flex:1}}>{l}</span>
+                <span style={{fontSize:13,fontWeight:700,color:'#f0ece6'}}>{v}</span>
+              </div>
+            ))}
+            <div style={{marginTop:14,paddingTop:14,borderTop:'1px solid rgba(255,255,255,.06)'}}>
+              <div style={{fontSize:11,color:'#4a4a6a'}}>Taux de conversion bêta</div>
+              <div style={{fontSize:22,fontWeight:800,color:'#10b981',marginTop:4}}>{total?Math.round(approved/total*100):0}%</div>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Derniers inscrits ── */}
+        <div style={{marginTop:14,background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px'}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:14}}>🕐 Dernières inscriptions</div>
+          {[...users].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,5).map(u=>(
+            <div key={u.id} style={{display:'flex',alignItems:'center',gap:12,padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+              <div style={{width:32,height:32,borderRadius:9,background:'linear-gradient(135deg,rgba(196,50,74,.2),rgba(196,50,74,.05))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,fontWeight:800,color:'#c4324a',flexShrink:0}}>
+                {(u.full_name||u.email||'?')[0].toUpperCase()}
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,color:'#d0d0e0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.full_name||'—'}</div>
+                <div style={{fontSize:10,color:'#4a4a6a'}}>{u.email}</div>
+              </div>
+              <span style={{padding:'2px 8px',borderRadius:6,fontSize:9,fontWeight:700,background:STATUS_BG[u.status]||STATUS_BG.pending,color:STATUS_COLOR[u.status]||STATUS_COLOR.pending}}>{STATUS_LABEL[u.status]||'?'}</span>
+              <span style={{fontSize:10,color:'#3a3a5a',whiteSpace:'nowrap'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}):'—'}</span>
+            </div>
+          ))}
+        </div>
+      </div>}
+
+      {/* ══ USERS TABLE ══ */}
+      {(tab==='users')&&<div>
+        <div style={{display:'flex',gap:10,marginBottom:16,alignItems:'center'}}>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  Rechercher par nom ou email…"
+            style={{flex:1,padding:'9px 14px',background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.1)',borderRadius:10,color:'#f0ece6',fontSize:12,fontFamily:'DM Sans,sans-serif',outline:'none'}}/>
+          {['all','pending','approved','rejected'].map(s=>(
+            <button key={s} onClick={()=>setFilterStatus(s)} style={{padding:'7px 14px',borderRadius:8,border:`1px solid ${filterStatus===s?STATUS_COLOR[s]||'rgba(196,50,74,.5)':'rgba(255,255,255,.08)'}`,
+              background:filterStatus===s?STATUS_BG[s]||'rgba(196,50,74,.12)':'transparent',
+              color:filterStatus===s?STATUS_COLOR[s]||'#c4324a':'#5a5a7e',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+              {s==='all'?'Tous':STATUS_LABEL[s]} ({s==='all'?users.length:users.filter(u=>u.status===s).length})
+            </button>
+          ))}
+          <button onClick={loadUsers} style={{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',background:'transparent',color:'#5a5a7e',fontSize:12,cursor:'pointer'}}>↻</button>
+        </div>
+        {loadingUsers?<div style={{textAlign:'center',padding:60,color:'#3a3a5a'}}>Chargement…</div>
+        :<div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,overflow:'hidden'}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+            <thead><tr style={{background:'rgba(0,0,0,.2)',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
+              {['','Utilisateur','Email','Rôle','Statut','Inscrit le','Actions'].map(h=><th key={h} style={{textAlign:'left',padding:'12px 14px',color:'#3a3a5a',fontWeight:700,fontSize:9,textTransform:'uppercase',letterSpacing:'.07em'}}>{h}</th>)}
+            </tr></thead>
+            <tbody>{filteredUsers.map((u,i)=>{
+              const isActing=acting===u.id;
+              return<tr key={u.id} style={{borderBottom:'1px solid rgba(255,255,255,.04)',background:i%2===0?'transparent':'rgba(255,255,255,.01)'}}>
+                <td style={{padding:'10px 14px',width:36}}>
+                  <div style={{width:32,height:32,borderRadius:9,background:`linear-gradient(135deg,rgba(196,50,74,.2),rgba(196,50,74,.05))`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:800,color:'#c4324a'}}>
+                    {(u.full_name||u.email||'?')[0].toUpperCase()}
+                  </div>
+                </td>
+                <td style={{padding:'10px 6px'}}><div style={{fontWeight:600,color:'#d0d0e0'}}>{u.full_name||'—'}</div></td>
+                <td style={{padding:'10px 6px',color:'#5a5a7e',fontSize:11}}>{u.email}</td>
+                <td style={{padding:'10px 6px'}}>
+                  <span style={{padding:'2px 8px',borderRadius:5,fontSize:9,fontWeight:700,
+                    background:u.role==='superadmin'?'rgba(196,50,74,.2)':u.role==='admin'?'rgba(245,158,11,.12)':'rgba(100,100,130,.15)',
+                    color:u.role==='superadmin'?'#c4324a':u.role==='admin'?'#f59e0b':'#6a6a9a'}}>
+                    {u.role==='superadmin'?'★ Superadmin':u.role==='admin'?'Admin':'Utilisateur'}
+                  </span>
+                </td>
+                <td style={{padding:'10px 6px'}}>
+                  <span style={{padding:'2px 8px',borderRadius:5,fontSize:9,fontWeight:700,background:STATUS_BG[u.status]||STATUS_BG.pending,color:STATUS_COLOR[u.status]||STATUS_COLOR.pending}}>{STATUS_LABEL[u.status]||'?'}</span>
+                </td>
+                <td style={{padding:'10px 6px',color:'#3a3a5a',fontSize:10,whiteSpace:'nowrap'}}>{u.created_at?new Date(u.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'}):'—'}</td>
+                <td style={{padding:'10px 6px'}}>
+                  <div style={{display:'flex',gap:4}}>
+                    {u.status!=='approved'&&<button onClick={()=>act(u.id,'approve')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(16,185,129,.3)',background:'rgba(16,185,129,.08)',color:'#10b981',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>✓ Approuver</button>}
+                    {u.status!=='rejected'&&<button onClick={()=>act(u.id,'reject')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#ef4444',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>✗ Refuser</button>}
+                    {u.status!=='pending'&&<button onClick={()=>act(u.id,'pending')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'#5a5a7e',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>⏸</button>}
+                    {u.role==='user'&&isSuperAdmin&&<button onClick={()=>act(u.id,'admin')} disabled={isActing} style={{padding:'3px 9px',borderRadius:5,border:'1px solid rgba(196,50,74,.3)',background:'rgba(196,50,74,.08)',color:'#c4324a',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:isActing?.5:1}}>★</button>}
+                  </div>
+                </td>
+              </tr>;
+            })}</tbody>
+          </table>
+          {!filteredUsers.length&&<div style={{textAlign:'center',padding:40,color:'#3a3a5a',fontSize:12}}>Aucun utilisateur trouvé</div>}
+        </div>}
+      </div>}
+
+      {/* ══ PENDING APPROVALS ══ */}
+      {tab==='pending'&&<div>
+        {pending===0
+          ?<div style={{textAlign:'center',padding:80}}>
+            <div style={{fontSize:48,marginBottom:16}}>✅</div>
+            <div style={{fontSize:16,fontWeight:700,color:'#f0ece6',marginBottom:8}}>Tout est traité !</div>
+            <div style={{fontSize:13,color:'#4a4a6a'}}>Aucune demande d'accès en attente</div>
+          </div>
+          :<div>
+            <div style={{marginBottom:16,padding:'12px 16px',background:'rgba(245,158,11,.08)',border:'1px solid rgba(245,158,11,.2)',borderRadius:12,fontSize:12,color:'#f59e0b',display:'flex',alignItems:'center',gap:10}}>
+              <span style={{fontSize:18}}>⏳</span>
+              <span><strong>{pending}</strong> demande{pending>1?'s':''} d'accès en attente de validation</span>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {users.filter(u=>u.status==='pending').map(u=>(
+                <div key={u.id} style={{display:'flex',alignItems:'center',gap:14,padding:'16px 20px',background:'rgba(255,255,255,.03)',border:'1px solid rgba(245,158,11,.15)',borderRadius:14}}>
+                  <div style={{width:42,height:42,borderRadius:12,background:'linear-gradient(135deg,rgba(245,158,11,.2),rgba(245,158,11,.05))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,fontWeight:800,color:'#f59e0b',flexShrink:0}}>
+                    {(u.full_name||u.email||'?')[0].toUpperCase()}
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:700,color:'#f0ece6'}}>{u.full_name||'Sans nom'}</div>
+                    <div style={{fontSize:11,color:'#5a5a7e',marginTop:2}}>{u.email}</div>
+                    <div style={{fontSize:10,color:'#3a3a5a',marginTop:2}}>Inscrit le {u.created_at?new Date(u.created_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'long',year:'numeric'}):'—'}</div>
+                  </div>
+                  <div style={{display:'flex',gap:8}}>
+                    <button onClick={()=>act(u.id,'approve')} disabled={acting===u.id} style={{padding:'8px 20px',borderRadius:9,border:'none',background:'linear-gradient(135deg,#10b981,#059669)',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:acting===u.id?.5:1,boxShadow:'0 4px 12px rgba(16,185,129,.25)'}}>
+                      ✓ Approuver
+                    </button>
+                    <button onClick={()=>act(u.id,'reject')} disabled={acting===u.id} style={{padding:'8px 20px',borderRadius:9,border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#ef4444',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',opacity:acting===u.id?.5:1}}>
+                      ✗ Refuser
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>}
+      </div>}
+
+      {/* ══ STATS ══ */}
+      {tab==='stats'&&<div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16,marginBottom:16}}>
+          <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:14}}>📊 Métriques clés</div>
+            {[
+              ['Inscrits total',total,'#0ea5e9'],
+              ['Taux d\'approbation',`${total?Math.round(approved/total*100):0}%`,'#10b981'],
+              ['Inscrits aujourd\'hui',newToday,'#c4324a'],
+              ['Inscrits cette semaine',thisWeek,'#8b5cf6'],
+              ['Inscrits ce mois',thisMonth,'#f59e0b'],
+              ['Admins',admins,'#c4324a'],
+            ].map(([l,v,c])=>(
+              <div key={l} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+                <span style={{fontSize:12,color:'#5a5a7e'}}>{l}</span>
+                <span style={{fontSize:14,fontWeight:800,color:c}}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:14}}>📅 Inscriptions par période</div>
+            {[['Aujourd\'hui',newToday,'#c4324a'],['7 derniers jours',thisWeek,'#8b5cf6'],['30 derniers jours',thisMonth,'#0ea5e9']].map(([l,v,c])=>(
+              <div key={l} style={{marginBottom:16}}>
+                <div style={{display:'flex',justifyContent:'space-between',marginBottom:6}}>
+                  <span style={{fontSize:11,color:'#5a5a7e'}}>{l}</span>
+                  <span style={{fontSize:13,fontWeight:800,color:c}}>{v}</span>
+                </div>
+                <div style={{height:8,borderRadius:4,background:'rgba(255,255,255,.06)',overflow:'hidden'}}>
+                  <div style={{height:'100%',width:`${total?v/total*100:0}%`,borderRadius:4,background:c,transition:'width .5s'}}/>
+                </div>
+              </div>
+            ))}
+            <div style={{marginTop:20,padding:'14px 16px',background:'rgba(196,50,74,.06)',border:'1px solid rgba(196,50,74,.15)',borderRadius:10}}>
+              <div style={{fontSize:10,color:'#6a6a8a',marginBottom:4}}>Vitesse de croissance (7j)</div>
+              <div style={{fontSize:20,fontWeight:800,color:'#c4324a'}}>{thisWeek > 0 ? '+'+thisWeek : '0'} <span style={{fontSize:11,fontWeight:400,color:'#4a4a6a'}}>nouveaux / 7 jours</span></div>
+            </div>
+          </div>
+        </div>
+        {/* Graphique barres 14j */}
+        <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px'}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:20}}>📈 Inscriptions jour par jour — 14 derniers jours</div>
+          <div style={{display:'flex',alignItems:'flex-end',gap:8,height:100,paddingBottom:24,position:'relative'}}>
+            {/* Gridlines */}
+            {[0,25,50,75,100].map(p=>(
+              <div key={p} style={{position:'absolute',left:0,right:0,bottom:24+p*.76,height:1,background:'rgba(255,255,255,.04)'}}/>
+            ))}
+            {signupsByDay.map((d,i)=>(
+              <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:0,position:'relative',zIndex:1}}>
+                {d.count>0&&<div style={{fontSize:9,color:'#c4324a',fontWeight:800,marginBottom:3}}>{d.count}</div>}
+                <div style={{width:'70%',borderRadius:'4px 4px 0 0',background:d.count>0?'linear-gradient(to top,#c4324a,#e8607a)':'rgba(255,255,255,.05)',
+                  height:Math.max(4,d.count/maxBar*76)+'px',transition:'height .4s'}}/>
+                <div style={{position:'absolute',bottom:-20,fontSize:8,color:'#3a3a5a',whiteSpace:'nowrap',left:'50%',transform:'translateX(-50%)'}}>{d.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>}
+
+    </div>
+  </div>;
+}
+
 function AuthGate({children}){
   const[user,setUser]=useState(null);
+  const[profile,setProfile]=useState(null);
   const[loading,setLoading]=useState(true);
   const[subStatus,setSubStatus]=useState(null);
   const[mode,setMode]=useState('login');
@@ -1669,13 +2069,23 @@ function AuthGate({children}){
   const[showPwd,setShowPwd]=useState(false);
   const[error,setError]=useState('');const[info,setInfo]=useState('');const[submitting,setSubmitting]=useState(false);
 
-  useEffect(()=>{authGetUser().then(async u=>{
+  const loadUserData=async(u)=>{
+    if(!u)return;
     setUser(u);
-    if(u){
+    let prof=null;
+    try{ prof=await ensureProfile(u); }catch(e){ console.warn('Profile fetch failed:',e); }
+    setProfile(prof);
+    // Charge l'abonnement uniquement si le profil est approuvé ou admin
+    const canAccess=prof?.status==='approved'||prof?.role==='admin'||prof?.role==='superadmin';
+    if(canAccess){
       let sub=await fetchSubscription(u.id);
       if(!sub)sub=await createTrialSubscription(u.id,u.email);
       setSubStatus(getSubscriptionStatus(sub));
     }
+  };
+
+  useEffect(()=>{authGetUser().then(async u=>{
+    await loadUserData(u);
     setLoading(false);
   });},[]);
 
@@ -1685,10 +2095,7 @@ function AuthGate({children}){
     setError('');setSubmitting(true);
     try{
       const data=await authSignIn(email,password);
-      setUser(data.user);
-      let sub=await fetchSubscription(data.user.id);
-      if(!sub)sub=await createTrialSubscription(data.user.id,data.user.email);
-      setSubStatus(getSubscriptionStatus(sub));
+      await loadUserData(data.user);
     }catch(e){setError(e.message||'Email ou mot de passe incorrect')}finally{setSubmitting(false)}
   };
   const handleSignup=async()=>{
@@ -1696,15 +2103,8 @@ function AuthGate({children}){
     setError('');setSubmitting(true);
     try{
       const data=await authSignUp(email,password,name);
-      if(data.user?.id){
-        setUser(data.user);
-        const sub=await createTrialSubscription(data.user.id,data.user.email);
-        setSubStatus(getSubscriptionStatus(sub));
-      }else if(data.user){
-        setUser(data.user);
-        const sub=await createTrialSubscription(data.user.id,data.user.email);
-        setSubStatus(getSubscriptionStatus(sub));
-      }
+      const u=data.user||data;
+      if(u?.id){await loadUserData(u);}
     }catch(e){setError(e.message)}finally{setSubmitting(false)}
   };
   const handleForgot=async()=>{
@@ -1723,7 +2123,66 @@ function AuthGate({children}){
     </div>
   </div>;
 
-  if(user)return typeof children==='function'?children({user,signOut:async()=>{await authSignOut();setUser(null);setSubStatus(null)},subStatus}):children;
+  // ── Écran BETA EN ATTENTE ──
+  if(user && profile?.status==='pending'){
+    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null);};
+    return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
+      <div style={{maxWidth:460,width:'100%',textAlign:'center'}}>
+        <div style={{width:64,height:64,borderRadius:18,background:'linear-gradient(135deg,rgba(245,158,11,.2),rgba(245,158,11,.05))',border:'1px solid rgba(245,158,11,.3)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,margin:'0 auto 24px'}}>⏳</div>
+        <div style={{fontSize:24,fontWeight:800,color:'#f0ece6',marginBottom:12,letterSpacing:'-.02em'}}>Demande d'accès envoyée</div>
+        <div style={{fontSize:15,color:'#6a6a7e',lineHeight:1.7,marginBottom:32}}>
+          Ton compte <strong style={{color:'#f0ece6'}}>{user.email}</strong> est en attente de validation.<br/>
+          Tu recevras un accès dès qu'il sera approuvé par l'équipe Kalepin.
+        </div>
+        <div style={{background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)',borderRadius:16,padding:'20px 24px',marginBottom:28,textAlign:'left'}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#f59e0b',marginBottom:12}}>🚀 Bêta privée — ce qui t'attend</div>
+          {[['⚡','Calepinage bardage façade en quelques minutes'],['🧱','Briques, carrelages, panneaux métalliques'],['📐','Export 3D, PDF, Excel et QR chantier'],['🎁','Accès complet gratuit pendant la bêta']].map(([ic,t])=><div key={t} style={{display:'flex',alignItems:'center',gap:10,marginBottom:8,fontSize:13,color:'#8a8a9e'}}>
+            <span>{ic}</span><span>{t}</span>
+          </div>)}
+        </div>
+        <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>
+          Se déconnecter
+        </button>
+      </div>
+    </div>;
+  }
+
+  // ── Écran REFUSÉ ──
+  if(user && profile?.status==='rejected'){
+    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null);};
+    return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
+      <div style={{maxWidth:420,width:'100%',textAlign:'center'}}>
+        <div style={{width:64,height:64,borderRadius:18,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,margin:'0 auto 24px'}}>🚫</div>
+        <div style={{fontSize:22,fontWeight:800,color:'#f0ece6',marginBottom:12}}>Accès non accordé</div>
+        <div style={{fontSize:14,color:'#6a6a7e',lineHeight:1.7,marginBottom:28}}>
+          Ton compte <strong style={{color:'#f0ece6'}}>{user.email}</strong> n'a pas été approuvé pour cette bêta.<br/>
+          Contacte-nous à <a href="mailto:contact@kalepin.fr" style={{color:'#c4324a'}}>contact@kalepin.fr</a> pour plus d'informations.
+        </div>
+        <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Se déconnecter</button>
+      </div>
+    </div>;
+  }
+
+  // ── Table Supabase pas encore configurée ──
+  if(user && profile===null){
+    const doSignout=async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null);};
+    return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#080810',fontFamily:'DM Sans,sans-serif',padding:24}}>
+      <div style={{maxWidth:440,width:'100%',textAlign:'center'}}>
+        <div style={{width:60,height:60,borderRadius:16,background:'rgba(14,165,233,.12)',border:'1px solid rgba(14,165,233,.25)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,margin:'0 auto 20px'}}>🔧</div>
+        <div style={{fontSize:20,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Configuration requise</div>
+        <div style={{fontSize:13,color:'#5a5a7e',lineHeight:1.7,marginBottom:24}}>
+          La table <code style={{background:'rgba(255,255,255,.08)',padding:'1px 6px',borderRadius:4,color:'#f0ece6'}}>kalepin_profiles</code> n'existe pas encore dans Supabase.<br/>
+          Exécute le script SQL fourni pour finaliser la configuration.
+        </div>
+        <button onClick={doSignout} style={{padding:'10px 24px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'var(--t3)',fontSize:13,cursor:'pointer',fontFamily:'inherit'}}>Se déconnecter</button>
+      </div>
+    </div>;
+  }
+
+  // ── App ouverte (approved ou admin) ──
+  const isApproved=profile?.status==='approved'||profile?.role==='admin'||profile?.role==='superadmin';
+  if(user && isApproved)return typeof children==='function'?children({user,profile,signOut:async()=>{await authSignOut();setUser(null);setProfile(null);setSubStatus(null)},subStatus}):children;
+  
 
   // ── Écran de connexion ──
   const isLogin=mode==='login',isSignup=mode==='signup',isForgot=mode==='forgot';
@@ -1830,15 +2289,15 @@ function AuthGate({children}){
           style={{width:'100%',padding:'14px',background:submitting?'#5a1120':'#c4324a',color:'#fff',border:'none',borderRadius:12,
             fontSize:15,fontWeight:700,cursor:submitting?'wait':'pointer',fontFamily:'inherit',transition:'all .2s',
             boxShadow:'0 4px 20px rgba(196,50,74,.35)',marginTop:4}}>
-          {submitting?'…':isForgot?'Envoyer le lien':isLogin?'Se connecter →':'Démarrer l\'essai gratuit →'}
+          {submitting?'…':isForgot?'Envoyer le lien':isLogin?'Se connecter →':'Demander l\'accès bêta →'}
         </button>
       </div>
 
-      {isSignup&&<div style={{marginTop:14,padding:'12px 14px',background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.15)',borderRadius:10,display:'flex',alignItems:'center',gap:10}}>
-        <span style={{fontSize:20}}>🎁</span>
+      {isSignup&&<div style={{marginTop:14,padding:'12px 14px',background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)',borderRadius:10,display:'flex',alignItems:'center',gap:10}}>
+        <span style={{fontSize:20}}>🔒</span>
         <div>
-          <div style={{fontSize:12,fontWeight:700,color:'#10b981'}}>14 jours gratuits, sans CB</div>
-          <div style={{fontSize:11,color:'var(--t3)'}}>Accès complet à toutes les fonctionnalités</div>
+          <div style={{fontSize:12,fontWeight:700,color:'#f59e0b'}}>Accès bêta sur invitation</div>
+          <div style={{fontSize:11,color:'var(--t3)'}}>Ton compte sera activé manuellement sous 24h</div>
         </div>
       </div>}
 
@@ -1992,8 +2451,8 @@ function ViewerApp({viewId}){
   </div>;
 }
 
-function App({user,signOut,subStatus}){
-  const[step,setStep]=useState('welcome');
+function App({user,profile,signOut,subStatus}){
+  const[step,setStep]=useState('dashboard');
   const[projectName,setProjectName]=useState('Projet facade');
   const[bgSrc,setBgSrc]=useState(null);const[bgW,setBgW]=useState(0);const[bgH,setBgH]=useState(0);
   const[bgOp,setBgOp]=useState(.35);const[bgVis,setBgVis]=useState(true);
@@ -2048,6 +2507,14 @@ function App({user,signOut,subStatus}){
   const[showAccount,setShowAccount]=useState(false);
   const[showProjects,setShowProjects]=useState(false);
   const[showMasse,setShowMasse]=useState(false);
+  const[showAdmin,setShowAdmin]=useState(false);
+  // Admin check: by role (si table créée) OU par email hardcodé (fallback)
+  // Sécurité : rôle admin uniquement depuis Supabase — aucun email hardcodé dans le code
+  const isAdmin=profile?.role==='admin'||profile?.role==='superadmin';
+  const isSuperAdmin=profile?.role==='superadmin';
+  const[projectType,setProjectType]=useState('facade');// 'facade' or 'carrelage'
+  const[dashProjects,setDashProjects]=useState([]);const[dashLoading,setDashLoading]=useState(true);
+  useEffect(()=>{if(step==='dashboard')cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})},[step]);
   const[cloudProjId,setCloudProjId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[lastSaved,setLastSaved]=useState(null);
@@ -2142,9 +2609,12 @@ function App({user,signOut,subStatus}){
     {code:'LAITON',name:'Laiton brossé',hex:'#C5A55A',cat:'Spécial',finish:'brossé'},
   ];
   const RAL_CATS=[...new Set(RAL_COLORS.map(r=>r.cat))];
-  const[ralIdx,setRalIdx]=useState(2);// default RAL 7016
-  // Sync global RAL with active zone's RAL when switching zones
-  useEffect(()=>{const z=zones[activeZoneIdx];if(z&&z.ralIdx!=null)setRalIdx(z.ralIdx)},[activeZoneIdx,zones]);
+  const[ralIdx,setRalIdx]=useState(2);// default RAL 7016 — remembered for new zone creation only
+  // Per-zone RAL: each zone has its own ralIdx stored in zone.ralIdx
+  // zoneRalIdx = the active zone's RAL (falls back to global default)
+  const zoneRalIdx=az?(az.ralIdx??ralIdx):ralIdx;
+  const setZoneRal=(i)=>{setRalIdx(i);updateAZ(z=>({...z,ralIdx:i}))};
+  // (no sync effect — each zone is fully independent)
   const[ralCat,setRalCat]=useState('RAL');
   const[show3D,setShow3D]=useState(false);
   const[show3DWall,setShow3DWall]=useState(true);
@@ -2215,7 +2685,7 @@ function App({user,signOut,subStatus}){
       if(e.key==='d'||e.key==='D'){setModeDraw(v=>!v);setMeasureMode(false)}
       if(e.key==='m'||e.key==='M'){setMeasureMode(v=>!v);setModeDraw(false);setMeasurePts([])}
       if(e.key==='Delete'&&az){if(selIds.size>0){updateAZ(z=>({...z,ouvs:z.ouvs.filter(o=>!selIds.has(o.id))}));setSelIds(new Set())}else if(selId){updateAZ(z=>({...z,ouvs:z.ouvs.filter(o=>o.id!==selId)}));setSelId(null)}}
-      if(e.key==='Escape'){setModeDraw(false);setMeasureMode(false);setMeasurePts([]);setSelId(null);setSelIds(new Set());setShowAlignPanel(false);setPolyPts([]);setEditPanel(null);setMergeSrc(null);setExcludeMode(false);setUserMenu(false);if(show3D)setShow3D(false)}
+      if(e.key==='Escape'){setModeDraw(false);setMeasureMode(false);setMeasurePts([]);setSelId(null);setSelIds(new Set());setShowAlignPanel(false);setPolyPts([]);setEditPanel(null);setMergeSrc(null);setExcludeMode(false);setUserMenu(false);setShow3D(false)}
       // Ctrl+A = ouvrir panneau d'alignement (si sélection) ou sélectionner toutes
       if((e.ctrlKey||e.metaKey)&&e.key==='a'&&az){e.preventDefault();
         if(selIds.size>=2){setShowAlignPanel(v=>!v);}
@@ -2232,7 +2702,7 @@ function App({user,signOut,subStatus}){
     if(step==='zone'&&e.key==='Escape'){setPolyPts([]);setPolyMode(false)}
     // Enter to validate calibration
     if(calModal&&e.key==='Enter'){e.preventDefault();confirmCal()}
-  };window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[step,selId,selIds,az,activeZoneIdx,calModal,zones,zoom,mergeSrc]);
+  };window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h);},[step,selId,selIds,az,activeZoneIdx,calModal,zones,zoom,mergeSrc,show3D]);
 
   const autoFit=useCallback(()=>{if(!cvRef.current||!zones.length)return;
     let minX=Infinity,minY=Infinity,maxX=-Infinity,maxY=-Infinity;
@@ -2656,19 +3126,36 @@ function App({user,signOut,subStatus}){
     XLSX.writeFile(wb,'Kalepin_'+projectName.replace(/\W+/g,'_')+'_'+new Date().toISOString().slice(0,10)+'.xlsx');
   };
   const exportCSV=exportExcel;
-  const loadProject=(file)=>{
+  const loadProject=(file,appendMode=false)=>{
     const reader=new FileReader();reader.onload=ev=>{
       try{
         const data=JSON.parse(ev.target.result);
         if(!data.zones||!Array.isArray(data.zones)){alert('Fichier projet invalide');return}
-        setProjectName(data.name||'Projet');
-        setZones(data.zones);
-        setActiveZoneIdx(data.activeZoneIdx||0);
-        if(data.ralIdx!=null)setRalIdx(data.ralIdx);
-        if(data.mmPerPx)setMmPerPx(data.mmPerPx);
-        setCloudProjId(null);// loaded from file, not cloud
-        setStep('work');
-        setTimeout(autoFit,200);
+        if(appendMode){
+          const newZones=data.zones.map(z=>({...z,id:Date.now()+Math.random(),
+            name:zones.some(ez=>ez.name===z.name)?z.name+' (imp.)':z.name}));
+          if(zones.length>0){
+            setZones(prev=>[...prev,...newZones]);
+            setActiveZoneIdx(zones.length);
+          }else{
+            setProjectName(data.name||'Projet');
+            setZones(newZones);
+            setActiveZoneIdx(0);
+            if(data.ralIdx!=null)setRalIdx(data.ralIdx);
+            if(data.mmPerPx)setMmPerPx(data.mmPerPx);
+          }
+          setStep('work');
+          setTimeout(autoFit,200);
+        }else{
+          setProjectName(data.name||'Projet');
+          setZones(data.zones);
+          setActiveZoneIdx(data.activeZoneIdx||0);
+          if(data.ralIdx!=null)setRalIdx(data.ralIdx);
+          if(data.mmPerPx)setMmPerPx(data.mmPerPx);
+          setCloudProjId(null);
+          setStep('work');
+          setTimeout(autoFit,200);
+        }
       }catch(e){alert('Erreur lecture fichier: '+e.message)}
     };reader.readAsText(file);
   };
@@ -3236,7 +3723,7 @@ function App({user,signOut,subStatus}){
             try{
               const viewData={project_name:projectName,zone_name:zq.name,
                 zone_json:JSON.stringify(zq),calc_json:JSON.stringify(zqC),
-                ral_color:RAL_COLORS[ralIdx]?.hex||'#383E42',ral_finish:RAL_COLORS[ralIdx]?.finish||'mat'};
+                ral_color:RAL_COLORS[zq.ralIdx??ralIdx]?.hex||'#383E42',ral_finish:RAL_COLORS[zq.ralIdx??ralIdx]?.finish||'mat'};
               const uid=await supaUpload(viewData);
               if(uid){
                 const sConf=getSupaConfig();
@@ -3575,12 +4062,11 @@ function App({user,signOut,subStatus}){
               if(mergeSrc)return;
               // Exclude mode: toggle exclusion on panel click
               if(excludeMode){
-                const exKey={col:pCol,row:pRow};
-                const already=(az.exclusions||[]).some(ex=>ex.col===pCol&&ex.row===pRow);
+                const already=(az.exclusions||[]).some(ex=>ex.col===pm.parentCol&&ex.row===pm.parentRow);
                 if(already){
-                  updateAZ(z=>({...z,exclusions:(z.exclusions||[]).filter(ex=>!(ex.col===pCol&&ex.row===pRow))}));
+                  updateAZ(z=>({...z,exclusions:(z.exclusions||[]).filter(ex=>!(ex.col===pm.parentCol&&ex.row===pm.parentRow))}));
                 }else{
-                  updateAZ(z=>({...z,exclusions:[...(z.exclusions||[]),{col:pCol,row:pRow,depth:excludeDepth}]}));
+                  updateAZ(z=>({...z,exclusions:[...(z.exclusions||[]),{col:pm.parentCol,row:pm.parentRow,depth:excludeDepth}]}));
                 }
                 return;
               }
@@ -3849,6 +4335,7 @@ function App({user,signOut,subStatus}){
         <h1 className="wc-d1 text-3xl font-bold mb-2" style={{background:'linear-gradient(135deg,#f0ece6,#c4324a)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',letterSpacing:'-0.02em'}}>Kalepin</h1>
         <p className="wc-d1 text-sm mb-1.5" style={{color:'var(--t2)'}}>Calepinage, découpe & visualisation 3D</p>
         <p className="wc-d1 text-[10px] mn mb-10" style={{color:'var(--t3)'}}>v16 — PDF fournisseur • Zones ajustables • Plan transparent</p>
+        <button onClick={()=>setStep('dashboard')} className="wc-d1 mb-6" style={{background:'none',border:'none',color:'var(--t3)',fontSize:11,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',gap:4}}>← Retour au dashboard</button>
         <div className="wc-d2 w-full" style={{marginBottom:24}}>
           <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.dxf" className="hidden" onChange={e=>{if(e.target.files[0])loadFile(e.target.files[0])}}/>
           <div className="drop p-6 flex items-center justify-center gap-5 rounded-2xl" onClick={()=>fileRef.current?.click()}
@@ -3861,7 +4348,7 @@ function App({user,signOut,subStatus}){
             <div className="flex gap-1.5">{['PDF','PNG','JPG','DXF'].map(t=><span key={t} className="px-2.5 py-0.5 rounded-md text-[10px] font-bold mn" style={{background:t==='DXF'?'rgba(8,145,178,.1)':'rgba(196,50,74,.12)',color:t==='DXF'?'#0891b2':'#c4324a'}}>{t}</span>)}</div></div>
           </div></div>
         <div className="wc-d3 flex items-center gap-3 mb-6 w-full"><div className="flex-1 h-px" style={{background:'var(--bd)'}}/><span className="text-[11px]" style={{color:'var(--t3)'}}>ou</span><div className="flex-1 h-px" style={{background:'var(--bd)'}}/></div>
-        <button onClick={()=>setShowProjects(true)} className="wc-d3 ba w-full py-3.5 rounded-xl text-sm font-semibold mb-3"
+        <button onClick={()=>setStep('dashboard')} className="wc-d3 ba w-full py-3.5 rounded-xl text-sm font-semibold mb-3"
           style={{background:'linear-gradient(135deg,rgba(79,110,247,.1),rgba(79,110,247,.05))',border:'1px solid rgba(79,110,247,.25)',color:'var(--bl)',transition:'all .3s'}}>
           ☁ Mes projets</button>
         <button onClick={startManual} className="wc-d3 ba w-full py-3.5 rounded-xl text-sm font-semibold" 
@@ -3951,8 +4438,8 @@ function App({user,signOut,subStatus}){
   return(
     <div className="h-full flex flex-col">
       {/* ── LIGNE 1 : Logo + projet + outils ── */}
-      <div className="flex items-center px-3 flex-shrink-0" style={{height:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)'}}>
-        <div className="flex items-center gap-2 flex-shrink-0">
+      <div className="flex items-center px-3 flex-shrink-0" style={{height:step==='dashboard'||step==='carrelage'||step==='brique'?0:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)',overflow:'hidden'}}>
+        <div className="flex items-center gap-2 flex-shrink-0" style={{cursor:'pointer'}} onClick={()=>{if(step!=='dashboard')setStep('dashboard')}} title="Retour au dashboard">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'linear-gradient(135deg,#c4324a,#a0243a)'}}>
             <svg width="14" height="14" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
           </div><span className="font-bold text-sm">Kalepin</span></div>
@@ -3973,7 +4460,9 @@ function App({user,signOut,subStatus}){
                 <button onClick={e=>{e.currentTarget.parentNode.style.display='none';saveProject(true)}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>☁ Sauver comme nouveau</button>
                 <button onClick={e=>{e.currentTarget.parentNode.style.display='none';exportProjectJSON()}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>💾 Exporter JSON</button>
                 <label className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2 cursor-pointer" style={{color:'var(--t2)'}}>
-                  📥 Importer JSON<input type="file" accept=".json" className="hidden" onChange={e=>{e.currentTarget.closest('div').style.display='none';if(e.target.files[0])loadProject(e.target.files[0]);e.target.value=''}}/></label>
+                  📥 Importer JSON (remplacer)<input type="file" accept=".json" className="hidden" onChange={e=>{e.currentTarget.closest('div').style.display='none';if(e.target.files[0])loadProject(e.target.files[0],false);e.target.value=''}}/></label>
+                {zones.length>0&&<label className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2 cursor-pointer" style={{color:'#0ea5e9'}}>
+                  📑 Ajouter comme onglet<input type="file" accept=".json" className="hidden" onChange={e=>{e.currentTarget.closest('div').style.display='none';if(e.target.files[0])loadProject(e.target.files[0],true);e.target.value=''}}/></label>}
               </div>
             </div>
             {lastSaved&&<span className="text-[8px] self-center ml-1" style={{color:'var(--t3)'}}>☁ {lastSaved.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span>}
@@ -4054,13 +4543,14 @@ function App({user,signOut,subStatus}){
             <button onClick={()=>setMetreOpen(true)} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)'}}>📊 Métré</button>
             <button onClick={()=>setRightTab('ral')} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
               style={{background:rightTab==='ral'?'rgba(167,139,250,.2)':'transparent',border:`1px solid ${rightTab==='ral'?'var(--pp)':'rgba(167,139,250,.2)'}`,color:'var(--pp)'}}>
-              <div style={{width:12,height:12,borderRadius:3,background:RAL_COLORS[ralIdx]?.hex,border:'1px solid rgba(255,255,255,.2)'}}/>{RAL_COLORS[ralIdx]?.code}</button>
+              <div style={{width:12,height:12,borderRadius:3,background:RAL_COLORS[zoneRalIdx]?.hex,border:'1px solid rgba(255,255,255,.2)'}}/>{RAL_COLORS[zoneRalIdx]?.code}</button>
             <button onClick={()=>setShow3D(v=>!v)} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
               style={{background:show3D?'rgba(167,139,250,.2)':'rgba(167,139,250,.08)',border:`1px solid ${show3D?'var(--pp)':'rgba(167,139,250,.25)'}`,color:'var(--pp)'}}>
               🧊 {show3D?'2D':'3D'}</button>
             <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setExpSel(s);setExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(79,110,247,.1)',border:'1px solid rgba(79,110,247,.3)',color:'var(--bl)'}}>{I.prn(12)} PDF</button>
             <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setXlsxExpSel(s);setXlsxExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)'}}>📊 Excel</button>
             <div className="mx-1 h-5 w-px flex-shrink-0" style={{background:'var(--bd)'}}/>
+            {isAdmin&&<button onClick={()=>setStep('admin')} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(196,50,74,.12)',border:'1px solid rgba(196,50,74,.3)',color:'#c4324a'}}>⚡ Admin</button>}
             <div style={{position:'relative'}} className="flex-shrink-0">
               <button onClick={()=>setUserMenu(v=>!v)} className="ba flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{background:userMenu?'var(--crd2)':'var(--crd)',border:'1px solid var(--bd)'}}>
                 <div style={{width:26,height:26,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:'#fff',flexShrink:0}}>
@@ -4078,6 +4568,7 @@ function App({user,signOut,subStatus}){
           </div>
         </>}
         {step!=='work'&&<div style={{marginLeft:'auto',position:'relative'}} className="flex-shrink-0">
+          {isAdmin&&<button onClick={()=>setStep('admin')} style={{marginRight:8,padding:'5px 12px',borderRadius:8,border:'1px solid rgba(196,50,74,.3)',background:'rgba(196,50,74,.08)',color:'#c4324a',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>⚡ Admin</button>}
           <button onClick={()=>setUserMenu(v=>!v)} className="ba flex items-center gap-1.5 px-2 py-1 rounded-lg" style={{background:userMenu?'var(--crd2)':'var(--crd)',border:'1px solid var(--bd)'}}>
             <div style={{width:26,height:26,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:800,color:'#fff'}}>
               {(user?.user_metadata?.full_name||user?.email||'U')[0].toUpperCase()}
@@ -4211,7 +4702,188 @@ function App({user,signOut,subStatus}){
         </div>
       )}
       <div className="flex-1 flex min-h-0">
+        {/* ── DASHBOARD ── */}
+        {/* ══════════ DASHBOARD ══════════ */}
+        {step==='dashboard'&&<div className="h-full w-full overflow-y-auto" style={{background:'linear-gradient(160deg,#0a0a0f,#0e0e1a 40%,#110e18 70%,#0a0a0f)'}}>
+
+          {/* ─── STICKY NAV ─── */}
+          <div style={{position:'sticky',top:0,zIndex:20,background:'rgba(10,10,15,.88)',backdropFilter:'blur(14px)',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
+            <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 24px',display:'flex',alignItems:'center',gap:12}}>
+              <div style={{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(196,50,74,.3)'}}>
+                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".95"/><rect x="23" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="3" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="23" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".55"/></svg>
+              </div>
+              <span style={{fontSize:15,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Kalepin</span>
+              <div style={{flex:1}}/>
+              <span style={{fontSize:11,color:'var(--t3)',marginRight:4}}>{user?.email||''}</span>
+              <button onClick={()=>setShowAccount(true)} style={{padding:'5px 12px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>⚙ Compte</button>
+              <button onClick={signOut} style={{padding:'5px 12px',borderRadius:7,border:'1px solid rgba(239,68,68,.12)',background:'rgba(239,68,68,.04)',color:'#f87171',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Déconnexion</button>
+            </div>
+          </div>
+
+          {/* ─── HERO PITCH ─── */}
+          <div style={{position:'relative',overflow:'hidden'}}>
+            <div style={{position:'absolute',top:'8%',left:'12%',width:300,height:300,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.06),transparent 70%)',pointerEvents:'none'}}/>
+            <div style={{position:'absolute',bottom:'5%',right:'8%',width:200,height:200,borderRadius:'50%',background:'radial-gradient(circle,rgba(8,145,178,.04),transparent 70%)',pointerEvents:'none'}}/>
+            <div style={{position:'absolute',top:'40%',left:'55%',width:350,height:350,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.035),transparent 60%)',pointerEvents:'none'}}/>
+            <div style={{maxWidth:1120,margin:'0 auto',padding:'60px 24px 40px',textAlign:'center',position:'relative',zIndex:1}}>
+              <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'5px 16px',borderRadius:20,background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.12)',marginBottom:24}}>
+                <span style={{width:6,height:6,borderRadius:3,background:'#34d399',animation:'pulse-ring 2s infinite'}}/>
+                <span style={{fontSize:11,fontWeight:600,color:'#34d399'}}>Bienvenue {user?.email?.split('@')[0]||''}!</span>
+              </div>
+              <h1 style={{fontSize:38,fontWeight:800,lineHeight:1.15,color:'#f0ece6',marginBottom:16,letterSpacing:'-.03em'}}>
+                De l'import de vos plans au<br/>
+                <span style={{background:'linear-gradient(135deg,#c4324a,#e8697f)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>bon de commande en 5 minutes</span>
+              </h1>
+              <p style={{fontSize:15,color:'rgba(255,255,255,.45)',maxWidth:620,margin:'0 auto 32px',lineHeight:1.7}}>
+                L'outil métier conçu pour les <b style={{color:'rgba(255,255,255,.6)'}}>bardeurs et façadiers</b> qui souhaitent automatiser le calepinage (Alucobond, Trespa, Equitone…), générer des métrés précis d'ossature et visualiser le rendu 3D avec les codes RAL réels.
+              </p>
+              <div style={{display:'flex',justifyContent:'center',gap:10,flexWrap:'wrap'}}>
+                {['Import PDF / DXF','Calcul auto cassettes','Vue 3D RAL','Métrés Excel','QR Code Chantier','Plan de masse'].map(t=>
+                  <span key={t} style={{padding:'5px 14px',borderRadius:20,fontSize:10,fontWeight:600,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',color:'rgba(255,255,255,.5)'}}>{t}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 24px 44px'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Créer un nouveau projet
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:`repeat(${isAdmin?4:3},1fr)`,gap:16}}>
+              {/* Facade cassettes */}
+              <div onClick={()=>{setProjectType('facade');setStep('welcome')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(196,50,74,.05),rgba(196,50,74,.01))',border:'1.5px solid rgba(196,50,74,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(196,50,74,.12)'}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                <div style={{fontSize:30,marginBottom:10}}>🏢</div>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Facade Cassettes</div>
+                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Bardage métallique, cassettes, panneaux composites (Alucobond, Trespa, Equitone).</div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {['PDF','DXF','3D','RAL','Ossature'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(196,50,74,.08)',color:'#c4324a'}}>{t}</span>)}
+                </div>
+              </div>
+              {/* Facade brique */}
+              <div onClick={()=>{setProjectType('brique');setStep('brique')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(217,119,6,.05),rgba(217,119,6,.01))',border:'1.5px solid rgba(217,119,6,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(217,119,6,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(217,119,6,.12)'}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(217,119,6,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                <div style={{fontSize:30,marginBottom:10}}>🧱</div>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Facade Brique</div>
+                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Briques de parement, plaquettes. Appareillages classiques, joints et ouvertures.</div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {['Panneresse','Flamande','Anglaise','Coupes','Métrés'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(217,119,6,.08)',color:'#d97706'}}>{t}</span>)}
+                </div>
+              </div>
+              {/* Carrelage */}
+              <div onClick={()=>{setProjectType('carrelage');setStep('carrelage')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(14,165,233,.05),rgba(14,165,233,.015))',border:'1.5px solid rgba(14,165,233,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(14,165,233,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(14,165,233,.12)'}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(14,165,233,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                <div style={{fontSize:30,marginBottom:10}}>🔲</div>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Calepinage Carrelage</div>
+                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Sol, mur, piscine. Motifs de pose, calepins, coupes périphériques.</div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                  {['Sol','Mur','Piscine','Coupes','Métrés','Motifs'].map(t=><span key={t} style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(14,165,233,.08)',color:'#0ea5e9'}}>{t}</span>)}
+                </div>
+              </div>
+              {/* Admin card — visible uniquement pour les admins */}
+              {isAdmin&&<div onClick={()=>setStep('admin')} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(196,50,74,.09),rgba(139,26,43,.04))',border:'1.5px solid rgba(196,50,74,.22)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.55)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(196,50,74,.18)'}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.22)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                <div style={{position:'absolute',top:12,right:14,padding:'2px 8px',borderRadius:20,background:'rgba(196,50,74,.15)',border:'1px solid rgba(196,50,74,.3)',fontSize:8,fontWeight:800,color:'#c4324a',letterSpacing:'.08em'}}>ADMIN</div>
+                <div style={{fontSize:30,marginBottom:10}}>⚡</div>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Dashboard Admin</div>
+                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Gestion des utilisateurs bêta, statistiques d'usage, bibliothèques.</div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {['Utilisateurs','Stats','Approbations','Bibliothèques'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(196,50,74,.1)',color:'#c4324a'}}>{t}</span>)}
+                </div>
+              </div>}
+            </div>
+          </div>
+
+          {/* ─── MES PROJETS ─── */}
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 24px 56px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+              <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',display:'flex',alignItems:'center',gap:8}}>
+                <div style={{width:3,height:18,borderRadius:2,background:'#0ea5e9'}}/>Mes projets récents ({dashProjects.length})
+              </div>
+              <button onClick={()=>{setDashLoading(true);cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})}} style={{padding:'5px 14px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>↻ Actualiser</button>
+            </div>
+            {dashLoading?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>Chargement...</div>
+            :dashProjects.length===0?<div style={{textAlign:'center',padding:50,borderRadius:20,border:'1.5px dashed rgba(255,255,255,.06)',background:'rgba(255,255,255,.012)'}}>
+              <div style={{fontSize:42,marginBottom:14}}>📁</div>
+              <div style={{fontSize:14,fontWeight:600,color:'var(--t2)',marginBottom:6}}>Aucun projet sauvegardé</div>
+              <div style={{fontSize:11,color:'var(--t3)'}}>Créez votre premier calepinage ci-dessus</div>
+            </div>
+            :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250,1fr))',gap:12}}>
+              {dashProjects.map(p=><div key={p.id} onClick={()=>openCloudProject(p.id)} style={{
+                padding:16,borderRadius:14,background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.05)',cursor:'pointer',transition:'all .2s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.22)';e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 10px 30px rgba(0,0,0,.25)'}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.05)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#c4324a,#a0243a)',opacity:.45}}/>
+                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
+                  <div style={{width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,rgba(196,50,74,.08),rgba(196,50,74,.03))',border:'1px solid rgba(196,50,74,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>🏗</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:12,fontWeight:700,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                    <div style={{fontSize:9,color:'var(--t3)',marginTop:2}}>{(()=>{try{return new Date(p.updated_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})}catch(e){return'-'}})()}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,fontSize:10,color:'var(--t3)'}}><span>{p.zones_count||0} zone{(p.zones_count||0)>1?'s':''}</span><span>·</span><span>{(p.total_surface||0).toFixed(1)} m²</span></div>
+              </div>)}
+            </div>}
+          </div>
+
+          {/* ─── FONCTIONNALITÉS ─── */}
+          <div style={{background:'rgba(255,255,255,.012)',borderTop:'1px solid rgba(255,255,255,.04)',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+            <div style={{maxWidth:1120,margin:'0 auto',padding:'56px 24px'}}>
+              <div style={{textAlign:'center',marginBottom:40}}>
+                <h2 style={{fontSize:26,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Pourquoi choisir Kalepin ?</h2>
+                <p style={{fontSize:13,color:'rgba(255,255,255,.4)',maxWidth:520,margin:'0 auto'}}>4 problèmes métier résolus par un seul outil</p>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
+                {[
+                  {icon:'🎯',title:'Zéro erreur de commande',desc:'Calcul auto des surfaces nettes, chutes et nombre exact de panneaux incluant les cassettes pliées avec le détail des plis.',color:'#c4324a'},
+                  {icon:'🧊',title:'Vente simplifiée en 3D',desc:'Montrez à vos clients le rendu final avec les finitions RAL (mat, brillant, métallisé) dans le navigateur ou sur mobile.',color:'#0ea5e9'},
+                  {icon:'📊',title:'Métrés instantanés',desc:'Excel récapitulant les métrés par zone, les ouvertures (fenêtres, portes) et les linéaires d\'ossature en 1 clic.',color:'#34d399'},
+                  {icon:'📐',title:'Import DXF / PDF',desc:'Importez vos plans d\'architecte et travaillez directement dessus par transparence. Calibration automatique.',color:'#f59e0b'},
+                ].map((f,i)=><div key={i} style={{padding:24,borderRadius:18,background:'rgba(0,0,0,.2)',border:'1px solid rgba(255,255,255,.04)',position:'relative',overflow:'hidden',transition:'all .2s'}}
+                  onMouseOver={e=>e.currentTarget.style.borderColor=`${f.color}30`}
+                  onMouseOut={e=>e.currentTarget.style.borderColor='rgba(255,255,255,.04)'}>
+                  <div style={{position:'absolute',top:-20,right:-20,width:70,height:70,borderRadius:'50%',background:`radial-gradient(circle,${f.color}0d,transparent)`,pointerEvents:'none'}}/>
+                  <div style={{fontSize:30,marginBottom:14}}>{f.icon}</div>
+                  <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:8}}>{f.title}</div>
+                  <div style={{fontSize:11,color:'rgba(255,255,255,.4)',lineHeight:1.65}}>{f.desc}</div>
+                </div>)}
+              </div>
+            </div>
+          </div>
+
+          {/* ─── QR CODE CHANTIER SPOTLIGHT ─── */}
+          <div style={{background:'rgba(196,50,74,.035)',borderTop:'1px solid rgba(196,50,74,.08)',borderBottom:'1px solid rgba(196,50,74,.08)'}}>
+            <div style={{maxWidth:1120,margin:'0 auto',padding:'44px 24px',display:'flex',alignItems:'center',gap:32}}>
+              <div style={{width:88,height:88,borderRadius:20,background:'linear-gradient(135deg,rgba(196,50,74,.1),rgba(196,50,74,.04))',border:'1px solid rgba(196,50,74,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:40,flexShrink:0}}>📱</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:18,fontWeight:700,color:'#f0ece6',marginBottom:8}}>Le QR Code Chantier</div>
+                <div style={{fontSize:12,color:'rgba(255,255,255,.4)',lineHeight:1.7}}>
+                  Posez vos panneaux avec le plan 3D accessible sur votre téléphone via un simple QR code collé sur votre plan papier.
+                  Partagez la vue AR avec vos clients directement sur site — un argument commercial unique qui fait la différence.
+                </div>
+              </div>
+              <div style={{flexShrink:0}}>
+                <button onClick={()=>{setProjectType('facade');setStep('welcome')}} style={{padding:'12px 28px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 6px 20px rgba(196,50,74,.25)',transition:'all .2s'}}>Essayer maintenant</button>
+              </div>
+            </div>
+          </div>
+
+          {/* ─── FOOTER ─── */}
+          <div style={{borderTop:'1px solid rgba(255,255,255,.04)',padding:'24px 0',textAlign:'center'}}>
+            <div style={{fontSize:10,color:'rgba(255,255,255,.2)'}}>Kalepin v16 — © 2025 · Conçu pour les bardeurs et façadiers</div>
+          </div>
+
+        </div>}
+
+
         {step==='welcome'&&<Welcome/>}
+        {step==='carrelage'&&<CarrelageApp onBack={()=>setStep('dashboard')} user={user}/>}
+        {step==='brique'&&<BriqueApp onBack={()=>setStep('dashboard')} user={user}/>}
+        {step==='admin'&&isAdmin&&<AdminApp onBack={()=>setStep('dashboard')} currentUser={user} isSuperAdmin={isSuperAdmin}/>}
         {/* LEFT */}
         {step==='work'&&az&&(
           <div className="w-[250px] flex-shrink-0 border-r flex flex-col" style={{borderColor:'var(--bd)',background:'var(--pnl)'}}>
@@ -4420,8 +5092,8 @@ function App({user,signOut,subStatus}){
               onClose={()=>setShow3D(false)}/>}
             {/* Floating canvas toolbar — only 3D + color swatch */}
             {step==='work'&&!show3D&&az&&<div style={{position:'absolute',top:12,right:12,zIndex:20,display:'flex',gap:8,alignItems:'center'}}>
-              <div onClick={()=>setRightTab('ral')} style={{width:28,height:28,borderRadius:8,background:RAL_COLORS[ralIdx]?.hex,
-                border:'2px solid rgba(255,255,255,.2)',cursor:'pointer',boxShadow:'0 2px 10px rgba(0,0,0,.3)'}} title={`${RAL_COLORS[ralIdx]?.code} — Cliquer pour changer`}/>
+              <div onClick={()=>setRightTab('ral')} style={{width:28,height:28,borderRadius:8,background:RAL_COLORS[zoneRalIdx]?.hex,
+                border:'2px solid rgba(255,255,255,.2)',cursor:'pointer',boxShadow:'0 2px 10px rgba(0,0,0,.3)'}} title={`${RAL_COLORS[zoneRalIdx]?.code} — Cliquer pour changer`}/>
               <button onClick={()=>setShow3D(true)} className="ba"
                 style={{background:'linear-gradient(135deg,rgba(139,92,246,.9),rgba(79,110,247,.9))',border:'none',borderRadius:10,padding:'8px 12px',
                   color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',boxShadow:'0 4px 20px rgba(79,110,247,.4)',
@@ -4449,7 +5121,7 @@ function App({user,signOut,subStatus}){
             {step==='work'&&!show3D&&az&&<div style={{position:'absolute',bottom:12,left:12,zIndex:20,
               background:'rgba(15,17,24,.85)',borderRadius:10,padding:'8px 12px',backdropFilter:'blur(12px)',
               border:'1px solid rgba(255,255,255,.06)',display:'flex',gap:12,alignItems:'center'}}>
-              {[{c:RAL_COLORS[ralIdx]?.hex||'#383E42',t:'Panneau',b:'none'},
+              {[{c:RAL_COLORS[zoneRalIdx]?.hex||'#383E42',t:'Panneau',b:'none'},
                 {c:'rgba(251,113,133,.3)',t:'Ouverture',b:'2px solid rgba(251,113,133,.8)'},
                 {c:'rgba(139,92,246,.3)',t:'Tableau',b:'1px solid rgba(139,92,246,.8)'},
                 {c:'rgba(34,211,238,.25)',t:'Linteau',b:'1px solid rgba(34,211,238,.8)'},
@@ -4569,9 +5241,9 @@ function App({user,signOut,subStatus}){
               {rightTab==='ral'&&<>
                 <div className="cd p-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <div className="w-6 h-6 rounded-lg" style={{background:RAL_COLORS[ralIdx]?.hex,border:'2px solid rgba(255,255,255,.15)'}}/>
-                    <div><div className="text-xs font-bold">{RAL_COLORS[ralIdx]?.code}</div>
-                    <div className="text-[9px]" style={{color:'var(--t3)'}}>{RAL_COLORS[ralIdx]?.name}{RAL_COLORS[ralIdx]?.finish?' • '+RAL_COLORS[ralIdx].finish:''}</div></div>
+                    <div className="w-6 h-6 rounded-lg" style={{background:RAL_COLORS[zoneRalIdx]?.hex,border:'2px solid rgba(255,255,255,.15)'}}/>
+                    <div><div className="text-xs font-bold">{RAL_COLORS[zoneRalIdx]?.code}</div>
+                    <div className="text-[9px]" style={{color:'var(--t3)'}}>{RAL_COLORS[zoneRalIdx]?.name}{RAL_COLORS[zoneRalIdx]?.finish?' • '+RAL_COLORS[zoneRalIdx].finish:''}</div></div>
                   </div>
                   {/* Category tabs */}
                   <div className="flex flex-wrap gap-1 mb-2.5">
@@ -4582,11 +5254,11 @@ function App({user,signOut,subStatus}){
                   </div>
                   {/* Color grid filtered by category */}
                   <div className="grid grid-cols-6 gap-1.5">
-                    {RAL_COLORS.map((r,i)=>r.cat===ralCat?<button key={r.code} onClick={()=>{setRalIdx(i);updateAZ(z=>({...z,ralIdx:i}))}}
+                    {RAL_COLORS.map((r,i)=>r.cat===ralCat?<button key={r.code} onClick={()=>setZoneRal(i)}
                       className="ba relative" title={`${r.code} — ${r.name}${r.finish?' ('+r.finish+')':''}`}
-                      style={{width:34,height:34,borderRadius:8,background:r.hex,border:i===ralIdx?'3px solid var(--bl)':'2px solid rgba(255,255,255,.08)',
-                        boxShadow:i===ralIdx?'0 0 12px rgba(79,110,247,.4)':'none',transform:i===ralIdx?'scale(1.12)':'scale(1)',transition:'.15s'}}>
-                      {i===ralIdx&&<div style={{position:'absolute',inset:-1,borderRadius:8,border:'2px solid #fff',opacity:.4}}/>}
+                      style={{width:34,height:34,borderRadius:8,background:r.hex,border:i===zoneRalIdx?'3px solid var(--bl)':'2px solid rgba(255,255,255,.08)',
+                        boxShadow:i===zoneRalIdx?'0 0 12px rgba(79,110,247,.4)':'none',transform:i===zoneRalIdx?'scale(1.12)':'scale(1)',transition:'.15s'}}>
+                      {i===zoneRalIdx&&<div style={{position:'absolute',inset:-1,borderRadius:8,border:'2px solid #fff',opacity:.4}}/>}
                       {r.finish&&<div style={{position:'absolute',bottom:1,right:1,width:6,height:6,borderRadius:3,
                         background:r.finish==='brillant'?'#fff':r.finish==='mat'?'#555':r.finish==='brossé'?'#999':r.finish==='métallisé'?'#ccc':'#a85',opacity:.8}}/>}
                     </button>:null)}
@@ -4924,6 +5596,16 @@ function App({user,signOut,subStatus}){
                 className="w-full py-1 rounded text-[9px] font-bold" style={{background:'rgba(251,113,133,.06)',border:'1px solid rgba(251,113,133,.15)',color:'var(--rs)'}}>
                 🚫 Exclure (balcon)</button>;
             })()}
+          </div>
+          {/* Transform to opening */}
+          <div className="px-2 py-1.5" style={{borderBottom:'1px solid var(--bd)'}}>
+            <button onClick={()=>{
+              const ox=Math.round(pm.pLeft*1000),oy=Math.round(pm.pTop*1000);
+              const ow=Math.round(pm.pWa*1000),oh=Math.round(pm.pHa*1000);
+              const nO={id:Date.now(),t:oh>1800?'Porte':'Fenetre',x:ox,y:oy,w:ow,h:oh};
+              updateAZ(z=>({...z,ouvs:[...z.ouvs,nO]}));setSelId(nO.id);setEditPanel(null)}}
+              className="w-full py-1 rounded text-[9px] font-bold" style={{background:'rgba(14,165,233,.06)',border:'1px solid rgba(14,165,233,.15)',color:'#0ea5e9'}}>
+              🔲 Transformer en ouverture</button>
           </div>
           {/* Merge */}
           <div className="px-2 py-1.5">
@@ -5265,6 +5947,1427 @@ function App({user,signOut,subStatus}){
 
 // ══════════════════════════════════════════════════════════════
 // ══════════════════════════════════════════════════════════════
+
+// BRIQUE — Module calepinage brique de parement
+// ══════════════════════════════════════════════════════════════
+function BriqueApp({onBack,user}){
+  // ── Multi-facade tabs ──
+  const mkFacade=(name='Facade 1')=>({id:Date.now()+Math.random(),name,facW:6000,facH:3000,bkW:210,bkH:50,jointH:10,jointV:10,bond:'panneresse',bkColor:'#b5654a',bkColor2:'#8b4513',jointColor:'#c8bfb0',openings:[]});
+  const[facades,setFacades]=useState([mkFacade()]);
+  const[activeFacIdx,setActiveFacIdx]=useState(0);
+  const fac=facades[activeFacIdx]||facades[0];
+  const setFac=(fn)=>setFacades(fs=>fs.map((f,i)=>i===activeFacIdx?(typeof fn==='function'?fn(f):{...f,...fn}):f));
+
+  // Shorthand getters
+  const facW=fac.facW,facH=fac.facH,bkW=fac.bkW,bkH=fac.bkH,jointH=fac.jointH,jointV=fac.jointV;
+  const bond=fac.bond,bkColor=fac.bkColor,bkColor2=fac.bkColor2,jointColor=fac.jointColor;
+  const openings=fac.openings||[];
+
+  // ── View state ──
+  const[zoom,setZoom]=useState(1);const[showDims,setShowDims]=useState(true);const[showCuts,setShowCuts]=useState(true);
+  const[hoverBk,setHoverBk]=useState(null);
+  const[view3D,setView3D]=useState(false);
+  const[selOuv,setSelOuv]=useState(null);// selected opening id
+  const[dragState,setDragState]=useState(null);// {type:'move'|'r-*', id, sx, sy, orig}
+  const svgRef=useRef(null);
+  const svgContainerRef=useRef(null);
+  const[cSize,setCSize]=useState({w:700,h:500});
+  const mountRef=useRef(null);
+  const sceneRef=useRef({});
+  const rotRef=useRef({x:-.25,y:.35});
+  const dragRef=useRef(null);
+  const zoomRef=useRef(3.5);
+  const panRef=useRef({x:0,y:0});
+
+  const BRICK_PRESETS=[
+    {name:'NF 210×50',w:210,h:50},{name:'NF 210×65',w:210,h:65},{name:'DF 240×52',w:240,h:52},
+    {name:'WF 210×40',w:210,h:40},{name:'Mince 220×50',w:220,h:50},{name:'Module 290×90',w:290,h:90},
+    {name:'Plaquette 240×71',w:240,h:71},{name:'Long 490×52',w:490,h:52},{name:'Format 240×115',w:240,h:115},
+  ];
+  const BK_COLORS=['#b5654a','#c47a5a','#d4956a','#9c4a2e','#8b4513','#7a3b1e','#6b3020',
+    '#e8c9a0','#d4b896','#c2a882','#f0e0c8','#a08060','#705040','#503828',
+    '#b88a6e','#c49474','#90786a','#786058','#605050','#484040'];
+  const BONDS=[
+    {id:'panneresse',name:'Panneresse',desc:'½ décalage (le plus courant)'},
+    {id:'flamande',name:'Flamande',desc:'Alternance boutisse/panneresse'},
+    {id:'anglaise',name:'Anglaise',desc:'Rangs alternés panneresse/boutisse'},
+    {id:'boutisse',name:'Boutisse',desc:'Toutes boutisses (½ décalage)'},
+    {id:'empile',name:'Empilé',desc:'Joints alignés verticalement'},
+    {id:'americain',name:'Américain',desc:'⅓ décalage'},
+  ];
+  const OUV_TYPES=['Fenêtre','Porte','Porte-fenêtre','Vide'];
+
+  // ── Compute bricks ──
+  const computeBricks=useMemo(()=>{
+    const W=facW,H=facH,bw=bkW,bh=bkH,jh=jointH,jv=jointV;
+    const boutW=bw/2-jv/2;
+    const rowH=bh+jh;
+    const nRows=Math.ceil(H/rowH);
+    const bricks=[];
+    let fullCount=0,cutCount=0,boutCount=0;
+    const oRects=openings.map(o=>({l:o.x,r:o.x+o.w,t:o.y,b:o.y+o.h}));
+    const isInOpening=(x,y,w,h)=>{const cx=x+w/2,cy=y+h/2;return oRects.some(o=>cx>o.l&&cx<o.r&&cy>o.t&&cy<o.b)};
+    const overlapsOpening=(x,y,w,h)=>oRects.some(o=>x<o.r&&x+w>o.l&&y<o.b&&y+h>o.t);
+    for(let r=0;r<nRows;r++){
+      const by=r*rowH;if(by>=H)break;
+      const brickH=Math.min(bh,H-by);
+      const isBoutisseRow=(bond==='anglaise'&&r%2===1)||(bond==='boutisse');
+      const curBW=isBoutisseRow?boutW:bw;
+      const colW=curBW+jv;
+      let offset=0;
+      if(bond==='panneresse')offset=r%2===0?0:colW/2;
+      else if(bond==='flamande')offset=r%2===0?0:colW*0.75;
+      else if(bond==='anglaise')offset=isBoutisseRow?(r%4===1?colW/2:0):(r%4===0?0:colW/2);
+      else if(bond==='empile')offset=0;
+      else if(bond==='americain')offset=(r%3)*colW/3;
+      else if(bond==='boutisse')offset=r%2===0?0:colW/2;
+      const nCols=Math.ceil((W+offset)/colW)+1;
+      for(let c=-1;c<nCols;c++){
+        let bx=c*colW-offset;
+        let brickW=curBW;
+        if(bond==='flamande'&&!isBoutisseRow){if(c%2===1)brickW=boutW;}
+        const cx1=Math.max(0,bx),cy1=by;
+        const cx2=Math.min(W,bx+brickW),cy2=Math.min(H,by+brickH);
+        if(cx2<=cx1||cy2<=cy1)continue;
+        const cw=cx2-cx1,ch=cy2-cy1;
+        if(overlapsOpening(cx1,cy1,cw,ch))continue;
+        const isCut=(Math.abs(cw-brickW)>1)||(Math.abs(ch-brickH)>1);
+        const isBout=brickW<bw*0.7;
+        if(!isCut)fullCount++;else cutCount++;
+        if(isBout)boutCount++;
+        const useBkColor2=isBout||(bond==='flamande'&&!isBoutisseRow&&(c%2===1));
+        bricks.push({x:cx1,y:cy1,w:cw,h:ch,full:!isCut,isBout:useBkColor2,origW:brickW,origH:bh,col:c,row:r});
+      }
+    }
+    const totalArea=W*H/1e6,ouvArea=openings.reduce((s,o)=>s+o.w*o.h/1e6,0),netArea=totalArea-ouvArea;
+    const bricksPerM2=1e6/((bkW+jv)*(bkH+jh));
+    return{bricks,fullCount,cutCount,boutCount,totalArea,ouvArea,netArea,bricksPerM2:Math.round(bricksPerM2),toOrder:Math.ceil((fullCount+cutCount)*1.05),mortarKg:netArea*(jh>=10?30:20)};
+  },[facW,facH,bkW,bkH,jointH,jointV,bond,openings]);
+
+  const svgW=cSize.w,svgH=cSize.h,mg=50;
+  const sc=Math.min((svgW-mg*2)/facW,(svgH-mg*2)/facH)*zoom;
+  const ox=(svgW-facW*sc)/2,oy=(svgH-facH*sc)/2;
+
+  // ── Opening helpers ──
+  const addOpening=(t)=>{
+    const w=t==='Porte'?900:t==='Porte-fenêtre'?1800:t==='Vide'?800:1200;
+    const h=t==='Porte'?2100:t==='Porte-fenêtre'?2150:t==='Vide'?800:1200;
+    const x=Math.round((facW-w)/2),y=t==='Porte'||t==='Porte-fenêtre'?facH-h:Math.round((facH-h)/2);
+    const nO={id:Date.now(),t,x,y,w,h,retours:{tG:150,tD:150,lin:150,app:150},faceVis:50};
+    setFac(f=>({...f,openings:[...f.openings,nO]}));setSelOuv(nO.id);
+  };
+  const updateOuv=(id,fn)=>setFac(f=>({...f,openings:f.openings.map(o=>o.id===id?fn(o):o)}));
+  const delOuv=(id)=>{setFac(f=>({...f,openings:f.openings.filter(o=>o.id!==id)}));if(selOuv===id)setSelOuv(null)};
+  const clamp=(v,mn,mx)=>Math.max(mn,Math.min(mx,v));
+  const snap=(v,s=10)=>Math.round(v/s)*s;
+
+  // ── SVG mouse handlers for drag/resize openings ──
+  const svgPt=(cx,cy)=>{
+    const r=svgContainerRef.current?.getBoundingClientRect();if(!r)return{x:0,y:0};
+    return{x:(cx-r.left-ox)/sc,y:(cy-r.top-oy)/sc};
+  };
+  const handleSvgDown=(e,ouvId,type)=>{
+    e.stopPropagation();e.preventDefault();
+    const o=openings.find(v=>v.id===ouvId);if(!o)return;
+    setSelOuv(ouvId);
+    const pt=svgPt(e.clientX,e.clientY);
+    setDragState({type,id:ouvId,sx:pt.x,sy:pt.y,orig:{x:o.x,y:o.y,w:o.w,h:o.h}});
+  };
+  const handleSvgMove=(e)=>{
+    if(!dragState)return;
+    const pt=svgPt(e.clientX,e.clientY);
+    const dx=snap(pt.x-dragState.sx),dy=snap(pt.y-dragState.sy);
+    const o=dragState.orig;
+    if(dragState.type==='move'){
+      const nx=clamp(o.x+dx,0,facW-o.w),ny=clamp(o.y+dy,0,facH-o.h);
+      updateOuv(dragState.id,v=>({...v,x:nx,y:ny}));
+    }else{
+      const dir=dragState.type;
+      let x=o.x,y=o.y,w=o.w,h=o.h;
+      if(dir.includes('e')){w=Math.max(100,o.w+dx)}
+      if(dir.includes('w')){const nw=Math.max(100,o.w-dx);x=o.x+(o.w-nw);w=nw}
+      if(dir.includes('s')){h=Math.max(100,o.h+dy)}
+      if(dir.includes('n')){const nh=Math.max(100,o.h-dy);y=o.y+(o.h-nh);h=nh}
+      x=clamp(x,0,facW-w);y=clamp(y,0,facH-h);
+      updateOuv(dragState.id,v=>({...v,x:snap(x),y:snap(y),w:snap(w),h:snap(h)}));
+    }
+  };
+  const handleSvgUp=()=>setDragState(null);
+
+  // ── Tab management ──
+  const addFacade=()=>{const nf=mkFacade('Facade '+(facades.length+1));setFacades(fs=>[...fs,nf]);setActiveFacIdx(facades.length)};
+  const delFacade=(idx)=>{if(facades.length<=1)return;setFacades(fs=>fs.filter((_,i)=>i!==idx));setActiveFacIdx(Math.max(0,Math.min(activeFacIdx,facades.length-2)))};
+  const dupFacade=(idx)=>{const c=JSON.parse(JSON.stringify(facades[idx]));c.id=Date.now()+Math.random();c.name=c.name+' (copie)';setFacades(fs=>[...fs.slice(0,idx+1),c,...fs.slice(idx+1)]);setActiveFacIdx(idx+1)};
+
+  // ── JSON export/import ──
+  const exportBriqueJSON=()=>{
+    const data={type:'kalepin-brique',version:1,facades};
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kalepin-brique-'+fac.name.replace(/\W+/g,'_')+'.json';a.click();
+  };
+  const importBriqueJSON=(file,append=false)=>{
+    const reader=new FileReader();reader.onload=ev=>{try{
+      const data=JSON.parse(ev.target.result);
+      if(data.type!=='kalepin-brique'||!data.facades){alert('Fichier brique invalide');return}
+      if(append){
+        const newF=data.facades.map(f=>({...f,id:Date.now()+Math.random()}));
+        setFacades(fs=>[...fs,...newF]);setActiveFacIdx(facades.length);
+      }else{
+        setFacades(data.facades.map(f=>({...f,id:f.id||Date.now()+Math.random()})));setActiveFacIdx(0);
+      }
+    }catch(e){alert('Erreur: '+e.message)}};reader.readAsText(file);
+  };
+
+  // ── Responsive SVG container ──
+  useEffect(()=>{
+    const el=svgContainerRef.current;if(!el)return;
+    const ro=new ResizeObserver(entries=>{for(const e of entries){const{width,height}=e.contentRect;if(width>50&&height>50)setCSize({w:width,h:height})}});
+    ro.observe(el);setCSize({w:el.clientWidth||700,h:el.clientHeight||500});
+    return()=>ro.disconnect();
+  },[view3D]);
+
+  // ── Selected opening ──
+  const selO=openings.find(o=>o.id===selOuv);
+
+  // ── 3D VIEW ──
+  useEffect(()=>{
+    if(!view3D||!mountRef.current)return;
+    const el=mountRef.current;
+    const W=el.clientWidth,H=el.clientHeight;
+    if(W<10||H<10)return;
+    if(sceneRef.current.renderer){sceneRef.current.renderer.dispose()}
+    el.innerHTML='';
+
+    const scene=new THREE.Scene();
+    scene.background=new THREE.Color(0x1a1e2e);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
+    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+    el.appendChild(renderer.domElement);
+    renderer.domElement.style.cursor='grab';
+
+    const amb=new THREE.AmbientLight(0xe8e8f0,0.6);scene.add(amb);
+    const sun=new THREE.DirectionalLight(0xfff5e0,1.1);
+    sun.position.set(8,12,8);sun.castShadow=true;
+    sun.shadow.camera.near=0.1;sun.shadow.camera.far=80;
+    sun.shadow.camera.left=-15;sun.shadow.camera.right=15;
+    sun.shadow.camera.top=15;sun.shadow.camera.bottom=-15;
+    sun.shadow.mapSize.width=1024;sun.shadow.mapSize.height=1024;
+    sun.shadow.bias=-0.0005;scene.add(sun);
+    const fill=new THREE.DirectionalLight(0x8ab0ff,0.3);fill.position.set(-4,-2,3);scene.add(fill);
+    const bounce=new THREE.PointLight(0xffeedd,0.2,30);bounce.position.set(0,-5,4);scene.add(bounce);
+
+    const Wm=facW/1000,Hm=facH/1000;
+    const brickDepth=0.065;
+    const facadeGroup=new THREE.Group();
+
+    const groundMat=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(30,30),groundMat);
+    ground.rotation.x=-Math.PI/2;ground.position.y=0;ground.receiveShadow=true;scene.add(ground);
+
+    const jcCol=new THREE.Color(jointColor);
+    const wallMat=new THREE.MeshStandardMaterial({color:jcCol,roughness:0.92,metalness:0.02});
+
+    // Build back wall as segments avoiding openings (so openings are truly hollow)
+    // oRects uses screen coords (y=0=top), convert to 3D coords for wall cutting
+    const wallSegs=[];
+    // Full wall rect in 3D space: x in [-Wm/2, Wm/2], y in [0, Hm]
+    // Opening rects in 3D: ox3d = o.x/1000 - Wm/2, oy3d = Hm - o.y/1000 - o.h/1000
+    let wallRects=[{x1:-Wm/2-0.01,x2:Wm/2+0.01,y1:-0.01,y2:Hm+0.01}];
+    openings.forEach(o=>{
+      const ol=o.x/1000-Wm/2, or2=(o.x+o.w)/1000-Wm/2;
+      const ob=Hm-o.y/1000-o.h/1000, ot=Hm-o.y/1000;
+      const next=[];
+      wallRects.forEach(wr=>{
+        if(ol>=wr.x2||or2<=wr.x1||ob>=wr.y2||ot<=wr.y1){next.push(wr);return}
+        if(wr.y1<ob)next.push({x1:wr.x1,x2:wr.x2,y1:wr.y1,y2:ob});// bottom strip
+        if(ot<wr.y2)next.push({x1:wr.x1,x2:wr.x2,y1:ot,y2:wr.y2});// top strip
+        if(wr.x1<ol)next.push({x1:wr.x1,x2:ol,y1:Math.max(wr.y1,ob),y2:Math.min(wr.y2,ot)});// left strip
+        if(or2<wr.x2)next.push({x1:or2,x2:wr.x2,y1:Math.max(wr.y1,ob),y2:Math.min(wr.y2,ot)});// right strip
+      });
+      wallRects=next;
+    });
+    wallRects.forEach(wr=>{
+      const w=wr.x2-wr.x1,h=wr.y2-wr.y1;if(w<0.001||h<0.001)return;
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.012),wallMat);
+      m.position.set(wr.x1+w/2,wr.y1+h/2,-0.006);m.receiveShadow=true;facadeGroup.add(m);
+    });
+    // Dark cavity behind each opening (simulates interior depth)
+    const cavityMat=new THREE.MeshStandardMaterial({color:0x0a0a12,roughness:1.0,metalness:0.0});
+    openings.forEach(o=>{
+      const cx3=o.x/1000+o.w/2/1000-Wm/2;
+      const cy3=Hm-o.y/1000-o.h/2/1000;
+      const cavD=0.3;// 30cm de profondeur visible
+      const cav=new THREE.Mesh(new THREE.BoxGeometry(o.w/1000-0.004,o.h/1000-0.004,cavD),cavityMat);
+      cav.position.set(cx3,cy3,-cavD/2);facadeGroup.add(cav);
+    });
+
+    // oy3d = Y position flipped for 3D (0=bottom in 3D, 0=top in 2D screen coords)
+    const oRects=openings.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,b:o.y/1000,t:(o.y+o.h)/1000,w:o.w/1000,h:o.h/1000,ox:o.x/1000,oy:Hm-o.y/1000-o.h/1000,type:o.t}));
+
+    const bricks=computeBricks.bricks;
+    const grp1=[],grp2=[];
+    bricks.forEach(b=>{if(b.isBout)grp2.push(b);else grp1.push(b)});
+
+    const addBrickGroup=(arr,baseCol)=>{
+      if(!arr.length)return;
+      const geo=new THREE.BoxGeometry(1,1,brickDepth);
+      const mat=new THREE.MeshStandardMaterial({roughness:0.82,metalness:0.02});
+      const mesh=new THREE.InstancedMesh(geo,mat,arr.length);
+      mesh.castShadow=true;mesh.receiveShadow=true;
+      const dummy=new THREE.Object3D();
+      const colorAttr=new Float32Array(arr.length*3);
+      const br=parseInt(baseCol.slice(1,3),16)/255;
+      const bg=parseInt(baseCol.slice(3,5),16)/255;
+      const bb=parseInt(baseCol.slice(5,7),16)/255;
+      arr.forEach((b,i)=>{
+        const sx=b.w/1000,sy=b.h/1000;
+        // Flip Y: 2D origin is top-left (y=0=top), 3D origin is bottom (y=0=bottom)
+        dummy.position.set(b.x/1000+sx/2-Wm/2, Hm-(b.y/1000+sy/2), brickDepth/2);
+        dummy.scale.set(sx,sy,1);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i,dummy.matrix);
+        const shade=((b.col*17+b.row*31)%20-10)*0.008;
+        colorAttr[i*3]=Math.max(0,Math.min(1,br+shade));
+        colorAttr[i*3+1]=Math.max(0,Math.min(1,bg+shade*0.7));
+        colorAttr[i*3+2]=Math.max(0,Math.min(1,bb+shade*0.5));
+      });
+      mesh.instanceColor=new THREE.InstancedBufferAttribute(colorAttr,3);
+      mesh.instanceMatrix.needsUpdate=true;
+      facadeGroup.add(mesh);
+    };
+    addBrickGroup(grp1,bkColor);
+    addBrickGroup(grp2,bkColor2);
+
+    // Openings with retours in 3D
+    oRects.forEach((o,oi)=>{
+      const cx=o.ox+o.w/2-Wm/2, cy=o.oy+o.h/2;// oy already flipped in oRects
+      const op=openings[oi];
+      const ret=op?.retours||{tG:150,tD:150,lin:150,app:150};
+      const fv=(op?.faceVis||50)/1000;
+      const retMat=new THREE.MeshStandardMaterial({color:jcCol.clone().multiplyScalar(0.8),roughness:0.85,metalness:0.05});
+      const frameMat=new THREE.MeshStandardMaterial({color:0x444455,roughness:0.25,metalness:0.7});
+      // Retour gauche
+      if(ret.tG>0){const d=ret.tG/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(d,o.h,fv),retMat);
+        m.position.set(cx-o.w/2-d/2,cy,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
+      // Retour droit
+      if(ret.tD>0){const d=ret.tD/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(d,o.h,fv),retMat);
+        m.position.set(cx+o.w/2+d/2,cy,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
+      // Linteau
+      if(ret.lin>0){const d=ret.lin/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.02,d,fv),retMat);
+        m.position.set(cx,cy+o.h/2+d/2,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
+      // Appui
+      if(ret.app>0){const d=ret.app/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.08,d,fv+0.02),retMat);
+        m.position.set(cx,cy-o.h/2-d/2,brickDepth/2+0.01);m.castShadow=true;facadeGroup.add(m)}
+      // Cadre alu + vitrage (sauf Vide)
+      if(o.type!=='Vide'){
+        const ft=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.06,0.04,0.05),frameMat);ft.position.set(cx,cy+o.h/2+0.02,brickDepth/2);facadeGroup.add(ft);
+        const fb=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.06,0.04,0.05),frameMat);fb.position.set(cx,cy-o.h/2-0.02,brickDepth/2);facadeGroup.add(fb);
+        const fl=new THREE.Mesh(new THREE.BoxGeometry(0.04,o.h+0.06,0.05),frameMat);fl.position.set(cx-o.w/2-0.02,cy,brickDepth/2);facadeGroup.add(fl);
+        const fr=new THREE.Mesh(new THREE.BoxGeometry(0.04,o.h+0.06,0.05),frameMat);fr.position.set(cx+o.w/2+0.02,cy,brickDepth/2);facadeGroup.add(fr);
+        if(o.type==='Fenêtre'){
+          const linMat=new THREE.MeshStandardMaterial({color:0x999990,roughness:0.85,metalness:0.05});
+          const linteau=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.12,0.06,brickDepth+0.02),linMat);linteau.position.set(cx,cy+o.h/2+0.05,brickDepth/2);facadeGroup.add(linteau);
+          const appui=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.08,0.04,brickDepth+0.04),linMat);appui.position.set(cx,cy-o.h/2-0.04,brickDepth/2+0.01);facadeGroup.add(appui);
+        }
+        const glassMat=new THREE.MeshStandardMaterial({color:0x88bbdd,transparent:true,opacity:0.25,roughness:0.05,metalness:0.1,side:THREE.DoubleSide});
+        const glass=new THREE.Mesh(new THREE.PlaneGeometry(o.w-0.02,o.h-0.02),glassMat);glass.position.set(cx,cy,brickDepth*0.3);facadeGroup.add(glass);
+        if(o.w>0.8){const mull=new THREE.Mesh(new THREE.BoxGeometry(0.02,o.h,0.025),frameMat);mull.position.set(cx,cy,brickDepth/2);facadeGroup.add(mull)}
+      }
+    });
+
+    scene.add(facadeGroup);
+
+    const dist0=Math.max(Wm,Hm)*1.6;
+    zoomRef.current=dist0;
+    const tgt=new THREE.Vector3(0,Hm/2,0);
+
+    const onDown=e=>{dragRef.current={x:e.clientX,y:e.clientY,rx:rotRef.current.x,ry:rotRef.current.y,btn:e.button};renderer.domElement.style.cursor='grabbing'};
+    const onUp=()=>{dragRef.current=null;renderer.domElement.style.cursor='grab'};
+    const onMove=e=>{
+      if(!dragRef.current)return;
+      const dx=e.clientX-dragRef.current.x,dy=e.clientY-dragRef.current.y;
+      if(dragRef.current.btn===2||dragRef.current.btn===1){
+        panRef.current.x+=dx*0.003;panRef.current.y-=dy*0.003;dragRef.current.x=e.clientX;dragRef.current.y=e.clientY;
+      }else{
+        rotRef.current.y=dragRef.current.ry+dx*0.005;
+        rotRef.current.x=Math.max(-1.2,Math.min(0.6,dragRef.current.rx+dy*0.005));
+      }
+    };
+    const onWheel=e=>{e.preventDefault();zoomRef.current=Math.max(1,Math.min(30,zoomRef.current*(1+e.deltaY*0.001)))};
+    renderer.domElement.addEventListener('mousedown',onDown);
+    renderer.domElement.addEventListener('mouseup',onUp);
+    renderer.domElement.addEventListener('mouseleave',onUp);
+    renderer.domElement.addEventListener('mousemove',onMove);
+    renderer.domElement.addEventListener('wheel',onWheel,{passive:false});
+    renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+
+    let raf;
+    const animate=()=>{
+      raf=requestAnimationFrame(animate);
+      const d=zoomRef.current,rx=rotRef.current.x,ry=rotRef.current.y;
+      camera.position.set(tgt.x+d*Math.sin(ry)*Math.cos(rx)+panRef.current.x,tgt.y+d*Math.sin(-rx)+panRef.current.y,tgt.z+d*Math.cos(ry)*Math.cos(rx));
+      camera.lookAt(tgt.x+panRef.current.x,tgt.y+panRef.current.y,tgt.z);
+      renderer.render(scene,camera);
+    };
+    animate();
+    sceneRef.current={renderer,raf};
+    const onResize=()=>{const w2=el.clientWidth,h2=el.clientHeight;if(w2>0&&h2>0){camera.aspect=w2/h2;camera.updateProjectionMatrix();renderer.setSize(w2,h2)}};
+    window.addEventListener('resize',onResize);
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onResize);renderer.dispose();el.innerHTML='';sceneRef.current={}};
+  },[view3D,facW,facH,bkW,bkH,jointH,jointV,bond,bkColor,bkColor2,jointColor,openings,computeBricks.bricks]);
+
+  // ── EXPORT PDF ──
+  const exportPDF=async()=>{
+    await window._jspdfReady;const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const pw=297,ph=210;
+    doc.setFillColor(26,30,46);doc.rect(0,0,pw,28,'F');
+    doc.setFontSize(16);doc.setTextColor(255);doc.text('KALEPIN — Calepinage Brique',14,14);
+    doc.setFontSize(10);doc.setTextColor(150);doc.text(fac.name+' — '+new Date().toLocaleDateString('fr-FR'),14,22);
+    doc.text(BONDS.find(b=>b.id===bond)?.name+' — '+bkW+'×'+bkH+'mm — Joint '+jointH+'×'+jointV,pw-14,22,{align:'right'});
+    const mL=20,mT=36,maxW=pw-mL*2,maxH=ph-mT-46;
+    const scale=Math.min(maxW/facW,maxH/facH);
+    const fW=facW*scale,fH=facH*scale;
+    const fX=mL+(maxW-fW)/2,fY=mT;
+    const hr=parseInt(jointColor.slice(1,3),16),hg=parseInt(jointColor.slice(3,5),16),hb=parseInt(jointColor.slice(5,7),16);
+    doc.setFillColor(hr,hg,hb);doc.rect(fX,fY,fW,fH,'F');
+    computeBricks.bricks.forEach(b=>{
+      const baseCol=b.isBout?bkColor2:bkColor;
+      const shade=((b.col*17+b.row*31)%20-10)*0.008;
+      const r=Math.max(0,Math.min(255,parseInt(baseCol.slice(1,3),16)+shade*255));
+      const g=Math.max(0,Math.min(255,parseInt(baseCol.slice(3,5),16)+shade*180));
+      const bl=Math.max(0,Math.min(255,parseInt(baseCol.slice(5,7),16)+shade*128));
+      doc.setFillColor(r,g,bl);
+      doc.rect(fX+b.x*scale,fY+b.y*scale,b.w*scale,b.h*scale,'F');
+      if(!b.full){doc.setDrawColor(239,68,68);doc.setLineWidth(0.2);doc.rect(fX+b.x*scale,fY+b.y*scale,b.w*scale,b.h*scale,'S')}
+    });
+    openings.forEach((o,i)=>{
+      doc.setFillColor(135,206,235);doc.setGlobalAlpha?.(0.2);
+      doc.rect(fX+o.x*scale,fY+o.y*scale,o.w*scale,o.h*scale,'F');
+      doc.setDrawColor(91,184,217);doc.setLineWidth(0.5);
+      doc.rect(fX+o.x*scale,fY+o.y*scale,o.w*scale,o.h*scale,'S');
+      doc.setFontSize(7);doc.setTextColor(91,184,217);
+      doc.text(o.t+' '+(i+1),fX+(o.x+o.w/2)*scale,fY+(o.y+o.h/2)*scale,{align:'center'});
+    });
+    doc.setDrawColor(80);doc.setLineWidth(0.5);doc.rect(fX,fY,fW,fH,'S');
+    doc.setFontSize(8);doc.setTextColor(100);
+    doc.text(facW+' mm',fX+fW/2,fY+fH+8,{align:'center'});
+    const tY=fY+fH+16;
+    doc.setFontSize(8);doc.setTextColor(60);
+    const left=[['Surface brute',computeBricks.totalArea.toFixed(2)+' m²'],['Ouvertures',computeBricks.ouvArea.toFixed(2)+' m²'],['Surface nette',computeBricks.netArea.toFixed(2)+' m²'],
+      ['Entières',''+computeBricks.fullCount],['Coupées',''+computeBricks.cutCount],['Total',''+(computeBricks.fullCount+computeBricks.cutCount)],['À commander (+5%)',''+computeBricks.toOrder],
+      ['Mortier','~'+Math.round(computeBricks.mortarKg)+' kg ('+Math.ceil(computeBricks.mortarKg/25)+' sacs)']];
+    left.forEach(([k,v],i)=>{doc.text(k,mL,tY+i*4);doc.text(v,mL+50,tY+i*4)});
+    const right=[['Appareillage',BONDS.find(b=>b.id===bond)?.name],['Brique',bkW+'×'+bkH+' mm'],
+      ['Joint',jointH+'×'+jointV+' mm'],['Briques/m²',''+computeBricks.bricksPerM2],['Ouvertures',''+openings.length]];
+    right.forEach(([k,v],i)=>{doc.text(k,pw-80,tY+i*4);doc.text(v,pw-30,tY+i*4)});
+    doc.save('kalepin-brique-'+fac.name.replace(/\W+/g,'_')+'.pdf');
+  };
+
+  // ── EXPORT CSV ──
+  const exportCSV=()=>{
+    const sep=';';let csv='\uFEFF';
+    csv+='KALEPIN - Calepinage Brique\n'+fac.name+sep+facW+'x'+facH+'mm\n';
+    csv+='Brique'+sep+bkW+'x'+bkH+'mm'+sep+'Joint'+sep+jointH+'x'+jointV+'mm'+sep+'Appareillage'+sep+(BONDS.find(b=>b.id===bond)?.name)+'\n\n';
+    csv+='SURFACES\n';csv+='Brute'+sep+computeBricks.totalArea.toFixed(2)+' m²\n';
+    csv+='Ouvertures'+sep+computeBricks.ouvArea.toFixed(2)+' m²\n';csv+='Nette'+sep+computeBricks.netArea.toFixed(2)+' m²\n\n';
+    csv+='QUANTITES\n';csv+='Entières'+sep+computeBricks.fullCount+'\n';csv+='Coupées'+sep+computeBricks.cutCount+'\n';
+    csv+='Total'+sep+(computeBricks.fullCount+computeBricks.cutCount)+'\n';csv+='À commander (+5%)'+sep+computeBricks.toOrder+'\n';
+    csv+='Briques/m²'+sep+computeBricks.bricksPerM2+'\n\n';
+    csv+='MORTIER\n';csv+='Estimé'+sep+'~'+Math.round(computeBricks.mortarKg)+' kg\n';
+    csv+='Sacs 25kg'+sep+Math.ceil(computeBricks.mortarKg/25)+'\n\n';
+    if(openings.length>0){csv+='OUVERTURES\nType'+sep+'X'+sep+'Y'+sep+'Largeur'+sep+'Hauteur'+sep+'Surface m²\n';
+      openings.forEach(o=>{csv+=o.t+sep+o.x+sep+o.y+sep+o.w+sep+o.h+sep+(o.w*o.h/1e6).toFixed(3)+'\n'});csv+='\n'}
+    csv+='DETAIL BRIQUES\n';csv+='N°'+sep+'X'+sep+'Y'+sep+'Largeur'+sep+'Hauteur'+sep+'Type'+sep+'Coupe\n';
+    computeBricks.bricks.forEach((b,i)=>{csv+=(i+1)+sep+Math.round(b.x)+sep+Math.round(b.y)+sep+Math.round(b.w)+sep+Math.round(b.h)+sep+(b.isBout?'Boutisse':'Panneresse')+sep+(b.full?'Non':'Oui')+'\n'});
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kalepin-brique-'+fac.name.replace(/\W+/g,'_')+'.csv';a.click();
+  };
+
+  const handleRH=8;// resize handle size in SVG px
+
+  return<div style={{display:'flex',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+    {/* LEFT */}
+    <div style={{width:260,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10}}>
+        <button onClick={onBack} style={{width:28,height:28,borderRadius:8,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontFamily:'inherit'}}>←</button>
+        <div><div style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>🧱 Brique</div>
+          <div style={{fontSize:9,color:'var(--t3)'}}>Calepinage facade</div></div>
+        <div style={{flex:1}}/>
+        <div style={{display:'flex',gap:3}}>
+          <button onClick={exportBriqueJSON} title="Exporter JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>💾</button>
+          <label title="Importer JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>📥<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])importBriqueJSON(e.target.files[0],false);e.target.value=''}}/></label>
+          <label title="Ajouter façades JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid #0ea5e9',background:'rgba(14,165,233,.08)',color:'#0ea5e9',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>📑<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])importBriqueJSON(e.target.files[0],true);e.target.value=''}}/></label>
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+        {/* Facade */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#d97706'}}/><span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Facade</span></div>
+          <TI label="Nom" value={fac.name} onChange={v=>setFac(f=>({...f,name:v}))}/>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:6}}>
+            <NI label="Largeur" value={facW} onChange={v=>setFac(f=>({...f,facW:v}))} unit="mm"/>
+            <NI label="Hauteur" value={facH} onChange={v=>setFac(f=>({...f,facH:v}))} unit="mm"/>
+          </div>
+          <div style={{fontSize:9,color:'var(--t3)',marginTop:4,textAlign:'right'}}>{(facW*facH/1e6).toFixed(2)} m² brut</div>
+        </div>
+        {/* Brique */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#d97706'}}/><span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Brique</span></div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:6}}>
+            {BRICK_PRESETS.map(p=><button key={p.name} onClick={()=>setFac(f=>({...f,bkW:p.w,bkH:p.h}))}
+              style={{padding:'2px 6px',borderRadius:5,fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit',
+                border:bkW===p.w&&bkH===p.h?'1.5px solid #d97706':'1px solid var(--bd)',
+                background:bkW===p.w&&bkH===p.h?'rgba(217,119,6,.12)':'var(--inp)',
+                color:bkW===p.w&&bkH===p.h?'#d97706':'var(--t3)'}}>{p.name}</button>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+            <NI label="Largeur" value={bkW} onChange={v=>setFac(f=>({...f,bkW:v}))} unit="mm"/>
+            <NI label="Hauteur" value={bkH} onChange={v=>setFac(f=>({...f,bkH:v}))} unit="mm"/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6,marginTop:6}}>
+            <NI label="Joint H" value={jointH} onChange={v=>setFac(f=>({...f,jointH:v}))} unit="mm" step={1} min={0}/>
+            <NI label="Joint V" value={jointV} onChange={v=>setFac(f=>({...f,jointV:v}))} unit="mm" step={1} min={0}/>
+          </div>
+        </div>
+        {/* Appareillage */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#d97706'}}/><span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Appareillage</span></div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+            {BONDS.map(b=><button key={b.id} onClick={()=>setFac(f=>({...f,bond:b.id}))}
+              style={{padding:'6px 4px',borderRadius:6,fontSize:9,fontWeight:600,textAlign:'left',cursor:'pointer',fontFamily:'inherit',
+                border:bond===b.id?'1.5px solid #d97706':'1px solid var(--bd)',
+                background:bond===b.id?'rgba(217,119,6,.1)':'var(--inp)',
+                color:bond===b.id?'#d97706':'var(--t2)'}}><div style={{fontWeight:700}}>{b.name}</div>
+              <div style={{fontSize:7,color:'var(--t3)',marginTop:1}}>{b.desc}</div></button>)}
+          </div>
+        </div>
+        {/* Couleurs */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#d97706'}}/><span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Couleurs</span></div>
+          <div style={{fontSize:9,color:'var(--t3)',marginBottom:3}}>Panneresse</div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:6}}>
+            {BK_COLORS.map(c=><div key={c} onClick={()=>setFac(f=>({...f,bkColor:c}))}
+              style={{width:18,height:18,borderRadius:4,background:c,cursor:'pointer',border:bkColor===c?'2px solid #fff':'2px solid transparent'}}/>)}
+            <input type="color" value={bkColor} onChange={e=>setFac(f=>({...f,bkColor:e.target.value}))} style={{width:18,height:18,padding:0,border:'none',borderRadius:4,cursor:'pointer'}}/>
+          </div>
+          {(bond==='flamande'||bond==='anglaise')&&<>
+            <div style={{fontSize:9,color:'var(--t3)',marginBottom:3}}>Boutisse</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:6}}>
+              {BK_COLORS.map(c=><div key={c} onClick={()=>setFac(f=>({...f,bkColor2:c}))}
+                style={{width:18,height:18,borderRadius:4,background:c,cursor:'pointer',border:bkColor2===c?'2px solid #fff':'2px solid transparent'}}/>)}
+            </div>
+          </>}
+          <div style={{fontSize:9,color:'var(--t3)',marginBottom:3}}>Joint</div>
+          <div style={{display:'flex',gap:3}}>
+            {['#c8bfb0','#f0ece6','#999','#666','#444','#222'].map(c=><div key={c} onClick={()=>setFac(f=>({...f,jointColor:c}))}
+              style={{width:18,height:18,borderRadius:4,background:c,cursor:'pointer',border:jointColor===c?'2px solid #fff':'2px solid transparent'}}/>)}
+          </div>
+        </div>
+        {/* Ouvertures */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+            <div style={{display:'flex',alignItems:'center',gap:6}}>
+              <div style={{width:3,height:12,borderRadius:2,background:'#f87171'}}/>
+              <span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Ouvertures ({openings.length})</span>
+            </div>
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:6}}>
+            {OUV_TYPES.map(t=><button key={t} onClick={()=>addOpening(t)}
+              style={{padding:'3px 8px',borderRadius:5,fontSize:9,fontWeight:600,border:'1px solid var(--bd)',background:'var(--inp)',color:t==='Vide'?'#f59e0b':'var(--t3)',cursor:'pointer',fontFamily:'inherit'}}>+ {t}</button>)}
+          </div>
+          {openings.map((o)=><div key={o.id} onClick={()=>setSelOuv(o.id)} style={{padding:6,borderRadius:6,background:selOuv===o.id?'rgba(14,165,233,.08)':'var(--inp)',border:selOuv===o.id?'1.5px solid #0ea5e9':'1px solid var(--bd)',marginBottom:4,cursor:'pointer'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+              <span style={{fontSize:10,fontWeight:600,color:selOuv===o.id?'#0ea5e9':'var(--t2)'}}>{o.t} — {o.w}×{o.h}</span>
+              <button onClick={e=>{e.stopPropagation();delOuv(o.id)}} style={{width:18,height:18,borderRadius:4,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.05)',color:'#f87171',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit'}}>×</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,fontSize:10}}>
+              <NI label="X" value={o.x} onChange={v=>updateOuv(o.id,o=>({...o,x:v}))} unit="mm"/>
+              <NI label="Y" value={o.y} onChange={v=>updateOuv(o.id,o=>({...o,y:v}))} unit="mm"/>
+              <NI label="L" value={o.w} onChange={v=>updateOuv(o.id,o=>({...o,w:v}))} unit="mm"/>
+              <NI label="H" value={o.h} onChange={v=>updateOuv(o.id,o=>({...o,h:v}))} unit="mm"/>
+            </div>
+          </div>)}
+        </div>
+      </div>
+    </div>
+
+    {/* CENTER SVG */}
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      {/* Tabs bar */}
+      <div style={{display:'flex',alignItems:'center',borderBottom:'1px solid var(--bd)',background:'var(--pnl)',flexShrink:0,padding:'0 8px',gap:2,height:32,overflowX:'auto'}}>
+        {facades.map((f,i)=><div key={f.id} onClick={()=>setActiveFacIdx(i)} onDoubleClick={()=>{const n=prompt('Nom:',f.name);if(n)setFacades(fs=>fs.map((ff,j)=>j===i?{...ff,name:n}:ff))}}
+          style={{padding:'4px 10px',fontSize:10,fontWeight:activeFacIdx===i?700:500,borderRadius:'6px 6px 0 0',cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4,
+            background:activeFacIdx===i?'var(--bg)':'transparent',color:activeFacIdx===i?'#d97706':'var(--t3)',
+            border:activeFacIdx===i?'1px solid var(--bd)':'1px solid transparent',borderBottom:activeFacIdx===i?'1px solid var(--bg)':'none'}}>
+          {f.name}
+          {facades.length>1&&<span onClick={e=>{e.stopPropagation();delFacade(i)}} style={{fontSize:8,color:'var(--t3)',cursor:'pointer',marginLeft:2}}>✕</span>}
+        </div>)}
+        <button onClick={addFacade} style={{width:22,height:22,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit',flexShrink:0}} title="Nouvelle facade">+</button>
+        <button onClick={()=>dupFacade(activeFacIdx)} style={{width:22,height:22,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'inherit',flexShrink:0}} title="Dupliquer">⧉</button>
+      </div>
+      {/* Toolbar */}
+      <div style={{padding:'6px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,background:'var(--pnl)',flexShrink:0}}>
+        <span style={{fontSize:12,fontWeight:700,color:'var(--t1)'}}>{fac.name}</span>
+        <span style={{fontSize:10,color:'var(--t3)'}}>— {facW}×{facH}mm — {BONDS.find(b=>b.id===bond)?.name}</span>
+        <div style={{flex:1}}/>
+        <div style={{display:'flex',borderRadius:7,border:'1px solid var(--bd)',overflow:'hidden'}}>
+          <button onClick={()=>setView3D(false)} style={{padding:'4px 12px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'none',
+            background:!view3D?'rgba(217,119,6,.15)':'var(--crd)',color:!view3D?'#d97706':'var(--t3)'}}>2D</button>
+          <button onClick={()=>setView3D(true)} style={{padding:'4px 12px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'none',borderLeft:'1px solid var(--bd)',
+            background:view3D?'rgba(217,119,6,.15)':'var(--crd)',color:view3D?'#d97706':'var(--t3)'}}>3D</button>
+        </div>
+        {!view3D&&<>
+          <label style={{fontSize:9,color:'var(--t3)',display:'flex',alignItems:'center',gap:3,cursor:'pointer'}}>
+            <input type="checkbox" checked={showDims} onChange={e=>setShowDims(e.target.checked)} style={{accentColor:'#d97706'}}/> Cotes</label>
+          <label style={{fontSize:9,color:'var(--t3)',display:'flex',alignItems:'center',gap:3,cursor:'pointer'}}>
+            <input type="checkbox" checked={showCuts} onChange={e=>setShowCuts(e.target.checked)} style={{accentColor:'#d97706'}}/> Coupes</label>
+          <div style={{display:'flex',gap:2}}>
+            <button onClick={()=>setZoom(z=>Math.max(.3,z-.2))} style={{width:22,height:22,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:12,fontFamily:'inherit'}}>−</button>
+            <button onClick={()=>setZoom(1)} style={{padding:'2px 6px',borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:9,fontFamily:'inherit'}}>{Math.round(zoom*100)}%</button>
+            <button onClick={()=>setZoom(z=>Math.min(4,z+.2))} style={{width:22,height:22,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:12,fontFamily:'inherit'}}>+</button>
+          </div>
+        </>}
+        <button onClick={exportPDF} style={{padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#ef4444'}}>📄 PDF</button>
+        <button onClick={exportCSV} style={{padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'1px solid rgba(52,211,153,.3)',background:'rgba(52,211,153,.08)',color:'#34d399'}}>📊 CSV</button>
+      </div>
+      {/* 2D SVG view */}
+      {!view3D&&<div ref={svgContainerRef} style={{flex:1,position:'relative',overflow:'hidden',background:'var(--bg)'}}
+        onMouseMove={handleSvgMove} onMouseUp={handleSvgUp} onMouseLeave={handleSvgUp}>
+        <svg ref={svgRef} style={{position:'absolute',inset:0,width:'100%',height:'100%',display:'block'}} viewBox={`0 0 ${svgW} ${svgH}`}>
+          {/* Background */}
+          <rect x={ox} y={oy} width={facW*sc} height={facH*sc} fill={jointColor} rx={1}/>
+          {/* Bricks */}
+          {computeBricks.bricks.map((b,i)=>{
+            const baseCol=b.isBout?bkColor2:bkColor;
+            const shade=((b.col*17+b.row*31)%20-10)/100;
+            const r=parseInt(baseCol.slice(1,3),16),g=parseInt(baseCol.slice(3,5),16),bl=parseInt(baseCol.slice(5,7),16);
+            const nr=Math.max(0,Math.min(255,r+Math.round(r*shade)));
+            const ng=Math.max(0,Math.min(255,g+Math.round(g*shade)));
+            const nb=Math.max(0,Math.min(255,bl+Math.round(bl*shade)));
+            const isCut=!b.full;
+            return<rect key={i} x={ox+b.x*sc} y={oy+b.y*sc} width={b.w*sc} height={b.h*sc}
+              fill={isCut&&showCuts?'rgba(239,68,68,.25)':`rgb(${nr},${ng},${nb})`}
+              stroke={isCut&&showCuts?'rgba(239,68,68,.5)':'rgba(0,0,0,.08)'} strokeWidth={isCut?.6:.2}
+              rx={.3} style={{cursor:'pointer'}} onMouseEnter={()=>setHoverBk(i)} onMouseLeave={()=>setHoverBk(null)}/>;
+          })}
+          {/* Openings — draggable + resizable */}
+          {openings.map((o,i)=>{
+            const isSel=selOuv===o.id;
+            const sx=ox+o.x*sc,sy=oy+o.y*sc,sw=o.w*sc,sh=o.h*sc;
+            const col=o.t==='Vide'?'#f59e0b':'#5bb8d9';
+            return<g key={o.id}>
+              <rect x={sx} y={sy} width={sw} height={sh} fill={o.t==='Vide'?'rgba(245,158,11,.1)':'rgba(135,206,235,.15)'} stroke={col} strokeWidth={isSel?2.5:1.5} rx={1}
+                style={{cursor:dragState?'grabbing':'grab'}} onMouseDown={e=>handleSvgDown(e,o.id,'move')}/>
+              {o.t!=='Vide'&&<>
+                <line x1={sx} y1={sy} x2={sx+sw} y2={sy+sh} stroke={col} strokeWidth={.5} opacity={.3}/>
+                <line x1={sx+sw} y1={sy} x2={sx} y2={sy+sh} stroke={col} strokeWidth={.5} opacity={.3}/>
+              </>}
+              <text x={sx+sw/2} y={sy+sh/2} textAnchor="middle" dominantBaseline="middle"
+                fill={col} fontSize={10} fontWeight="700" fontFamily="JetBrains Mono,monospace">{o.t} {i+1}</text>
+              <text x={sx+sw/2} y={sy+sh/2+13} textAnchor="middle" fill={col} fontSize={8} fontFamily="JetBrains Mono,monospace">{o.w}×{o.h}</text>
+              {/* Resize handles when selected */}
+              {isSel&&<>{/* corners */}
+                {[['nw',sx,sy],['ne',sx+sw-handleRH,sy],['sw',sx,sy+sh-handleRH],['se',sx+sw-handleRH,sy+sh-handleRH]].map(([d,hx,hy])=>
+                  <rect key={d} x={hx} y={hy} width={handleRH} height={handleRH} fill={col} rx={2} style={{cursor:d+'-resize'}} onMouseDown={e=>handleSvgDown(e,o.id,d)}/>)}
+                {/* edge midpoints */}
+                {[['n',sx+sw/2-handleRH/2,sy],['s',sx+sw/2-handleRH/2,sy+sh-handleRH],['w',sx,sy+sh/2-handleRH/2],['e',sx+sw-handleRH,sy+sh/2-handleRH/2]].map(([d,hx,hy])=>
+                  <rect key={d} x={hx} y={hy} width={handleRH} height={handleRH} fill="rgba(255,255,255,.7)" stroke={col} strokeWidth={1} rx={2} style={{cursor:d==='n'||d==='s'?'ns-resize':'ew-resize'}} onMouseDown={e=>handleSvgDown(e,o.id,d)}/>)}
+              </>}
+            </g>})}
+          {/* Border */}
+          <rect x={ox} y={oy} width={facW*sc} height={facH*sc} fill="none" stroke="var(--t1)" strokeWidth={2} rx={1}/>
+          {/* Dims */}
+          {showDims&&<>
+            <line x1={ox} y1={oy+facH*sc+20} x2={ox+facW*sc} y2={oy+facH*sc+20} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={ox} y1={oy+facH*sc+14} x2={ox} y2={oy+facH*sc+26} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={ox+facW*sc} y1={oy+facH*sc+14} x2={ox+facW*sc} y2={oy+facH*sc+26} stroke="var(--t3)" strokeWidth={.8}/>
+            <text x={ox+facW*sc/2} y={oy+facH*sc+34} textAnchor="middle" fill="var(--t3)" fontSize={10} fontFamily="JetBrains Mono,monospace">{facW} mm</text>
+            <line x1={ox-20} y1={oy} x2={ox-20} y2={oy+facH*sc} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={ox-26} y1={oy} x2={ox-14} y2={oy} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={ox-26} y1={oy+facH*sc} x2={ox-14} y2={oy+facH*sc} stroke="var(--t3)" strokeWidth={.8}/>
+            <text x={ox-24} y={oy+facH*sc/2} textAnchor="middle" fill="var(--t3)" fontSize={10}
+              fontFamily="JetBrains Mono,monospace" transform={`rotate(-90,${ox-24},${oy+facH*sc/2})`}>{facH} mm</text>
+          </>}
+          {hoverBk!==null&&computeBricks.bricks[hoverBk]&&(()=>{
+            const b=computeBricks.bricks[hoverBk];
+            return<g><rect x={ox+b.x*sc+2} y={oy+b.y*sc-16} width={100} height={16} rx={3} fill="rgba(0,0,0,.85)"/>
+              <text x={ox+b.x*sc+6} y={oy+b.y*sc-4} fill="#fff" fontSize={9} fontFamily="JetBrains Mono,monospace">
+                {b.full?`${b.origW}×${b.origH}`:`${Math.round(b.w)}×${Math.round(b.h)} (coupe)`}</text></g>
+          })()}
+        </svg>
+      </div>}
+      {/* 3D view */}
+      {view3D&&<div ref={mountRef} style={{flex:1,background:'#1a1e2e',cursor:'grab'}}/>}
+    </div>
+
+    {/* RIGHT RESULTS */}
+    <div style={{width:260,flexShrink:0,borderLeft:'1px solid var(--bd)',background:'var(--pnl)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)'}}><div style={{fontSize:12,fontWeight:700,color:'var(--t1)'}}>📊 Résultats</div></div>
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+        {/* Surfaces */}
+        <div style={{padding:8,borderRadius:8,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>SURFACES</div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}><span style={{fontSize:11,color:'var(--t2)'}}>Brute</span><span style={{fontSize:12,fontWeight:600,color:'var(--t1)',fontFamily:'monospace'}}>{computeBricks.totalArea.toFixed(2)} m²</span></div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}><span style={{fontSize:11,color:'var(--t2)'}}>Ouvertures</span><span style={{fontSize:12,fontWeight:600,color:'#f87171',fontFamily:'monospace'}}>-{computeBricks.ouvArea.toFixed(2)} m²</span></div>
+          <div style={{display:'flex',justifyContent:'space-between'}}><span style={{fontSize:11,fontWeight:700,color:'#d97706'}}>Nette</span><span style={{fontSize:13,fontWeight:700,color:'#d97706',fontFamily:'monospace'}}>{computeBricks.netArea.toFixed(2)} m²</span></div>
+        </div>
+        {/* Briques */}
+        <div style={{padding:8,borderRadius:8,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>BRIQUES</div>
+          <RR label="Entières" value={computeBricks.fullCount} color="#34d399"/>
+          <RR label="Coupées" value={computeBricks.cutCount} color="#f87171"/>
+          {computeBricks.boutCount>0&&<RR label="Boutisses" value={computeBricks.boutCount} color="#d97706"/>}
+          <RR label="Total" value={computeBricks.fullCount+computeBricks.cutCount} bold/>
+          <div style={{fontSize:9,color:'var(--t3)',marginTop:4}}>≈ {computeBricks.bricksPerM2} briques/m²</div>
+        </div>
+        {/* Commander */}
+        <div style={{padding:8,borderRadius:8,background:'rgba(217,119,6,.06)',border:'1px solid rgba(217,119,6,.15)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'#d97706',marginBottom:4}}>À COMMANDER (+5%)</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <span style={{fontSize:12,fontWeight:600,color:'var(--t2)'}}>Briques</span>
+            <span style={{fontSize:18,fontWeight:800,color:'#d97706',fontFamily:'monospace'}}>{computeBricks.toOrder}</span>
+          </div>
+        </div>
+        {/* Mortier */}
+        <div style={{padding:8,borderRadius:8,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:4}}>MORTIER</div>
+          <div style={{display:'flex',justifyContent:'space-between'}}><span style={{fontSize:11,color:'var(--t2)'}}>Mortier estimé</span><span style={{fontSize:12,fontWeight:600,fontFamily:'monospace'}}>~{Math.round(computeBricks.mortarKg)} kg</span></div>
+          <div style={{fontSize:9,color:'var(--t3)',marginTop:2}}>Joint {jointH}×{jointV}mm — {Math.ceil(computeBricks.mortarKg/25)} sacs de 25kg</div>
+        </div>
+        {/* Selected opening retours */}
+        {selO&&<div style={{padding:8,borderRadius:8,background:'rgba(14,165,233,.04)',border:'1px solid rgba(14,165,233,.2)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'#0ea5e9',marginBottom:6}}>RETOURS — {selO.t} ({selO.w}×{selO.h})</div>
+          <div style={{fontSize:9,color:'var(--t3)',marginBottom:3}}>Type</div>
+          <div style={{display:'flex',gap:3,marginBottom:6}}>
+            {OUV_TYPES.map(t=><button key={t} onClick={()=>updateOuv(selO.id,o=>({...o,t}))}
+              style={{padding:'2px 6px',borderRadius:4,fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit',
+                border:selO.t===t?'1.5px solid #0ea5e9':'1px solid var(--bd)',
+                background:selO.t===t?'rgba(14,165,233,.12)':'var(--inp)',
+                color:selO.t===t?'#0ea5e9':'var(--t3)'}}>{t}</button>)}
+          </div>
+          <div style={{fontSize:9,color:'var(--t3)',marginBottom:3}}>Profondeur retours (mm)</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+            <NI compact label="Tab. G" value={selO.retours?.tG||150} onChange={v=>updateOuv(selO.id,o=>({...o,retours:{...(o.retours||{tG:150,tD:150,lin:150,app:150}),tG:v}}))} unit="mm" step={10} min={0}/>
+            <NI compact label="Tab. D" value={selO.retours?.tD||150} onChange={v=>updateOuv(selO.id,o=>({...o,retours:{...(o.retours||{tG:150,tD:150,lin:150,app:150}),tD:v}}))} unit="mm" step={10} min={0}/>
+            <NI compact label="Linteau" value={selO.retours?.lin||150} onChange={v=>updateOuv(selO.id,o=>({...o,retours:{...(o.retours||{tG:150,tD:150,lin:150,app:150}),lin:v}}))} unit="mm" step={10} min={0}/>
+            <NI compact label="Appui" value={selO.retours?.app||150} onChange={v=>updateOuv(selO.id,o=>({...o,retours:{...(o.retours||{tG:150,tD:150,lin:150,app:150}),app:v}}))} unit="mm" step={10} min={0}/>
+          </div>
+          <div style={{marginTop:4}}><NI compact label="Face visible" value={selO.faceVis||50} onChange={v=>updateOuv(selO.id,o=>({...o,faceVis:v}))} unit="mm" step={5} min={0}/></div>
+        </div>}
+        {/* Récap */}
+        <div style={{padding:8,borderRadius:8,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:4}}>RÉCAPITULATIF</div>
+          <div style={{fontSize:10,color:'var(--t2)',lineHeight:1.6}}>
+            <div>Facade: <b>{fac.name}</b></div>
+            <div>Brique: <b>{bkW}×{bkH} mm</b></div>
+            <div>Joint: <b>{jointH}×{jointV} mm</b></div>
+            <div>Appareil: <b>{BONDS.find(b=>b.id===bond)?.name}</b></div>
+            <div>Ouvertures: <b>{openings.length}</b></div>
+            <div>Facades: <b>{facades.length}</b></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>;
+}
+
+
+
+// CARRELAGE — Module calepinage carrelage
+// ══════════════════════════════════════════════════════════════
+function CarrelageApp({onBack,user}){
+  // ── Room ──
+  const[roomW,setRoomW]=useState(3500);// mm
+  const[roomH,setRoomH]=useState(2800);
+  const[roomName,setRoomName]=useState('Pièce 1');
+  const[roomType,setRoomType]=useState('sol');// sol, mur, piscine
+  // ── Tile ──
+  const[tileW,setTileW]=useState(600);
+  const[tileH,setTileH]=useState(600);
+  const[jointW,setJointW]=useState(3);
+  const[tileColor1,setTileColor1]=useState('#d4c5a9');
+  const[tileColor2,setTileColor2]=useState('#8b7355');
+  const[jointColor,setJointColor]=useState('#c8c0b0');
+  // ── Layout ──
+  const[pattern,setPattern]=useState('droit');// droit, decale12, decale13, diagonal, chevron, damier
+  const[startCorner,setStartCorner]=useState('bl');// bl, br, tl, tr, center
+  const[orientation,setOrientation]=useState('h');// h=horizontal, v=vertical
+  // ── View ──
+  const[zoom,setZoom]=useState(1);
+  const[showDims,setShowDims]=useState(true);
+  const[showCuts,setShowCuts]=useState(true);
+  const[hoverTile,setHoverTile]=useState(null);
+  const[view3D,setView3D]=useState(false);
+  const svgRef=useRef(null);
+  const mountRef=useRef(null);
+  const sceneRef3D=useRef({});
+  const rotRef3D=useRef({x:-.5,y:.4});const dragRef3D=useRef(null);
+  const zoomRef3D=useRef(4);const panRef3D=useRef({x:0,y:0});
+  const svgContainerRef=useRef(null);
+  const[cSize,setCSize]=useState({w:800,h:600});
+  const{useLayoutEffect}=React;
+  useLayoutEffect(()=>{
+    const el=svgContainerRef.current;if(!el)return;
+    const upd=()=>{const r=el.getBoundingClientRect();if(r.width>80&&r.height>80)setCSize({w:r.width,h:r.height})};
+    upd();const ro=new ResizeObserver(upd);ro.observe(el);return()=>ro.disconnect();
+  },[view3D]);
+
+  const TILE_PRESETS=[
+    {name:'20×20',w:200,h:200},{name:'30×30',w:300,h:300},{name:'33×33',w:330,h:330},
+    {name:'40×40',w:400,h:400},{name:'45×45',w:450,h:450},{name:'60×60',w:600,h:600},
+    {name:'60×120',w:600,h:1200},{name:'80×80',w:800,h:800},{name:'30×60',w:300,h:600},
+    {name:'75×150',w:750,h:1500},{name:'100×100',w:1000,h:1000},{name:'120×120',w:1200,h:1200},
+    {name:'20×40',w:200,h:400},{name:'10×30 (métro)',w:100,h:300},{name:'7.5×15 (métro)',w:75,h:150},
+    {name:'5×5 (mosaïque)',w:50,h:50},{name:'10×10 (zellige)',w:100,h:100},
+  ];
+  const COLORS=['#d4c5a9','#f5f0e6','#e8e0d0','#c2b8a3','#8b7355','#b8a88a','#6b5b4b',
+    '#f0f0f0','#d0d0d0','#a0a0a0','#505050','#2a2a2a','#d4a574','#c48c5c',
+    '#8b4513','#e6ccb3','#f5deb3','#daa520','#1a3a4a','#2c5f7c','#4a8c6f',
+    '#2d5a27','#8b0000','#cc3333','#f4a460','#ffe4c4'];
+  const JOINT_COLORS=['#c8c0b0','#ffffff','#e0dcd4','#999999','#666666','#333333','#2a2a2a'];
+
+  // ── Compute tiles ──
+  const computeTiles=useMemo(()=>{
+    const tw=orientation==='v'?tileH:tileW;
+    const th=orientation==='v'?tileW:tileH;
+    const j=jointW;
+    const RW=roomW,RH=roomH;
+    const tiles=[];
+    let fullCount=0,cutCount=0,cutArea=0;
+
+    if(pattern==='droit'||pattern==='decale12'||pattern==='decale13'||pattern==='damier'){
+      const stepX=tw+j,stepY=th+j;
+      const offset=pattern==='decale12'?0.5:pattern==='decale13'?1/3:0;
+      const nCols=Math.ceil(RW/stepX)+1,nRows=Math.ceil(RH/stepY)+1;
+      // Start offsets based on corner
+      let ox=0,oy=0;
+      if(startCorner==='center'){ox=(RW%stepX)/2;oy=(RH%stepY)/2}
+      else if(startCorner==='br'||startCorner==='tr'){ox=RW%stepX||0}
+      if(startCorner==='tl'||startCorner==='tr'){oy=RH%stepY||0}
+
+      for(let r=0;r<nRows;r++){
+        const rowOff=(r%2===1&&offset>0)?stepX*offset:(pattern==='decale13'&&r%3===1)?stepX/3:(pattern==='decale13'&&r%3===2)?stepX*2/3:0;
+        for(let c=-1;c<nCols;c++){
+          let x=c*stepX-ox+rowOff;
+          let y=r*stepY-oy;
+          // Clip to room
+          let cx1=Math.max(0,x),cy1=Math.max(0,y);
+          let cx2=Math.min(RW,x+tw),cy2=Math.min(RH,y+th);
+          if(cx2<=cx1||cy2<=cy1)continue;
+          const clipW=cx2-cx1,clipH=cy2-cy1;
+          const isFull=Math.abs(clipW-tw)<1&&Math.abs(clipH-th)<1;
+          const isDamier2=pattern==='damier'&&(r+c)%2===1;
+          if(isFull)fullCount++;else{cutCount++;cutArea+=clipW*clipH}
+          tiles.push({x:cx1,y:cy1,w:clipW,h:clipH,full:isFull,origW:tw,origH:th,col:c,row:r,isDamier2});
+        }
+      }
+    }else if(pattern==='diagonal'){
+      // 45° diagonal — rotated tiles
+      const diag=Math.sqrt(tw*tw+th*th);
+      const stepD=diag/Math.sqrt(2)+j;
+      const nD=Math.ceil((RW+RH)/stepD)+2;
+      for(let r=-nD;r<nD;r++)for(let c=-nD;c<nD;c++){
+        const cx=(c+r)*stepD/2,cy=(r-c)*stepD/2+RH/2;
+        // Rotated rectangle corners
+        const hw=tw/2,hh=th/2;
+        const cos45=Math.cos(Math.PI/4),sin45=Math.sin(Math.PI/4);
+        const corners=[[-hw,-hh],[hw,-hh],[hw,hh],[-hw,hh]].map(([px,py])=>({
+          x:cx+px*cos45-py*sin45,y:cy+px*sin45+py*cos45
+        }));
+        // Check if any corner is in room
+        const allOut=corners.every(p=>p.x<-tw||p.x>RW+tw||p.y<-th||p.y>RH+th);
+        if(allOut)continue;
+        // Simple AABB for clipping check
+        const minX=Math.min(...corners.map(p=>p.x)),maxX=Math.max(...corners.map(p=>p.x));
+        const minY=Math.min(...corners.map(p=>p.y)),maxY=Math.max(...corners.map(p=>p.y));
+        if(maxX<0||minX>RW||maxY<0||minY>RH)continue;
+        const isFull=minX>=0&&maxX<=RW&&minY>=0&&maxY<=RH;
+        if(isFull)fullCount++;else cutCount++;
+        tiles.push({x:cx,y:cy,w:tw,h:th,full:isFull,diagonal:true,corners,origW:tw,origH:th,col:c,row:r});
+      }
+    }else if(pattern==='chevron'){
+      const angle=Math.PI/4;
+      const segW=tw,segH=th;
+      const stepX=segW*Math.cos(angle)*2+j;
+      const stepY=segH+j;
+      const nC=Math.ceil(RW/stepX)+2,nR=Math.ceil(RH/stepY)+2;
+      for(let r=-1;r<nR;r++)for(let c=-1;c<nC;c++){
+        const bx=c*stepX,by=r*stepY;
+        // Left leg
+        const x1=bx,y1=by;
+        const cx1=Math.max(0,x1),cy1=Math.max(0,y1);
+        const cx2=Math.min(RW,x1+segW*Math.cos(angle)),cy2=Math.min(RH,y1+segH);
+        if(cx2>cx1&&cy2>cy1){
+          const isFull=cx1===x1&&cy1===y1&&Math.abs(cx2-(x1+segW*Math.cos(angle)))<1&&Math.abs(cy2-(y1+segH))<1;
+          if(isFull)fullCount++;else cutCount++;
+          tiles.push({x:cx1,y:cy1,w:cx2-cx1,h:cy2-cy1,full:isFull,origW:tw,origH:th,col:c*2,row:r,chevronLeft:true});
+        }
+        // Right leg (mirror)
+        const x2=bx+segW*Math.cos(angle)+j/2,y2=by;
+        const dx1=Math.max(0,x2),dy1=Math.max(0,y2);
+        const dx2=Math.min(RW,x2+segW*Math.cos(angle)),dy2=Math.min(RH,y2+segH);
+        if(dx2>dx1&&dy2>dy1){
+          const isFull2=dx1===x2&&dy1===y2&&Math.abs(dx2-(x2+segW*Math.cos(angle)))<1&&Math.abs(dy2-(y2+segH))<1;
+          if(isFull2)fullCount++;else cutCount++;
+          tiles.push({x:dx1,y:dy1,w:dx2-dx1,h:dy2-dy1,full:isFull2,origW:tw,origH:th,col:c*2+1,row:r,chevronRight:true});
+        }
+      }
+    }
+
+    const totalRoomArea=RW*RH/1e6;// m²
+    const fullTileArea=tw*th/1e6;
+    const totalTilesNeeded=fullCount+cutCount;
+    const wastePercent=cutCount>0?((cutCount*fullTileArea*1e6-cutArea)/(totalRoomArea*1e6)*100):0;
+    const tilesToOrder=fullCount+Math.ceil(cutCount*1.1);// 10% extra for cuts
+    const boxesOf=Math.ceil(tilesToOrder/(pattern==='diagonal'||pattern==='chevron'?8:Math.max(1,Math.floor(1/fullTileArea))));
+
+    return{tiles,fullCount,cutCount,totalTilesNeeded,totalRoomArea,fullTileArea,wastePercent:Math.min(wastePercent,50),tilesToOrder,boxesOf,
+      linearCutH:cutCount>0?roomW*2:0,linearCutV:cutCount>0?roomH*2:0};
+  },[roomW,roomH,tileW,tileH,jointW,pattern,startCorner,orientation]);
+
+  // ── 3D Carrelage ──
+  useEffect(()=>{
+    if(!view3D||!mountRef.current)return;
+    const el=mountRef.current;
+    el.innerHTML='';
+    const W=el.clientWidth,H=el.clientHeight;
+    if(W<10||H<10)return;
+    const tw=orientation==='v'?tileH:tileW,th=orientation==='v'?tileW:tileH;
+    const RWm=roomW/1000,RHm=roomH/1000;
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1e2e);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
+    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+    el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xe8e8f0,0.5));
+    const sun=new THREE.DirectionalLight(0xfff5e0,1.2);sun.position.set(6,12,8);sun.castShadow=true;
+    sun.shadow.camera.near=0.1;sun.shadow.camera.far=40;sun.shadow.camera.left=-10;sun.shadow.camera.right=10;
+    sun.shadow.camera.top=10;sun.shadow.camera.bottom=-10;sun.shadow.mapSize.width=1024;sun.shadow.mapSize.height=1024;sun.shadow.bias=-0.0005;
+    scene.add(sun);
+    const fill=new THREE.DirectionalLight(0x8ab0ff,0.35);fill.position.set(-4,-2,3);scene.add(fill);
+    const bounce=new THREE.PointLight(0xffeedd,0.15,20);bounce.position.set(0,-3,2);scene.add(bounce);
+
+    // Ground plane
+    const groundMat=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(30,30),groundMat);
+    ground.rotation.x=-Math.PI/2;ground.position.y=0;ground.receiveShadow=true;scene.add(ground);
+
+    // Grout slab — FLOOR: XZ plane (y=height, very thin)
+    const jcC=new THREE.Color(jointColor);
+    const floorMat=new THREE.MeshStandardMaterial({color:jcC,roughness:0.92,metalness:0.02});
+    const floor=new THREE.Mesh(new THREE.BoxGeometry(RWm+.02,.006,RHm+.02),floorMat);
+    floor.position.set(0,.003,0);floor.receiveShadow=true;scene.add(floor);
+
+    // Tiles instanced — laid FLAT on the floor (XZ plane)
+    const tileDepth=0.012;// tile thickness in Y
+    const grp1=[],grp2=[];
+    computeTiles.tiles.forEach(t=>{if(!t.diagonal){if(t.isDamier2)grp2.push(t);else grp1.push(t)}});
+    const addGroup=(arr,hex)=>{if(!arr.length)return;
+      const c=new THREE.Color(hex);const mat=new THREE.MeshStandardMaterial({roughness:0.25,metalness:0.08});
+      // BoxGeometry(X-width, Y-thickness, Z-depth) for floor tiles
+      const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,tileDepth,1),mat,arr.length);
+      mesh.castShadow=true;mesh.receiveShadow=true;const dummy=new THREE.Object3D();
+      const ic=new Float32Array(arr.length*3);
+      arr.forEach((t,i)=>{
+        const sx=t.w/1000,sz=t.h/1000;
+        // x: left→right, y: tile sits on top of grout slab, z: top→bottom of room
+        dummy.position.set(t.x/1000+sx/2-RWm/2, tileDepth/2+.006, t.y/1000+sz/2-RHm/2);
+        dummy.scale.set(sx*.985,1,sz*.985);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+        const sh=((t.col*13+t.row*17)%12-6)*0.015;
+        ic[i*3]=Math.max(0,Math.min(1,c.r+sh));ic[i*3+1]=Math.max(0,Math.min(1,c.g+sh));ic[i*3+2]=Math.max(0,Math.min(1,c.b+sh*.5));
+      });
+      mesh.instanceColor=new THREE.InstancedBufferAttribute(ic,3);mesh.instanceMatrix.needsUpdate=true;scene.add(mesh);
+    };
+    addGroup(grp1,tileColor1);addGroup(grp2,tileColor2);
+
+    // Room walls — vertical on the 4 sides of the floor area
+    const wm=new THREE.MeshStandardMaterial({color:0x8a8a9a,roughness:.65,metalness:.05});
+    const wH=0.5;const wT=0.04;
+    // Back wall (z = -RHm/2)
+    const bw=new THREE.Mesh(new THREE.BoxGeometry(RWm+wT*2,wH,wT),wm);
+    bw.position.set(0,wH/2,-RHm/2-wT/2);bw.castShadow=true;bw.receiveShadow=true;scene.add(bw);
+    // Left wall (x = -RWm/2)
+    const lw=new THREE.Mesh(new THREE.BoxGeometry(wT,wH,RHm+wT),wm);
+    lw.position.set(-RWm/2-wT/2,wH/2,0);lw.castShadow=true;lw.receiveShadow=true;scene.add(lw);
+    // Right wall (x = RWm/2)
+    const rw=new THREE.Mesh(new THREE.BoxGeometry(wT,wH,RHm+wT),wm);
+    rw.position.set(RWm/2+wT/2,wH/2,0);rw.castShadow=true;rw.receiveShadow=true;scene.add(rw);
+    // Front wall semi-transparent (z = +RHm/2)
+    const fwMat=new THREE.MeshStandardMaterial({color:0x8a8a9a,roughness:.65,transparent:true,opacity:.18});
+    const fw=new THREE.Mesh(new THREE.BoxGeometry(RWm+wT*2,wH,wT),fwMat);
+    fw.position.set(0,wH/2,RHm/2+wT/2);scene.add(fw);
+
+    // Baseboards on floor edges
+    const bbMat=new THREE.MeshStandardMaterial({color:0xd0d0d8,roughness:.5});
+    const bbH=0.055,bbT=0.009;
+    const bb1=new THREE.Mesh(new THREE.BoxGeometry(RWm,bbH,bbT),bbMat);bb1.position.set(0,bbH/2,-RHm/2);scene.add(bb1);
+    const bb2=new THREE.Mesh(new THREE.BoxGeometry(bbT,bbH,RHm),bbMat);bb2.position.set(-RWm/2,bbH/2,0);scene.add(bb2);
+    const bb3=new THREE.Mesh(new THREE.BoxGeometry(bbT,bbH,RHm),bbMat);bb3.position.set(RWm/2,bbH/2,0);scene.add(bb3);
+
+    // Camera — top-down angle looking at the floor
+    const tgt=new THREE.Vector3(0,0,0);
+    rotRef3D.current={x:-0.85,y:0.5};// look down from front-right
+    zoomRef3D.current=Math.max(RWm,RHm)*1.8;
+    const onD=e=>{dragRef3D.current={x:e.clientX,y:e.clientY,rx:rotRef3D.current.x,ry:rotRef3D.current.y,btn:e.button};renderer.domElement.style.cursor='grabbing'};
+    const onU=()=>{dragRef3D.current=null;renderer.domElement.style.cursor='grab'};
+    const onM=e=>{if(!dragRef3D.current)return;const dx=e.clientX-dragRef3D.current.x,dy=e.clientY-dragRef3D.current.y;
+      if(dragRef3D.current.btn===2){panRef3D.current.x+=dx*.003;panRef3D.current.y-=dy*.003;dragRef3D.current.x=e.clientX;dragRef3D.current.y=e.clientY;}
+      else{rotRef3D.current.y=dragRef3D.current.ry+dx*.005;rotRef3D.current.x=Math.max(-1.55,Math.min(-.1,dragRef3D.current.rx+dy*.005));}};
+    const onW=e=>{e.preventDefault();zoomRef3D.current=Math.max(.5,Math.min(30,zoomRef3D.current*(1+e.deltaY*.001)))};
+    renderer.domElement.addEventListener('mousedown',onD);renderer.domElement.addEventListener('mouseup',onU);
+    renderer.domElement.addEventListener('mouseleave',onU);renderer.domElement.addEventListener('mousemove',onM);
+    renderer.domElement.addEventListener('wheel',onW,{passive:false});
+    let raf;const animate=()=>{raf=requestAnimationFrame(animate);
+      const d=zoomRef3D.current,rx=rotRef3D.current.x,ry=rotRef3D.current.y;
+      camera.position.set(tgt.x+d*Math.sin(ry)*Math.cos(rx)+panRef3D.current.x,tgt.y+d*Math.sin(-rx)+panRef3D.current.y,tgt.z+d*Math.cos(ry)*Math.cos(rx));
+      camera.lookAt(tgt.x+panRef3D.current.x,tgt.y+panRef3D.current.y,tgt.z);renderer.render(scene,camera);};
+    animate();sceneRef3D.current={renderer,raf};
+    const onR=()=>{const w2=el.clientWidth,h2=el.clientHeight;if(w2>0&&h2>0){camera.aspect=w2/h2;camera.updateProjectionMatrix();renderer.setSize(w2,h2)}};
+    window.addEventListener('resize',onR);
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onR);renderer.dispose();if(el)el.innerHTML='';sceneRef3D.current={}};
+  },[view3D,roomW,roomH,tileW,tileH,jointW,pattern,startCorner,orientation,tileColor1,tileColor2,jointColor,computeTiles.tiles]);
+
+  // ── EXPORT PDF (Carrelage) ──
+  const exportPDF=async()=>{
+    await window._jspdfReady;const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const pw=297,ph=210;
+    doc.setFillColor(26,30,46);doc.rect(0,0,pw,28,'F');
+    doc.setFontSize(16);doc.setTextColor(255);doc.text('KALEPIN — Calepinage Carrelage',14,14);
+    doc.setFontSize(10);doc.setTextColor(150);doc.text(roomName+' — '+new Date().toLocaleDateString('fr-FR'),14,22);
+    doc.text(PATTERNS.find(p=>p.id===pattern)?.name+' — '+tileW+'×'+tileH+'mm — Joint '+jointW+'mm',pw-14,22,{align:'right'});
+    const mL=20,mT=36,maxW=pw-mL*2,maxH=ph-mT-46;
+    const scale=Math.min(maxW/roomW,maxH/roomH);
+    const fW=roomW*scale,fH=roomH*scale,fX=mL+(maxW-fW)/2,fY=mT;
+    const jR=parseInt(jointColor.slice(1,3),16),jG=parseInt(jointColor.slice(3,5),16),jB=parseInt(jointColor.slice(5,7),16);
+    doc.setFillColor(jR,jG,jB);doc.rect(fX,fY,fW,fH,'F');
+    computeTiles.tiles.forEach(t=>{
+      const col=t.isDamier2?tileColor2:tileColor1;
+      const sh=((t.col*13+t.row*17)%12-6)*0.013;
+      const r=Math.max(0,Math.min(255,parseInt(col.slice(1,3),16)+sh*255));
+      const g=Math.max(0,Math.min(255,parseInt(col.slice(3,5),16)+sh*255));
+      const b=Math.max(0,Math.min(255,parseInt(col.slice(5,7),16)+sh*128));
+      doc.setFillColor(r,g,b);doc.rect(fX+t.x*scale,fY+t.y*scale,t.w*scale,t.h*scale,'F');
+      if(!t.full){doc.setDrawColor(239,68,68);doc.setLineWidth(0.15);doc.rect(fX+t.x*scale,fY+t.y*scale,t.w*scale,t.h*scale,'S')}
+    });
+    doc.setDrawColor(80);doc.setLineWidth(0.5);doc.rect(fX,fY,fW,fH,'S');
+    doc.setFontSize(8);doc.setTextColor(100);doc.text(roomW+' mm',fX+fW/2,fY+fH+8,{align:'center'});
+    const tY=fY+fH+16;doc.setFontSize(8);doc.setTextColor(60);
+    const left=[['Surface',computeTiles.totalRoomArea.toFixed(2)+' m²'],['Carreau',tileW+'×'+tileH+' mm ('+computeTiles.fullTileArea.toFixed(4)+' m²)'],
+      ['Entiers',''+computeTiles.fullCount],['Coupés',''+computeTiles.cutCount],['Total',''+(computeTiles.fullCount+computeTiles.cutCount)],
+      ['À commander (+10%)',''+computeTiles.tilesToOrder],['Boîtes ('+computeTiles.boxesOf.n+'/boîte)',''+computeTiles.boxesOf.boxes]];
+    left.forEach(([k,v],i)=>{doc.text(k,mL,tY+i*4);doc.text(v,mL+60,tY+i*4)});
+    const right=[['Pose',PATTERNS.find(p=>p.id===pattern)?.name],['Joint',jointW+' mm'],['Chute','~'+computeTiles.wastePercent.toFixed(1)+' %']];
+    right.forEach(([k,v],i)=>{doc.text(k,pw-80,tY+i*4);doc.text(v,pw-30,tY+i*4)});
+    doc.save('kalepin-carrelage-'+roomName.replace(/\W+/g,'_')+'.pdf');
+  };
+
+  // ── EXPORT CSV (Carrelage) ──
+  const exportCSV=()=>{
+    const sep=';';let csv='\uFEFF';
+    csv+='KALEPIN - Calepinage Carrelage\n'+roomName+sep+roomW+'x'+roomH+'mm\n';
+    csv+='Carreau'+sep+tileW+'x'+tileH+'mm'+sep+'Joint'+sep+jointW+'mm'+sep+'Pose'+sep+(PATTERNS.find(p=>p.id===pattern)?.name)+'\n\n';
+    csv+='SURFACES\n';csv+='Surface'+sep+computeTiles.totalRoomArea.toFixed(2)+' m²\n';
+    csv+='Carreau unitaire'+sep+computeTiles.fullTileArea.toFixed(4)+' m²\n\n';
+    csv+='QUANTITES\n';csv+='Entiers'+sep+computeTiles.fullCount+'\n';csv+='Coupés'+sep+computeTiles.cutCount+'\n';
+    csv+='Total'+sep+(computeTiles.fullCount+computeTiles.cutCount)+'\n';csv+='À commander (+10%)'+sep+computeTiles.tilesToOrder+'\n';
+    csv+='Boîtes ('+computeTiles.boxesOf.n+'/boîte)'+sep+computeTiles.boxesOf.boxes+'\n';
+    csv+='Chute estimée'+sep+'~'+computeTiles.wastePercent.toFixed(1)+' %\n\n';
+    csv+='DETAIL CARREAUX\nN°'+sep+'X'+sep+'Y'+sep+'L'+sep+'H'+sep+'Type'+sep+'Coupe\n';
+    computeTiles.tiles.forEach((t,i)=>{csv+=(i+1)+sep+Math.round(t.x)+sep+Math.round(t.y)+sep+Math.round(t.w)+sep+Math.round(t.h)+sep+(t.isDamier2?'Couleur2':'Couleur1')+sep+(t.full?'Non':'Oui')+'\n'});
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kalepin-carrelage-'+roomName.replace(/\W+/g,'_')+'.csv';a.click();
+  };
+
+  // ── SVG scale ──
+  const svgW=cSize.w,svgH=cSize.h;
+  const mg=40;
+  const sc=Math.min((svgW-mg*2)/roomW,(svgH-mg*2)/roomH)*zoom;
+  const oxSvg=(svgW-roomW*sc)/2,oySvg=(svgH-roomH*sc)/2;
+
+  // ── NI helper ──
+  const NI=({label,value,onChange,unit,min=0,max=99999})=>
+    <div><label style={{fontSize:9,fontWeight:600,color:'var(--t3)',display:'block',marginBottom:2}}>{label}</label>
+      <div style={{display:'flex',alignItems:'center',gap:4}}>
+        <input type="number" value={value} min={min} max={max} onChange={e=>onChange(Math.max(min,parseInt(e.target.value)||0))}
+          style={{flex:1,padding:'5px 8px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:12,fontFamily:'JetBrains Mono,monospace',textAlign:'center'}}
+          onKeyDown={e=>e.stopPropagation()}/>
+        {unit&&<span style={{fontSize:9,color:'var(--t3)',flexShrink:0}}>{unit}</span>}
+      </div></div>;
+
+  const PATTERNS=[
+    {id:'droit',name:'Droit',icon:'▦'},
+    {id:'decale12',name:'Décalé ½',icon:'▤'},
+    {id:'decale13',name:'Décalé ⅓',icon:'▥'},
+    {id:'diagonal',name:'Diagonal 45°',icon:'◇'},
+    {id:'chevron',name:'Chevron',icon:'⟨⟩'},
+    {id:'damier',name:'Damier',icon:'▩'},
+  ];
+
+  const CORNERS=[
+    {id:'bl',name:'Bas-Gauche',icon:'◣'},{id:'br',name:'Bas-Droite',icon:'◢'},
+    {id:'tl',name:'Haut-Gauche',icon:'◤'},{id:'tr',name:'Haut-Droite',icon:'◥'},
+    {id:'center',name:'Centre',icon:'◉'},
+  ];
+
+  return<div style={{display:'flex',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+    {/* ─── LEFT PANEL ─── */}
+    <div style={{width:260,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      {/* Header */}
+      <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10}}>
+        <button onClick={onBack} style={{width:28,height:28,borderRadius:8,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontFamily:'inherit'}}>←</button>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>🔲 Carrelage</div>
+          <div style={{fontSize:9,color:'var(--t3)'}}>Calepinage & coupes</div>
+        </div>
+        <div style={{flex:1}}/>
+        <div style={{display:'flex',gap:3}}>
+          <button onClick={()=>{const data={type:'kalepin-carrelage',version:1,roomName,roomW,roomH,roomType,tileW,tileH,jointW,tileColor1,tileColor2,jointColor,pattern,startCorner,orientation};
+            const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kalepin-carrelage-'+roomName.replace(/\W+/g,'_')+'.json';a.click()}}
+            title="Exporter JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>💾</button>
+          <label title="Importer JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>📥<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(!e.target.files[0])return;const r=new FileReader();r.onload=ev=>{try{
+            const d=JSON.parse(ev.target.result);if(d.type!=='kalepin-carrelage'){alert('Fichier carrelage invalide');return}
+            if(d.roomName)setRoomName(d.roomName);if(d.roomW)setRoomW(d.roomW);if(d.roomH)setRoomH(d.roomH);if(d.roomType)setRoomType(d.roomType);
+            if(d.tileW)setTileW(d.tileW);if(d.tileH)setTileH(d.tileH);if(d.jointW)setJointW(d.jointW);
+            if(d.tileColor1)setTileColor1(d.tileColor1);if(d.tileColor2)setTileColor2(d.tileColor2);if(d.jointColor)setJointColor(d.jointColor);
+            if(d.pattern)setPattern(d.pattern);if(d.startCorner)setStartCorner(d.startCorner);if(d.orientation)setOrientation(d.orientation);
+            }catch(err){alert('Erreur: '+err.message)}};r.readAsText(e.target.files[0]);e.target.value=''}}/></label>
+        </div>
+      </div>
+
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+        {/* Room */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#0ea5e9'}}/>
+            <span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Pièce</span>
+          </div>
+          <input type="text" value={roomName} onChange={e=>setRoomName(e.target.value)}
+            style={{width:'100%',padding:'5px 8px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:12,marginBottom:8,boxSizing:'border-box'}}
+            onKeyDown={e=>e.stopPropagation()}/>
+          <div style={{display:'flex',gap:4,marginBottom:8}}>
+            {['sol','mur','piscine'].map(t=><button key={t} onClick={()=>setRoomType(t)}
+              style={{flex:1,padding:'4px',borderRadius:6,border:`1px solid ${roomType===t?'#0ea5e9':'var(--bd)'}`,
+                background:roomType===t?'rgba(14,165,233,.1)':'var(--inp)',color:roomType===t?'#0ea5e9':'var(--t3)',
+                fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',textTransform:'capitalize'}}>{t}</button>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+            <NI label="Largeur" value={roomW} onChange={setRoomW} unit="mm"/>
+            <NI label="Hauteur" value={roomH} onChange={setRoomH} unit="mm"/>
+          </div>
+          <div style={{marginTop:6,fontSize:10,color:'var(--t3)',textAlign:'right'}}>
+            {(roomW*roomH/1e6).toFixed(2)} m²
+          </div>
+        </div>
+
+        {/* Tile */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#f59e0b'}}/>
+            <span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Carreau</span>
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:8}}>
+            {TILE_PRESETS.map(p=><button key={p.name} onClick={()=>{setTileW(p.w);setTileH(p.h)}}
+              style={{padding:'3px 7px',borderRadius:5,fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit',
+                border:`1px solid ${tileW===p.w&&tileH===p.h?'#f59e0b':'var(--bd)'}`,
+                background:tileW===p.w&&tileH===p.h?'rgba(245,158,11,.1)':'var(--inp)',
+                color:tileW===p.w&&tileH===p.h?'#f59e0b':'var(--t3)'}}>{p.name}</button>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:6}}>
+            <NI label="Largeur" value={tileW} onChange={setTileW} unit="mm"/>
+            <NI label="Hauteur" value={tileH} onChange={setTileH} unit="mm"/>
+          </div>
+          <div style={{marginTop:6}}>
+            <NI label="Joint" value={jointW} onChange={setJointW} unit="mm" max={20}/>
+          </div>
+          <div style={{display:'flex',gap:4,marginTop:8}}>
+            <button onClick={()=>setOrientation('h')} style={{flex:1,padding:'4px',borderRadius:6,
+              border:`1px solid ${orientation==='h'?'#f59e0b':'var(--bd)'}`,
+              background:orientation==='h'?'rgba(245,158,11,.1)':'var(--inp)',
+              color:orientation==='h'?'#f59e0b':'var(--t3)',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+              ▬ Horizontal</button>
+            <button onClick={()=>setOrientation('v')} style={{flex:1,padding:'4px',borderRadius:6,
+              border:`1px solid ${orientation==='v'?'#f59e0b':'var(--bd)'}`,
+              background:orientation==='v'?'rgba(245,158,11,.1)':'var(--inp)',
+              color:orientation==='v'?'#f59e0b':'var(--t3)',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>
+              ▮ Vertical</button>
+          </div>
+        </div>
+
+        {/* Pattern */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#8b5cf6'}}/>
+            <span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Motif de pose</span>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:4}}>
+            {PATTERNS.map(p=><button key={p.id} onClick={()=>setPattern(p.id)}
+              style={{padding:'6px 4px',borderRadius:8,border:`1px solid ${pattern===p.id?'#8b5cf6':'var(--bd)'}`,
+                background:pattern===p.id?'rgba(139,92,246,.1)':'var(--inp)',cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}>
+              <div style={{fontSize:16}}>{p.icon}</div>
+              <div style={{fontSize:8,fontWeight:600,color:pattern===p.id?'#8b5cf6':'var(--t3)',marginTop:2}}>{p.name}</div>
+            </button>)}
+          </div>
+          <div style={{marginTop:8}}>
+            <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:4}}>Départ</div>
+            <div style={{display:'flex',gap:3}}>
+              {CORNERS.map(c=><button key={c.id} onClick={()=>setStartCorner(c.id)} title={c.name}
+                style={{flex:1,padding:'4px',borderRadius:5,fontSize:12,cursor:'pointer',fontFamily:'inherit',
+                  border:`1px solid ${startCorner===c.id?'#8b5cf6':'var(--bd)'}`,
+                  background:startCorner===c.id?'rgba(139,92,246,.1)':'var(--inp)',
+                  color:startCorner===c.id?'#8b5cf6':'var(--t3)'}}>{c.icon}</button>)}
+            </div>
+          </div>
+        </div>
+
+        {/* Colors */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
+            <div style={{width:3,height:12,borderRadius:2,background:'#34d399'}}/>
+            <span style={{fontSize:10,fontWeight:700,color:'var(--t1)'}}>Couleurs</span>
+          </div>
+          <div style={{marginBottom:6}}>
+            <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:3}}>Carreau {pattern==='damier'?'1':''}</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
+              {COLORS.map((c,i)=><button key={i} onClick={()=>setTileColor1(c)}
+                style={{width:18,height:18,borderRadius:4,background:c,border:tileColor1===c?'2px solid #fff':'1px solid rgba(255,255,255,.1)',cursor:'pointer'}}/>)}
+              <input type="color" value={tileColor1} onChange={e=>setTileColor1(e.target.value)}
+                style={{width:18,height:18,borderRadius:4,border:'1px solid var(--bd)',cursor:'pointer',padding:0}}/>
+            </div>
+          </div>
+          {pattern==='damier'&&<div style={{marginBottom:6}}>
+            <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:3}}>Carreau 2</div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:3}}>
+              {COLORS.map((c,i)=><button key={i} onClick={()=>setTileColor2(c)}
+                style={{width:18,height:18,borderRadius:4,background:c,border:tileColor2===c?'2px solid #fff':'1px solid rgba(255,255,255,.1)',cursor:'pointer'}}/>)}
+              <input type="color" value={tileColor2} onChange={e=>setTileColor2(e.target.value)}
+                style={{width:18,height:18,borderRadius:4,border:'1px solid var(--bd)',cursor:'pointer',padding:0}}/>
+            </div>
+          </div>}
+          <div>
+            <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:3}}>Joint</div>
+            <div style={{display:'flex',gap:3}}>
+              {JOINT_COLORS.map((c,i)=><button key={i} onClick={()=>setJointColor(c)}
+                style={{width:18,height:18,borderRadius:4,background:c,border:jointColor===c?'2px solid #0ea5e9':'1px solid rgba(255,255,255,.1)',cursor:'pointer'}}/>)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* ─── CENTER: SVG VISUALIZATION ─── */}
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      {/* Toolbar */}
+      <div style={{padding:'8px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8,background:'var(--pnl)',flexShrink:0}}>
+        <span style={{fontSize:12,fontWeight:700,color:'var(--t1)'}}>{roomName}</span>
+        <span style={{fontSize:10,color:'var(--t3)'}}>— {roomW}×{roomH}mm — {PATTERNS.find(p=>p.id===pattern)?.name}</span>
+        <div style={{flex:1}}/>
+        {!view3D&&<>
+        <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'var(--t3)',cursor:'pointer'}}>
+          <input type="checkbox" checked={showDims} onChange={e=>setShowDims(e.target.checked)}/> Cotes</label>
+        <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'var(--t3)',cursor:'pointer'}}>
+          <input type="checkbox" checked={showCuts} onChange={e=>setShowCuts(e.target.checked)}/> Coupes</label>
+        <div style={{display:'flex',gap:2}}>
+          <button onClick={()=>setZoom(z=>Math.max(.3,z-.15))} style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',cursor:'pointer',fontSize:14,fontFamily:'inherit'}}>−</button>
+          <button onClick={()=>setZoom(1)} style={{padding:'0 8px',height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,fontFamily:'inherit'}}>{Math.round(zoom*100)}%</button>
+          <button onClick={()=>setZoom(z=>Math.min(4,z+.15))} style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',cursor:'pointer',fontSize:14,fontFamily:'inherit'}}>+</button>
+        </div></>}
+        {/* Toggle 2D/3D */}
+        <div style={{display:'flex',borderRadius:7,border:'1px solid var(--bd)',overflow:'hidden',flexShrink:0}}>
+          <button onClick={()=>setView3D(false)} style={{padding:'4px 12px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'none',
+            background:!view3D?'rgba(14,165,233,.15)':'var(--crd)',color:!view3D?'#0ea5e9':'var(--t3)'}}>2D</button>
+          <button onClick={()=>setView3D(true)} style={{padding:'4px 12px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'none',borderLeft:'1px solid var(--bd)',
+            background:view3D?'rgba(14,165,233,.15)':'var(--crd)',color:view3D?'#0ea5e9':'var(--t3)'}}>🧊 3D</button>
+        </div>
+        <button onClick={exportPDF} style={{padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'1px solid rgba(239,68,68,.3)',background:'rgba(239,68,68,.08)',color:'#ef4444'}}>📄 PDF</button>
+        <button onClick={exportCSV} style={{padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'1px solid rgba(52,211,153,.3)',background:'rgba(52,211,153,.08)',color:'#34d399'}}>📊 CSV</button>
+      </div>
+
+      {/* SVG 2D */}
+      {!view3D&&<div ref={svgContainerRef} style={{flex:1,position:'relative',overflow:'hidden',background:'var(--bg)'}}>
+        <svg ref={svgRef} style={{position:'absolute',inset:0,width:'100%',height:'100%',display:'block'}} viewBox={`0 0 ${svgW} ${svgH}`}>
+          {/* Background */}
+          <rect width="100%" height="100%" fill="var(--bg)"/>
+
+          {/* Room background with joint color */}
+          <rect x={oxSvg} y={oySvg} width={roomW*sc} height={roomH*sc} fill={jointColor} rx={2}/>
+
+          {/* Tiles */}
+          {computeTiles.tiles.map((t,i)=>{
+            if(t.diagonal){
+              // Rotated tile — draw as polygon
+              const pts=t.corners.map(p=>`${oxSvg+p.x*sc},${oySvg+p.y*sc}`).join(' ');
+              return<polygon key={i} points={pts}
+                fill={t.full?tileColor1:(showCuts?'rgba(239,68,68,.25)':tileColor1)}
+                stroke={t.full?'rgba(0,0,0,.08)':'rgba(239,68,68,.4)'} strokeWidth={t.full?.3:.8}
+                style={{cursor:'pointer'}} onMouseEnter={()=>setHoverTile(i)} onMouseLeave={()=>setHoverTile(null)}/>;
+            }
+            const col=t.isDamier2?tileColor2:tileColor1;
+            const cutCol=showCuts&&!t.full;
+            return<rect key={i} x={oxSvg+t.x*sc} y={oySvg+t.y*sc} width={t.w*sc} height={t.h*sc}
+              fill={cutCol?`rgba(239,68,68,.2)`:col}
+              stroke={cutCol?'rgba(239,68,68,.5)':'rgba(0,0,0,.06)'} strokeWidth={cutCol?.8:.3}
+              rx={.5} style={{cursor:'pointer',transition:'fill .1s'}}
+              onMouseEnter={()=>setHoverTile(i)} onMouseLeave={()=>setHoverTile(null)}/>;
+          })}
+
+          {/* Room border */}
+          <rect x={oxSvg} y={oySvg} width={roomW*sc} height={roomH*sc}
+            fill="none" stroke="var(--t1)" strokeWidth={2} rx={1}/>
+
+          {/* Dimensions */}
+          {showDims&&<>
+            {/* Width */}
+            <line x1={oxSvg} y1={oySvg+roomH*sc+20} x2={oxSvg+roomW*sc} y2={oySvg+roomH*sc+20} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={oxSvg} y1={oySvg+roomH*sc+14} x2={oxSvg} y2={oySvg+roomH*sc+26} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={oxSvg+roomW*sc} y1={oySvg+roomH*sc+14} x2={oxSvg+roomW*sc} y2={oySvg+roomH*sc+26} stroke="var(--t3)" strokeWidth={.8}/>
+            <text x={oxSvg+roomW*sc/2} y={oySvg+roomH*sc+32} textAnchor="middle" fill="var(--t3)" fontSize={10} fontFamily="JetBrains Mono,monospace">{roomW} mm</text>
+            {/* Height */}
+            <line x1={oxSvg-20} y1={oySvg} x2={oxSvg-20} y2={oySvg+roomH*sc} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={oxSvg-26} y1={oySvg} x2={oxSvg-14} y2={oySvg} stroke="var(--t3)" strokeWidth={.8}/>
+            <line x1={oxSvg-26} y1={oySvg+roomH*sc} x2={oxSvg-14} y2={oySvg+roomH*sc} stroke="var(--t3)" strokeWidth={.8}/>
+            <text x={oxSvg-24} y={oySvg+roomH*sc/2} textAnchor="middle" fill="var(--t3)" fontSize={10}
+              fontFamily="JetBrains Mono,monospace" transform={`rotate(-90,${oxSvg-24},${oySvg+roomH*sc/2})`}>{roomH} mm</text>
+          </>}
+
+          {/* Hover tooltip */}
+          {hoverTile!==null&&computeTiles.tiles[hoverTile]&&(()=>{
+            const t=computeTiles.tiles[hoverTile];
+            const tx=oxSvg+(t.x||0)*sc+20,ty=oySvg+(t.y||0)*sc-10;
+            return<g>
+              <rect x={tx-4} y={ty-14} width={110} height={18} rx={4} fill="rgba(0,0,0,.85)"/>
+              <text x={tx} y={ty} fill="#fff" fontSize={10} fontFamily="JetBrains Mono,monospace">
+                {t.full?`${Math.round(t.origW)}×${Math.round(t.origH)}`:`Coupe: ${Math.round(t.w)}×${Math.round(t.h)}`}
+              </text>
+            </g>;
+          })()}
+        </svg>
+      </div>}
+      {/* 3D Three.js */}
+      {view3D&&<div ref={mountRef} style={{flex:1,background:'#1a1e2e',cursor:'grab'}}/>}
+    </div>
+
+    {/* ─── RIGHT PANEL: RESULTS ─── */}
+    <div style={{width:240,flexShrink:0,borderLeft:'1px solid var(--bd)',background:'var(--pnl)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)'}}>
+        <div style={{fontSize:12,fontWeight:700,color:'var(--t1)'}}>📊 Résultats</div>
+      </div>
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+
+        {/* Surface */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>SURFACE</div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+            <span style={{fontSize:11,color:'var(--t2)'}}>Surface pièce</span>
+            <span style={{fontSize:12,fontWeight:700,color:'#0ea5e9',fontFamily:'JetBrains Mono,monospace'}}>{computeTiles.totalRoomArea.toFixed(2)} m²</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+            <span style={{fontSize:11,color:'var(--t2)'}}>Surface carreau</span>
+            <span style={{fontSize:11,color:'var(--t3)',fontFamily:'JetBrains Mono,monospace'}}>{computeTiles.fullTileArea.toFixed(4)} m²</span>
+          </div>
+        </div>
+
+        {/* Tiles count */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>CARREAUX</div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+            <span style={{fontSize:11,color:'var(--t2)'}}>Carreaux entiers</span>
+            <span style={{fontSize:12,fontWeight:700,color:'#34d399',fontFamily:'JetBrains Mono,monospace'}}>{computeTiles.fullCount}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+            <span style={{fontSize:11,color:'var(--t2)'}}>Carreaux coupés</span>
+            <span style={{fontSize:12,fontWeight:700,color:'#f87171',fontFamily:'JetBrains Mono,monospace'}}>{computeTiles.cutCount}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+            <span style={{fontSize:11,color:'var(--t2)'}}>Total posé</span>
+            <span style={{fontSize:12,fontWeight:700,color:'var(--t1)',fontFamily:'JetBrains Mono,monospace'}}>{computeTiles.totalTilesNeeded}</span>
+          </div>
+          <div style={{height:1,background:'var(--bd)',margin:'6px 0'}}/>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+            <span style={{fontSize:11,color:'var(--t2)'}}>Chutes estimées</span>
+            <span style={{fontSize:12,fontWeight:600,color:'#f59e0b',fontFamily:'JetBrains Mono,monospace'}}>{computeTiles.wastePercent.toFixed(1)}%</span>
+          </div>
+        </div>
+
+        {/* Order */}
+        <div style={{padding:12,borderRadius:10,background:'linear-gradient(135deg,rgba(14,165,233,.06),rgba(14,165,233,.02))',border:'1px solid rgba(14,165,233,.15)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'#0ea5e9',marginBottom:6}}>À COMMANDER (+10% marge)</div>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+            <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Carreaux</span>
+            <span style={{fontSize:20,fontWeight:800,color:'#0ea5e9',fontFamily:'JetBrains Mono,monospace'}}>{computeTiles.tilesToOrder}</span>
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:4}}>
+            <span style={{fontSize:11,color:'var(--t2)'}}>Surface à acheter</span>
+            <span style={{fontSize:12,fontWeight:700,color:'var(--t1)',fontFamily:'JetBrains Mono,monospace'}}>{(computeTiles.tilesToOrder*computeTiles.fullTileArea).toFixed(2)} m²</span>
+          </div>
+        </div>
+
+        {/* Tile format recap */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>RÉCAPITULATIF</div>
+          <div style={{fontSize:10,color:'var(--t2)',lineHeight:1.7}}>
+            <div>Pièce: <b>{roomName}</b> ({roomType})</div>
+            <div>Carreau: <b>{orientation==='v'?tileH:tileW}×{orientation==='v'?tileW:tileH} mm</b></div>
+            <div>Joint: <b>{jointW} mm</b></div>
+            <div>Motif: <b>{PATTERNS.find(p=>p.id===pattern)?.name}</b></div>
+            <div>Départ: <b>{CORNERS.find(c=>c.id===startCorner)?.name}</b></div>
+          </div>
+        </div>
+
+        {/* Cut details */}
+        {showCuts&&computeTiles.cutCount>0&&<div style={{padding:10,borderRadius:10,background:'rgba(239,68,68,.04)',border:'1px solid rgba(239,68,68,.1)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'#f87171',marginBottom:6}}>COUPES PÉRIPHÉRIQUES</div>
+          <div style={{fontSize:10,color:'var(--t2)',lineHeight:1.7}}>
+            {(()=>{
+              const tw=orientation==='v'?tileH:tileW;
+              const th=orientation==='v'?tileW:tileH;
+              const j=jointW;
+              const cutRight=roomW%((tw+j))||tw;
+              const cutBottom=roomH%((th+j))||th;
+              return<>
+                <div>Coupe droite: <b style={{color:'#f87171'}}>{Math.round(cutRight)} mm</b></div>
+                <div>Coupe basse: <b style={{color:'#f87171'}}>{Math.round(cutBottom)} mm</b></div>
+                <div>Nb coupes: <b>{computeTiles.cutCount}</b></div>
+              </>;
+            })()}
+          </div>
+        </div>}
+
+        {/* Joint quantity */}
+        <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+          <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>JOINTEMENT</div>
+          <div style={{fontSize:10,color:'var(--t2)',lineHeight:1.7}}>
+            {(()=>{
+              const tw=orientation==='v'?tileH:tileW;
+              const th=orientation==='v'?tileW:tileH;
+              const perimeter=(tw+th)*2;
+              const totalJointLength=computeTiles.totalTilesNeeded*perimeter/2/1000;// ml approx
+              const kgPerM2=jointW<=3?0.5:jointW<=5?0.8:1.2;
+              const jointKg=computeTiles.totalRoomArea*kgPerM2;
+              return<>
+                <div>Linéaire joints: <b>~{totalJointLength.toFixed(0)} ml</b></div>
+                <div>Mortier joint: <b>~{jointKg.toFixed(1)} kg</b></div>
+                <div style={{fontSize:9,color:'var(--t3)',marginTop:2}}>(base {kgPerM2} kg/m² pour joint {jointW}mm)</div>
+              </>;
+            })()}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>;
+}
+
 // PLAN DE MASSE — Vue de dessus avec angles indépendants
 // ══════════════════════════════════════════════════════════════
 function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClose,ZONE_COLORS,RAL_COLORS,ralIdx}){
@@ -5273,8 +7376,11 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
   const[panSt,setPanSt]=useState(null);
   const[selIdx,setSelIdx]=useState(activeZoneIdx);
   const[show3D,setShow3D]=useState(false);
-  // Angles INDÉPENDANTS pour le plan de masse (n'impactent PAS la vue 2D)
+  // Angles INDÉPENDANTS pour le plan de masse
   const[angles,setAngles]=useState(()=>zones.map(()=>0));
+  // Breaks: indices de jonction dissociés
+  const[breaks,setBreaks]=useState(new Set());
+  const toggleBreak=(i)=>setBreaks(b=>{const n=new Set(b);n.has(i)?n.delete(i):n.add(i);return n});
   // Échafaudages multiples, positionnés librement
   const[scaffs,setScaffs]=useState([]);
   const[selSc,setSelSc]=useState(-1);
@@ -5298,11 +7404,15 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
   const computeChain=()=>{
     const ch=[];let cx=0,cy=0;
     zones.forEach((z,i)=>{
+      if(i>0&&breaks.has(i)){// dissocié: décalage depuis la fin du précédent
+        const prev=ch[ch.length-1];
+        cx=prev.x2+prev.nx*2+1.5;cy=prev.y2+prev.ny*2;
+      }
       const a=(angles[i]||0)*Math.PI/180;
-      const dir=a+Math.PI/2;// segment direction (perpendicular to normal)
+      const dir=a+Math.PI/2;
       const L=z.L/1000,H=z.H/1000;
       const x2=cx+Math.cos(dir)*L,y2=cy+Math.sin(dir)*L;
-      ch.push({i,x1:cx,y1:cy,x2,y2,nx:Math.cos(a),ny:Math.sin(a),L,H,dir});
+      ch.push({i,x1:cx,y1:cy,x2,y2,nx:Math.cos(a),ny:Math.sin(a),L,H,dir,broken:i>0&&breaks.has(i)});
       cx=x2;cy=y2;
     });
     return ch;
@@ -5417,15 +7527,21 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
             </g>;
           })}
 
-          {/* ── Junction angles ── */}
+          {/* ── Junction angles + dissociation ── */}
           {chain.length>1&&chain.slice(1).map((c,k)=>{
             const prev=chain[k];
             const d=((angles[c.i]||0)-(angles[prev.i]||0)+360)%360;
             const disp=d>180?d-360:d;
+            const isBroken=breaks.has(c.i);
             return<g key={`a${k}`}>
-              <circle cx={c.x1} cy={c.y1} r=".12" fill="rgba(14,165,233,.35)" stroke="#0ea5e9" strokeWidth=".03"/>
-              {showCorners&&<rect x={c.x1-.06} y={c.y1-.06} width=".12" height=".12" fill="rgba(167,139,250,.5)" stroke="#a78bfa" strokeWidth=".02" rx=".02"/>}
-              <text x={c.x1} y={c.y1-.3} textAnchor="middle" fontSize=".24" fill="#0ea5e9" fontWeight="700" fontFamily="monospace">{disp>0?'+':''}{disp.toFixed(0)}°</text>
+              <circle cx={c.x1} cy={c.y1} r=".15" fill={isBroken?"rgba(239,68,68,.3)":"rgba(14,165,233,.3)"} stroke={isBroken?"#ef4444":"#0ea5e9"} strokeWidth=".03"/>
+              {showCorners&&!isBroken&&<rect x={c.x1-.07} y={c.y1-.07} width=".14" height=".14" fill="rgba(167,139,250,.5)" stroke="#a78bfa" strokeWidth=".02" rx=".02"/>}
+              {/* Bouton dissocier/relier */}
+              <g onClick={e=>{e.stopPropagation();toggleBreak(c.i)}} style={{cursor:'pointer'}}>
+                <circle cx={c.x1} cy={c.y1-.38} r=".19" fill={isBroken?"rgba(239,68,68,.85)":"rgba(16,185,129,.7)"} stroke={isBroken?"#ef4444":"#10b981"} strokeWidth=".025"/>
+                <text x={c.x1} y={c.y1-.38} textAnchor="middle" dominantBaseline="middle" fontSize=".16" fill="#fff" fontWeight="800">{isBroken?"⇔":"✂"}</text>
+              </g>
+              <text x={c.x1} y={c.y1-.65} textAnchor="middle" fontSize=".19" fill={isBroken?"#ef4444":"#0ea5e9"} fontWeight="700" fontFamily="monospace">{isBroken?"dissocié":(disp>0?'+':'')+disp.toFixed(0)+'°'}</text>
             </g>;
           })}
 
@@ -5512,28 +7628,11 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
               {i>0&&(()=>{const d=((angles[i]||0)-(angles[i-1]||0)+360)%360;const disp=d>180?d-360:d;
                 return<div style={{padding:'4px 8px',background:'rgba(14,165,233,.07)',borderRadius:6,border:'1px solid rgba(14,165,233,.1)',fontSize:9,color:'var(--t3)'}}>
                   ∠ {zones[i-1].name}: <span style={{color:'#0ea5e9',fontWeight:700,fontFamily:'monospace'}}>{disp>0?'+':''}{disp}°</span></div>})()}
-              {/* RAL per zone */}
-              <div>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
-                  <span style={{fontSize:9,fontWeight:600,color:'var(--t3)'}}>RAL</span>
-                  <span style={{fontSize:9,color:'var(--t3)',fontFamily:'monospace'}}>{RAL_COLORS[z.ralIdx??ralIdx]?.code}</span>
-                </div>
-                <div style={{display:'flex',flexWrap:'wrap',gap:2}}>
-                  {RAL_COLORS.slice(0,20).map((r,ri)=><button key={ri} onClick={e=>{e.stopPropagation();
-                    setZones(zs=>zs.map((zz,j)=>j===i?{...zz,ralIdx:ri}:zz))}}
-                    title={r.code+' '+r.name}
-                    style={{width:16,height:16,borderRadius:3,background:r.hex,border:(z.ralIdx??ralIdx)===ri?'2px solid #fff':'1px solid rgba(255,255,255,.1)',
-                      cursor:'pointer',flexShrink:0}}/>)}
-                  <details style={{width:'100%'}}><summary style={{fontSize:8,color:'var(--t3)',cursor:'pointer'}}>+ voir tout</summary>
-                    <div style={{display:'flex',flexWrap:'wrap',gap:2,marginTop:3}}>
-                      {RAL_COLORS.slice(20).map((r,ri)=><button key={ri+20} onClick={e=>{e.stopPropagation();
-                        setZones(zs=>zs.map((zz,j)=>j===i?{...zz,ralIdx:ri+20}:zz))}}
-                        title={r.code+' '+r.name}
-                        style={{width:14,height:14,borderRadius:2,background:r.hex,border:(z.ralIdx??ralIdx)===ri+20?'2px solid #fff':'1px solid rgba(255,255,255,.08)',
-                          cursor:'pointer'}}/>)}
-                    </div>
-                  </details>
-                </div>
+              {/* RAL from 2D */}
+              <div style={{display:'flex',alignItems:'center',gap:6,padding:'4px 0'}}>
+                <div style={{width:14,height:14,borderRadius:3,background:RAL_COLORS[z.ralIdx??ralIdx]?.hex||'#383E42',border:'1px solid rgba(255,255,255,.2)',flexShrink:0}}/>
+                <span style={{fontSize:9,color:'var(--t3)'}}>{RAL_COLORS[z.ralIdx??ralIdx]?.code||'RAL 7016'}</span>
+                <span style={{fontSize:8,color:'var(--t3)',opacity:.5}}>(2D)</span>
               </div>
               <div style={{fontSize:9,color:'var(--t3)',opacity:.5}}>Ouvertures: {z.ouvs.length}</div>
             </div>}
@@ -5650,22 +7749,45 @@ function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ra
       const ouvs=zone.ouvs||[];
       const depth=0.008;
 
-      // Panels (skip where openings are)
+      // Facade panel = flat shape with holes for openings (ShapeGeometry = reliable normals)
+      const facShape=new THREE.Shape();
+      facShape.moveTo(-Lm/2,0);facShape.lineTo(Lm/2,0);facShape.lineTo(Lm/2,Hm);facShape.lineTo(-Lm/2,Hm);facShape.lineTo(-Lm/2,0);
+      ouvs.forEach(o=>{
+        const ox=o.x/1000-Lm/2,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
+        const hole=new THREE.Path();
+        hole.moveTo(ox,oy);hole.lineTo(ox+ow,oy);hole.lineTo(ox+ow,oy+oh);hole.lineTo(ox,oy+oh);hole.lineTo(ox,oy);
+        facShape.holes.push(hole);
+      });
+      // Front face (exterior) - faces +Z = outward
+      const panMat2=panMat.clone();panMat2.side=THREE.DoubleSide;
+      const facMeshF=new THREE.Mesh(new THREE.ShapeGeometry(facShape),panMat2);
+      facMeshF.position.z=.006;facMeshF.castShadow=true;grp.add(facMeshF);
+      // Back face (interior side of panel, slightly behind)
+      const facMeshB=new THREE.Mesh(new THREE.ShapeGeometry(facShape),panMat2);
+      facMeshB.position.z=0;grp.add(facMeshB);
+
+      // Joint lines (clipped around openings)
       const panW=(zone.pan_?.l||600)/1000,panH=(zone.pan_?.w||600)/1000;
-      const jH=(zone.jointH||6)/1000,jV=(zone.jointV||6)/1000;
+      const jH=(zone.jointH||6)/1000||.006,jV=(zone.jointV||6)/1000||.006;
+      const jointMat=new THREE.MeshStandardMaterial({color:0x111418,metalness:.15,roughness:.9});
       const nC=Math.max(1,Math.round(Lm/panW)),nR=Math.max(1,Math.round(Hm/panH));
-      const rW=Lm/nC,rH=Hm/nR;
-      for(let cc=0;cc<nC;cc++)for(let r=0;r<nR;r++){
-        const pw=rW-jV,ph=rH-jH;if(pw<.01||ph<.01)continue;
-        const px=-Lm/2+cc*rW+rW/2,py=r*rH+rH/2;
-        const pL=px-pw/2,pR=px+pw/2,pB=py-ph/2,pT=py+ph/2;
-        let skip=false;
-        ouvs.forEach(o=>{const oL=o.x/1000-Lm/2,oR=oL+o.w/1000,oB=o.y/1000,oT=oB+o.h/1000;
-          if(px>oL&&px<oR&&py>oB&&py<oT)skip=true;});
-        if(skip)continue;
-        const m=new THREE.Mesh(new THREE.BoxGeometry(pw,ph,.006),panMat);
-        m.position.set(px,py,.003);m.castShadow=true;grp.add(m);
-      }
+      const oRects=ouvs.map(o=>({l:o.x/1000-Lm/2,r:(o.x+o.w)/1000-Lm/2,b:o.y/1000,t:(o.y+o.h)/1000}));
+      // Vertical joints — split segments around openings
+      for(let j=1;j<nC;j++){const jx=-Lm/2+j*(Lm/nC);
+        let segs=[{a:0,b:Hm}];
+        oRects.forEach(o=>{if(jx<o.l||jx>o.r)return;const ns=[];
+          segs.forEach(s=>{if(o.b>=s.b||o.t<=s.a){ns.push(s);return}
+            if(s.a<o.b)ns.push({a:s.a,b:o.b});if(o.t<s.b)ns.push({a:o.t,b:s.b});});segs=ns;});
+        segs.forEach(s=>{const h=s.b-s.a;if(h<.02)return;
+          const m=new THREE.Mesh(new THREE.BoxGeometry(jV,h,.008),jointMat);m.position.set(jx,s.a+h/2,.004);grp.add(m);});}
+      // Horizontal joints — split segments around openings
+      for(let j=1;j<nR;j++){const jy=j*(Hm/nR);
+        let segs=[{a:-Lm/2,b:Lm/2}];
+        oRects.forEach(o=>{if(jy<o.b||jy>o.t)return;const ns=[];
+          segs.forEach(s=>{if(o.l>=s.b||o.r<=s.a){ns.push(s);return}
+            if(s.a<o.l)ns.push({a:s.a,b:o.l});if(o.r<s.b)ns.push({a:o.r,b:s.b});});segs=ns;});
+        segs.forEach(s=>{const w=s.b-s.a;if(w<.02)return;
+          const m=new THREE.Mesh(new THREE.BoxGeometry(w,jH,.008),jointMat);m.position.set(s.a+w/2,jy,.004);grp.add(m);});}
 
       // Openings
       ouvs.forEach(o=>{
@@ -5908,8 +8030,19 @@ if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https:/
 const _viewParam=new URLSearchParams(window.location.search).get('view');
 ReactDOM.createRoot(document.getElementById('root')).render(
   _viewParam?<ViewerApp viewId={_viewParam}/>:
-  <AuthGate>{({user,signOut,subStatus})=><App user={user} signOut={signOut} subStatus={subStatus}/>}</AuthGate>
+  <AuthGate>{({user,profile,signOut,subStatus})=><App user={user} profile={profile} signOut={signOut} subStatus={subStatus}/>}</AuthGate>
 );
+</script>
+<script>
+try{
+  var _src=document.getElementById('app-source').textContent;
+  var _out=Babel.transform(_src,{presets:['react']}).code;
+  var _s=document.createElement('script');
+  _s.textContent=_out;
+  document.body.appendChild(_s);
+}catch(e){
+  document.body.innerHTML='<div style="color:#ff6b6b;padding:20px;font-family:monospace;white-space:pre-wrap;background:#1a1a2e;min-height:100vh"><h2 style=color:#ff4444>ERREUR BABEL</h2><pre>'+e.message+'</pre></div>';
+}
 </script>
 <script>
 // PWA Service Worker Registration
