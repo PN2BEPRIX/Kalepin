@@ -503,7 +503,7 @@ function optimizeLayout(z){
 }
 
 /* ═══ 3D FACADE VIEWER ═══ */
-function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
+function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBack=false}){
   const mountRef=useRef();const sceneRef=useRef();const frameRef=useRef();
   const rotRef=useRef({x:-.3,y:.4});const dragRef=useRef(null);const zoomRef=useRef(3);
   const panRef=useRef({x:0,y:0});const pinchRef=useRef(null);
@@ -1155,8 +1155,8 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose}){
     <div style={{position:'absolute',top:10,left:10,right:10,zIndex:50,display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}
       onMouseDown={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()}>
       <div style={{display:'flex',gap:5,padding:5,background:'rgba(12,14,28,.88)',borderRadius:10,backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)'}}>
-        {[{l:isMobile?'\u2190 2D':'\u2190 Vue 2D',fn:onClose,col:'red'},{l:'Reset',fn:()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}},{l:'Face',fn:()=>{rotRef.current={x:0,y:0};zoomRef.current=3}}
-        ].map(b=><button key={b.l} onClick={b.fn} style={{border:'none',cursor:'pointer',padding:isMobile?'8px 10px':'7px 14px',borderRadius:7,fontSize:10,fontWeight:600,fontFamily:'DM Sans',background:b.col==='red'?'rgba(139,26,43,.45)':'rgba(40,44,65,.9)',color:b.col==='red'?'#fca5a5':'rgba(255,255,255,.65)',boxShadow:'0 0 0 1px rgba(255,255,255,.08)'}}>{b.l}</button>)}
+        {[{l:isMobile?'\u2190 2D':'\u2190 Vue 2D',fn:onClose,col:'red',hide:hideBack},{l:'Reset',fn:()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}},{l:'Face',fn:()=>{rotRef.current={x:0,y:0};zoomRef.current=3}}
+        ].filter(b=>!b.hide).map(b=><button key={b.l} onClick={b.fn} style={{border:'none',cursor:'pointer',padding:isMobile?'8px 10px':'7px 14px',borderRadius:7,fontSize:10,fontWeight:600,fontFamily:'DM Sans',background:b.col==='red'?'rgba(139,26,43,.45)':'rgba(40,44,65,.9)',color:b.col==='red'?'#fca5a5':'rgba(255,255,255,.65)',boxShadow:'0 0 0 1px rgba(255,255,255,.08)'}}>{b.l}</button>)}
       </div>
       <div style={{display:'flex',gap:5,padding:5,background:'rgba(12,14,28,.88)',borderRadius:10,backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)'}}>
         {[{l:'Ossature',fn:()=>setShowOss3D(v=>!v),a:showOss3D,col:'amber'},{l:'Isolant',fn:()=>setShowInsul(v=>!v),a:showInsul,col:'yellow'},{l:isMobile?'B\u00e9ton':'Mur b\u00e9ton',fn:()=>onToggle('wall'),a:showWall,col:'blue'}
@@ -2586,7 +2586,7 @@ function ViewerApp({viewId}){
   const zone=JSON.parse(data.zone_json);const calc=JSON.parse(data.calc_json);
   return<div style={{width:'100vw',height:'100vh',position:'relative'}}>
     <Facade3D zone={zone} calc={calc} ralColor={data.ral_color||'#383E42'} ralFinish={data.ral_finish||'mat'}
-      showWall={showWall} onToggle={k=>{if(k==='wall')setShowWall(v=>!v);}} onClose={()=>window.location.href=window.location.pathname}/>
+      showWall={showWall} onToggle={k=>{if(k==='wall')setShowWall(v=>!v);}} onClose={()=>window.location.href=window.location.pathname} hideBack={true}/>
     <div style={{position:'absolute',top:16,left:16,zIndex:100,background:'rgba(0,0,0,.7)',padding:'10px 16px',borderRadius:12,color:'#fff',fontFamily:'DM Sans'}}>
       <div style={{fontSize:14,fontWeight:700}}>{data.project_name}</div>
       <div style={{fontSize:11,opacity:.7}}>{data.zone_name} — {zone.L/1000}×{zone.H/1000}m</div>
@@ -6342,15 +6342,7 @@ function BriqueApp({onBack,user}){
       const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.012),wallMat);
       m.position.set(wr.x1+w/2,wr.y1+h/2,-0.006);m.receiveShadow=true;facadeGroup.add(m);
     });
-    // Dark cavity behind each opening (simulates interior depth)
-    const cavityMat=new THREE.MeshStandardMaterial({color:0x0a0a12,roughness:1.0,metalness:0.0});
-    openings.forEach(o=>{
-      const cx3=o.x/1000+o.w/2/1000-Wm/2;
-      const cy3=Hm-o.y/1000-o.h/2/1000;
-      const cavD=0.3;// 30cm de profondeur visible
-      const cav=new THREE.Mesh(new THREE.BoxGeometry(o.w/1000-0.004,o.h/1000-0.004,cavD),cavityMat);
-      cav.position.set(cx3,cy3,-cavD/2);facadeGroup.add(cav);
-    });
+    // Pas de cavity noire — le fond de scène est visible à travers le vitrage transparent
 
     // oy3d = Y position flipped for 3D (0=bottom in 3D, 0=top in 2D screen coords)
     const oRects=openings.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,b:o.y/1000,t:(o.y+o.h)/1000,w:o.w/1000,h:o.h/1000,ox:o.x/1000,oy:Hm-o.y/1000-o.h/1000,type:o.t}));
@@ -6420,8 +6412,8 @@ function BriqueApp({onBack,user}){
           const linteau=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.12,0.06,brickDepth+0.02),linMat);linteau.position.set(cx,cy+o.h/2+0.05,brickDepth/2);facadeGroup.add(linteau);
           const appui=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.08,0.04,brickDepth+0.04),linMat);appui.position.set(cx,cy-o.h/2-0.04,brickDepth/2+0.01);facadeGroup.add(appui);
         }
-        const glassMat=new THREE.MeshStandardMaterial({color:0x88bbdd,transparent:true,opacity:0.25,roughness:0.05,metalness:0.1,side:THREE.DoubleSide});
-        const glass=new THREE.Mesh(new THREE.PlaneGeometry(o.w-0.02,o.h-0.02),glassMat);glass.position.set(cx,cy,brickDepth*0.3);facadeGroup.add(glass);
+        const glassMat=new THREE.MeshStandardMaterial({color:0x88ccee,transparent:true,opacity:0.32,roughness:0.03,metalness:0.15,side:THREE.DoubleSide,envMapIntensity:0.8});
+        const glass=new THREE.Mesh(new THREE.PlaneGeometry(o.w-0.02,o.h-0.02),glassMat);glass.position.set(cx,cy,brickDepth*0.4);facadeGroup.add(glass);
         if(o.w>0.8){const mull=new THREE.Mesh(new THREE.BoxGeometry(0.02,o.h,0.025),frameMat);mull.position.set(cx,cy,brickDepth/2);facadeGroup.add(mull)}
       }
     });
