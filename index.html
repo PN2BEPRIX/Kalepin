@@ -6195,7 +6195,7 @@ function App({user,profile,signOut,subStatus}){
 // ══════════════════════════════════════════════════════════════
 function BriqueApp({onBack,user}){
   // ── Multi-facade tabs ──
-  const mkFacade=(name='Facade 1')=>({id:Date.now()+Math.random(),name,facW:6000,facH:3000,bkW:210,bkH:50,jointH:10,jointV:10,bond:'panneresse',bkColor:'#b5654a',bkColor2:'#8b4513',jointColor:'#c8bfb0',openings:[]});
+  const mkFacade=(name='Facade 1')=>({id:Date.now()+Math.random(),name,facW:6000,facH:3000,bkW:210,bkH:50,jointH:10,jointV:10,bond:'panneresse',bkColor:'#b5654a',bkColor2:'#8b4513',jointColor:'#c8bfb0',openings:[],angle:0});
   const[facades,setFacades]=useState([mkFacade()]);
   const[activeFacIdx,setActiveFacIdx]=useState(0);
   const fac=facades[activeFacIdx]||facades[0];
@@ -6210,6 +6210,7 @@ function BriqueApp({onBack,user}){
   const[zoom,setZoom]=useState(1);const[showDims,setShowDims]=useState(true);const[showCuts,setShowCuts]=useState(true);
   const[hoverBk,setHoverBk]=useState(null);
   const[view3D,setView3D]=useState(false);
+  const[showPlanMasse,setShowPlanMasse]=useState(false);
   const[selOuv,setSelOuv]=useState(null);// selected opening id
   const[dragState,setDragState]=useState(null);// {type:'move'|'r-*', id, sx, sy, orig}
   const svgRef=useRef(null);
@@ -6296,7 +6297,7 @@ function BriqueApp({onBack,user}){
     const w=t==='Porte'?900:t==='Porte-fenêtre'?1800:t==='Vide'?800:1200;
     const h=t==='Porte'?2100:t==='Porte-fenêtre'?2150:t==='Vide'?800:1200;
     const x=Math.round((facW-w)/2),y=t==='Porte'||t==='Porte-fenêtre'?facH-h:Math.round((facH-h)/2);
-    const nO={id:Date.now(),t,x,y,w,h,retours:{tG:150,tD:150,lin:150,app:150},faceVis:50};
+    const nO={id:Date.now(),t,x,y,w,h,retours:{tG:150,tD:150,lin:150,app:150},faceVis:50,retourType:t==='Vide'?'brique':'metal'};
     setFac(f=>({...f,openings:[...f.openings,nO]}));setSelOuv(nO.id);
   };
   const updateOuv=(id,fn)=>setFac(f=>({...f,openings:f.openings.map(o=>o.id===id?fn(o):o)}));
@@ -6496,7 +6497,12 @@ function BriqueApp({onBack,user}){
       const op=openings[oi];
       const ret=op?.retours||{tG:150,tD:150,lin:150,app:150};
       const fv=(op?.faceVis||50)/1000;
-      const retMat=new THREE.MeshStandardMaterial({color:jcCol.clone().multiplyScalar(0.8),roughness:0.85,metalness:0.05});
+      const rType=op?.retourType||'metal';
+      const retMat=rType==='brique'
+        ?new THREE.MeshStandardMaterial({color:new THREE.Color(bkColor).multiplyScalar(0.92),roughness:0.85,metalness:0.02})
+        :rType==='enduit'
+        ?new THREE.MeshStandardMaterial({color:0xd8d0c4,roughness:0.95,metalness:0.0})
+        :new THREE.MeshStandardMaterial({color:jcCol.clone().multiplyScalar(0.8),roughness:0.85,metalness:0.05});
       const frameMat=new THREE.MeshStandardMaterial({color:0x444455,roughness:0.25,metalness:0.7});
       // Retour gauche
       if(ret.tG>0){const d=ret.tG/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(d,o.h,fv),retMat);
@@ -6771,6 +6777,8 @@ function BriqueApp({onBack,user}){
             background:!view3D?'rgba(217,119,6,.15)':'var(--crd)',color:!view3D?'#d97706':'var(--t3)'}}>2D</button>
           <button onClick={()=>setView3D(true)} style={{padding:'4px 12px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'none',borderLeft:'1px solid var(--bd)',
             background:view3D?'rgba(217,119,6,.15)':'var(--crd)',color:view3D?'#d97706':'var(--t3)'}}>3D</button>
+          <button onClick={()=>setShowPlanMasse(true)} style={{padding:'4px 12px',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'none',borderLeft:'1px solid var(--bd)',
+            background:'var(--crd)',color:'var(--t3)'}}>Plan</button>
         </div>
         {!view3D&&<>
           <label style={{fontSize:9,color:'var(--t3)',display:'flex',alignItems:'center',gap:3,cursor:'pointer'}}>
@@ -6821,6 +6829,7 @@ function BriqueApp({onBack,user}){
               <text x={sx+sw/2} y={sy+sh/2} textAnchor="middle" dominantBaseline="middle"
                 fill={col} fontSize={10} fontWeight="700" fontFamily="JetBrains Mono,monospace">{o.t} {i+1}</text>
               <text x={sx+sw/2} y={sy+sh/2+13} textAnchor="middle" fill={col} fontSize={8} fontFamily="JetBrains Mono,monospace">{o.w}×{o.h}</text>
+              {o.retourType&&o.retourType!=='metal'&&<text x={sx+sw/2} y={sy+sh/2+24} textAnchor="middle" fill={col} fontSize={7} opacity={0.6} fontFamily="JetBrains Mono,monospace">ret. {o.retourType}</text>}
               {/* Resize handles when selected */}
               {isSel&&<>{/* corners */}
                 {[['nw',sx,sy],['ne',sx+sw-handleRH,sy],['sw',sx,sy+sh-handleRH],['se',sx+sw-handleRH,sy+sh-handleRH]].map(([d,hx,hy])=>
@@ -6901,6 +6910,14 @@ function BriqueApp({onBack,user}){
                 background:selO.t===t?'rgba(14,165,233,.12)':'var(--inp)',
                 color:selO.t===t?'#0ea5e9':'var(--t3)'}}>{t}</button>)}
           </div>
+          <div style={{fontSize:9,color:'var(--t3)',marginBottom:3}}>Finition retours</div>
+          <div style={{display:'flex',gap:3,marginBottom:6}}>
+            {['metal','brique','enduit'].map(rt=><button key={rt} onClick={()=>updateOuv(selO.id,o=>({...o,retourType:rt}))}
+              style={{padding:'2px 6px',borderRadius:4,fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit',
+                border:(selO.retourType||'metal')===rt?'1.5px solid #d97706':'1px solid var(--bd)',
+                background:(selO.retourType||'metal')===rt?'rgba(217,119,6,.12)':'var(--inp)',
+                color:(selO.retourType||'metal')===rt?'#d97706':'var(--t3)'}}>{rt==='metal'?'Métal':rt==='brique'?'Brique':'Enduit'}</button>)}
+          </div>
           <div style={{fontSize:9,color:'var(--t3)',marginBottom:3}}>Profondeur retours (mm)</div>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
             <NI compact label="Tab. G" value={selO.retours?.tG||150} onChange={v=>updateOuv(selO.id,o=>({...o,retours:{...(o.retours||{tG:150,tD:150,lin:150,app:150}),tG:v}}))} unit="mm" step={10} min={0}/>
@@ -6920,16 +6937,126 @@ function BriqueApp({onBack,user}){
             <div>Appareil: <b>{BONDS.find(b=>b.id===bond)?.name}</b></div>
             <div>Ouvertures: <b>{openings.length}</b></div>
             <div>Facades: <b>{facades.length}</b></div>
+            <div>Angle: <b>{fac.angle||0}°</b></div>
           </div>
         </div>
       </div>
     </div>
+
+    {/* ═══ PLAN DE MASSE BRIQUE ═══ */}
+    {showPlanMasse&&<div style={{position:'fixed',inset:0,zIndex:200,background:'var(--bg)',display:'flex',flexDirection:'column',fontFamily:'inherit'}}>
+      {/* Header */}
+      <div style={{padding:'10px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:12,background:'var(--pnl)'}}>
+        <button onClick={()=>setShowPlanMasse(false)} style={{padding:'5px 14px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Retour</button>
+        <span style={{fontSize:14,fontWeight:700,color:'var(--t1)'}}>Plan de masse — Brique</span>
+        <span style={{fontSize:10,color:'var(--t3)'}}>{facades.length} facade{facades.length>1?'s':''}</span>
+        <div style={{flex:1}}/>
+        <button onClick={()=>{const nf=mkFacade('Facade '+(facades.length+1));setFacades(fs=>[...fs,nf])}} style={{padding:'5px 14px',borderRadius:7,border:'1px solid rgba(217,119,6,.2)',background:'rgba(217,119,6,.06)',color:'#d97706',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Facade</button>
+      </div>
+      {/* Content */}
+      <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+        {/* SVG Plan */}
+        <div style={{flex:1,position:'relative'}}>
+          {(()=>{
+            // Compute chain of facades
+            const chain=[];let cx=0,cy=0;
+            facades.forEach((f,i)=>{
+              const a=(f.angle||0)*Math.PI/180;
+              const nx=Math.sin(a),ny=-Math.cos(a);
+              const dx=-ny,dy=nx;// direction along facade
+              const Lm=f.facW/1000,Hm=f.facH/1000;
+              const x1=cx,y1=cy;
+              const x2=cx+dx*Lm,y2=cy+dy*Lm;
+              chain.push({x1,y1,x2,y2,nx,ny,dx,dy,Lm,Hm,f,i});
+              cx=x2;cy=y2;
+            });
+            // Bounding box
+            let mnx=Infinity,mny=Infinity,mxx=-Infinity,mxy=-Infinity;
+            chain.forEach(c=>{
+              [c.x1,c.x2].forEach(x=>{mnx=Math.min(mnx,x-1);mxx=Math.max(mxx,x+1)});
+              [c.y1,c.y2].forEach(y=>{mny=Math.min(mny,y-1);mxy=Math.max(mxy,y+1)});
+              // Include wall thickness
+              const t=c.Hm*0.12+0.3;
+              mnx=Math.min(mnx,c.x1+c.nx*t,c.x2+c.nx*t);mxx=Math.max(mxx,c.x1+c.nx*t,c.x2+c.nx*t);
+              mny=Math.min(mny,c.y1+c.ny*t,c.y2+c.ny*t);mxy=Math.max(mxy,c.y1+c.ny*t,c.y2+c.ny*t);
+            });
+            const pad=2;mnx-=pad;mny-=pad;mxx+=pad;mxy+=pad;
+            const vbW=mxx-mnx,vbH=mxy-mny;
+            const BK_PLAN_COLORS=['#d97706','#c4324a','#0ea5e9','#10b981','#8b5cf6','#ec4899'];
+            return<svg viewBox={`${mnx} ${mny} ${vbW} ${vbH}`} style={{width:'100%',height:'100%'}} xmlns="http://www.w3.org/2000/svg">
+              <defs><marker id="bk-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#d97706" opacity="0.5"/></marker></defs>
+              {/* Grid */}
+              <pattern id="bk-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.02"/></pattern>
+              <rect x={mnx} y={mny} width={vbW} height={vbH} fill="url(#bk-grid)"/>
+              {/* Facades */}
+              {chain.map((c,i)=>{
+                const col=BK_PLAN_COLORS[i%BK_PLAN_COLORS.length];
+                const thick=0.25;// wall thickness in meters for display
+                // 4 corners of the wall rectangle
+                const pts=[
+                  [c.x1,c.y1],[c.x2,c.y2],
+                  [c.x2+c.nx*thick,c.y2+c.ny*thick],
+                  [c.x1+c.nx*thick,c.y1+c.ny*thick]
+                ].map(p=>p.join(',')).join(' ');
+                const mx=(c.x1+c.x2)/2+c.nx*thick/2,my=(c.y1+c.y2)/2+c.ny*thick/2;
+                // Normal arrow (shows exterior direction)
+                const ax1=(c.x1+c.x2)/2, ay1=(c.y1+c.y2)/2;
+                const ax2=ax1+c.nx*0.8, ay2=ay1+c.ny*0.8;
+                return<g key={i}>
+                  <polygon points={pts} fill={col} fillOpacity={activeFacIdx===i?0.35:0.15} stroke={col} strokeWidth={activeFacIdx===i?0.06:0.03} style={{cursor:'pointer'}}
+                    onClick={()=>{setActiveFacIdx(i);setShowPlanMasse(false)}}/>
+                  <line x1={ax1} y1={ay1} x2={ax2} y2={ay2} stroke={col} strokeWidth="0.03" markerEnd="url(#bk-arrow)" opacity="0.5"/>
+                  <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle" fill={col} fontSize="0.28" fontWeight="700" style={{pointerEvents:'none'}}>{c.f.name}</text>
+                  <text x={mx} y={my+0.35} textAnchor="middle" fill={col} fontSize="0.18" opacity="0.7" style={{pointerEvents:'none'}}>{c.f.facW}×{c.f.facH}mm</text>
+                  {/* Length dimension */}
+                  <text x={(c.x1+c.x2)/2} y={(c.y1+c.y2)/2-0.25} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="0.16" style={{pointerEvents:'none'}}>{(c.Lm).toFixed(2)}m</text>
+                </g>
+              })}
+              {/* Junction dots */}
+              {chain.map((c,i)=><circle key={'j'+i} cx={c.x1} cy={c.y1} r="0.08" fill="#fff" fillOpacity="0.3"/>)}
+              {chain.length>0&&<circle cx={chain[chain.length-1].x2} cy={chain[chain.length-1].y2} r="0.08" fill="#fff" fillOpacity="0.3"/>}
+            </svg>
+          })()}
+        </div>
+        {/* Side panel */}
+        <div style={{width:260,borderLeft:'1px solid var(--bd)',background:'var(--pnl)',padding:12,overflowY:'auto',display:'flex',flexDirection:'column',gap:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Facades</div>
+          {facades.map((f,i)=>{
+            const col=(['#d97706','#c4324a','#0ea5e9','#10b981','#8b5cf6','#ec4899'])[i%6];
+            return<div key={f.id} style={{padding:10,borderRadius:10,border:activeFacIdx===i?'1.5px solid '+col:'1px solid var(--bd)',background:activeFacIdx===i?'rgba(255,255,255,.03)':'var(--crd)',cursor:'pointer'}}
+              onClick={()=>setActiveFacIdx(i)}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+                <div style={{width:10,height:10,borderRadius:3,background:col}}/>
+                <span style={{fontSize:11,fontWeight:700,color:'var(--t1)',flex:1}}>{f.name}</span>
+                <span style={{fontSize:9,color:'var(--t3)'}}>{f.facW}×{f.facH}</span>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:9,color:'var(--t3)'}}>Angle:</span>
+                <input type="range" min={0} max={360} step={5} value={f.angle||0}
+                  onClick={e=>e.stopPropagation()}
+                  onChange={e=>{const v=Number(e.target.value);setFacades(fs=>fs.map((ff,j)=>j===i?{...ff,angle:v}:ff))}}
+                  style={{flex:1,accentColor:col,height:3}}/>
+                <span style={{fontSize:9,fontWeight:600,color:col,width:28,textAlign:'right'}}>{f.angle||0}°</span>
+              </div>
+              <div style={{display:'flex',gap:4,marginTop:6}}>
+                <div style={{width:12,height:12,borderRadius:3,background:f.bkColor}}/>
+                <span style={{fontSize:9,color:'var(--t3)'}}>{f.bond} — {f.openings?.length||0} ouv.</span>
+              </div>
+            </div>
+          })}
+          <button onClick={()=>{const nf=mkFacade('Facade '+(facades.length+1));setFacades(fs=>[...fs,nf])}}
+            style={{padding:'8px',borderRadius:8,border:'1.5px dashed var(--bd)',background:'transparent',color:'var(--t3)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Ajouter une facade</button>
+          <div style={{marginTop:'auto',paddingTop:12,borderTop:'1px solid var(--bd)'}}>
+            <div style={{fontSize:9,color:'var(--t3)',lineHeight:1.6}}>
+              Cliquer sur une facade pour l'éditer.<br/>
+              L'angle oriente la normale extérieure.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>}
   </div>;
 }
-
-
-
-// CARRELAGE — Module calepinage carrelage
 // ══════════════════════════════════════════════════════════════
 function CarrelageApp({onBack,user}){
   // ── Room ──
