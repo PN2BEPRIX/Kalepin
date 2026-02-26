@@ -2625,8 +2625,10 @@ function App({user,profile,signOut,subStatus}){
   const[rightTab,setRightTab]=useState('resultats');
   const[presPan,setPresPan]=useState(DP);const[presOuv,setPresOuv]=useState(DO);
   const[addMod,setAddMod]=useState(null);const[expMod,setExpMod]=useState(false);
-  const[expSel,setExpSel]=useState({});const[pdfOss,setPdfOss]=useState(false);const[pdfPageNums,setPdfPageNums]=useState({});// {zoneIdx: pageNum} — zones same pageNum = même page
+  const[expSel,setExpSel]=useState({});const[pdfOss,setPdfOss]=useState(false);const[pdfPageNums,setPdfPageNums]=useState({});
   const[xlsxExpMod,setXlsxExpMod]=useState(false);const[xlsxExpSel,setXlsxExpSel]=useState({});
+  const[jsonExpMod,setJsonExpMod]=useState(false);const[jsonExpSel,setJsonExpSel]=useState({});
+  const[jsonImpFile,setJsonImpFile]=useState(null);const[jsonImpMod,setJsonImpMod]=useState(false);const[jsonImpZones,setJsonImpZones]=useState([]);const[jsonImpSel,setJsonImpSel]=useState({});
   const[supaModal,setSupaModal]=useState(false);const[pdfQR,setPdfQR]=useState(false);const[pdfCass,setPdfCass]=useState(true);
   const[supaConf,setSupaConf]=useState(()=>getSupaConfig());
   const[renamingTab,setRenamingTab]=useState(null);// zone index being renamed inline
@@ -3075,13 +3077,45 @@ function App({user,profile,signOut,subStatus}){
     }catch(e){console.error('Save:',e)}
     setSaving(false);
   };
-  const exportProjectJSON=()=>{
-    const data={v:16,name:projectName,zones,activeZoneIdx,ralIdx,
-      bgSrc:null,mmPerPx,manualScale:0.06,savedAt:new Date().toISOString()};
+  const exportProjectJSON=(selIdxs)=>{
+    const selZones=selIdxs&&selIdxs.length>0?selIdxs.map(i=>zones[i]).filter(Boolean):zones;
+    const data={v:16,name:projectName,zones:selZones,activeZoneIdx:0,ralIdx,
+      mmPerPx,manualScale:0.06,savedAt:new Date().toISOString()};
     const json=JSON.stringify(data,null,2);const blob=new Blob([json],{type:'application/json'});
     const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;
-    a.download=`Kalepin_${projectName.replace(/\W/g,'_')}_${new Date().toISOString().slice(0,10)}.json`;
+    const suffix=selZones.length===1?'_'+selZones[0].name.replace(/\W+/g,'_'):'';
+    a.download=`Kalepin_${projectName.replace(/\W/g,'_')}${suffix}_${new Date().toISOString().slice(0,10)}.json`;
     a.click();URL.revokeObjectURL(url);
+  };
+  // Ouvrir le picker JSON et lire les zones disponibles dans le fichier
+  const jsonImpRef=useRef();
+  const openJsonImport=()=>{jsonImpRef.current&&jsonImpRef.current.click();};
+  const onJsonImpFile=(file)=>{
+    if(!file)return;
+    const reader=new FileReader();reader.onload=ev=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!data.zones||!Array.isArray(data.zones)){alert('Fichier projet invalide');return}
+        setJsonImpFile(data);
+        const sel={};data.zones.forEach((_,i)=>sel[i]=true);
+        setJsonImpZones(data.zones);setJsonImpSel(sel);setJsonImpMod(true);
+      }catch(e){alert('Erreur lecture fichier: '+e.message)}
+    };reader.readAsText(file);
+  };
+  const confirmJsonImport=(mode)=>{// mode: 'replace' | 'append'
+    const selIdxs=Object.entries(jsonImpSel).filter(([,v])=>v).map(([k])=>parseInt(k));
+    if(!selIdxs.length){alert('Sélectionne au moins une zone');return}
+    const importedZones=selIdxs.map(i=>({...jsonImpZones[i],id:Date.now()+Math.random()*1000}));
+    if(mode==='replace'){
+      setProjectName(jsonImpFile.name||'Projet');setZones(importedZones);setActiveZoneIdx(0);
+      if(jsonImpFile.ralIdx!=null)setRalIdx(jsonImpFile.ralIdx);
+      if(jsonImpFile.mmPerPx)setMmPerPx(jsonImpFile.mmPerPx);
+      setCloudProjId(null);
+    }else{
+      const renamed=importedZones.map(z=>({...z,name:zones.some(ez=>ez.name===z.name)?z.name+' (imp.)':z.name}));
+      setZones(prev=>[...prev,...renamed]);setActiveZoneIdx(zones.length);
+    }
+    setJsonImpMod(false);setJsonImpFile(null);setStep('work');setTimeout(autoFit,200);
   };
   const exportExcel=(selIdxs)=>{
     if(typeof XLSX==='undefined'){alert('SheetJS non chargé, réessayez dans quelques secondes.');return;}
@@ -4604,13 +4638,11 @@ function App({user,profile,signOut,subStatus}){
             <div style={{position:'relative'}} className="flex-shrink-0">
               <button onClick={e=>{e.currentTarget.nextSibling.style.display=e.currentTarget.nextSibling.style.display==='block'?'none':'block'}}
                 className="ba px-1.5 py-1 rounded text-[9px]" style={{border:'1px solid var(--bd)',color:'var(--t3)',background:'var(--crd)'}}>⋯</button>
-              <div style={{display:'none',position:'absolute',top:'100%',left:0,marginTop:4,background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:8,padding:4,minWidth:140,boxShadow:'0 10px 30px rgba(0,0,0,.4)',zIndex:200}}>
-                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';saveProject(true)}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>☁ Sauver comme nouveau</button>
-                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';exportProjectJSON()}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>💾 Exporter JSON</button>
-                <label className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2 cursor-pointer" style={{color:'var(--t2)'}}>
-                  📥 Importer JSON (remplacer)<input type="file" accept=".json" className="hidden" onChange={e=>{e.currentTarget.closest('div').style.display='none';if(e.target.files[0])loadProject(e.target.files[0],false);e.target.value=''}}/></label>
-                {zones.length>0&&<label className="ba w-full text-left px-3 py-1.5 rounded text-[10px] flex items-center gap-2 cursor-pointer" style={{color:'#0ea5e9'}}>
-                  📑 Ajouter comme onglet<input type="file" accept=".json" className="hidden" onChange={e=>{e.currentTarget.closest('div').style.display='none';if(e.target.files[0])loadProject(e.target.files[0],true);e.target.value=''}}/></label>}
+              <div style={{display:'none',position:'absolute',top:'100%',left:0,marginTop:4,background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:8,padding:4,minWidth:160,boxShadow:'0 10px 30px rgba(0,0,0,.4)',zIndex:200}}>
+                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';saveProject(true)}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px]" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>☁ Sauver comme nouveau</button>
+                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';const s={};zones.forEach((_,i)=>s[i]=true);setJsonExpSel(s);setJsonExpMod(true)}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px]" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>💾 Exporter JSON…</button>
+                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';openJsonImport()}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px]" style={{border:'none',background:'transparent',color:'#0ea5e9',cursor:'pointer',fontFamily:'inherit'}}>📥 Importer JSON…</button>
+                <input ref={jsonImpRef} type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])onJsonImpFile(e.target.files[0]);e.target.value=''}}/>
               </div>
             </div>
             {lastSaved&&<span className="text-[8px] self-center ml-1" style={{color:'var(--t3)'}}>☁ {lastSaved.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span>}
@@ -5784,6 +5816,69 @@ function App({user,profile,signOut,subStatus}){
               className="px-3 py-1 rounded text-[8px] font-bold" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t2)'}}>Fermer</button>
           </div>
         </div>})()}
+
+      {/* ══ MODAL EXPORT JSON ══ */}
+      {jsonExpMod&&<div className="ov"><div className="mbx" style={{maxWidth:480}}>
+        <div className="flex items-center justify-between mb-4">
+          <div className="text-sm font-bold" style={{color:'var(--t1)'}}>💾 Exporter JSON — choisir les zones</div>
+          <button onClick={()=>setJsonExpMod(false)} className="ba px-2 py-1 rounded text-xs" style={{color:'var(--t3)'}}>✕</button>
+        </div>
+        <div className="space-y-2 mb-4">
+          {zones.map((z,i)=>(
+            <label key={z.id} className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer" style={{background:jsonExpSel[i]?'rgba(79,110,247,.08)':'var(--inp)',border:`1px solid ${jsonExpSel[i]?'var(--bl)':'var(--bd)'}`,transition:'.15s'}}>
+              <input type="checkbox" checked={!!jsonExpSel[i]} onChange={e=>setJsonExpSel(s=>({...s,[i]:e.target.checked}))}/>
+              <span className="text-xs font-semibold" style={{color:'var(--t1)'}}>{z.name}</span>
+              <span className="text-[10px] ml-auto" style={{color:'var(--t3)'}}>{z.L/1000}×{z.H/1000}m</span>
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2 justify-between items-center">
+          <div className="flex gap-2">
+            <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setJsonExpSel(s)}} className="text-[10px] px-2 py-1 rounded ba" style={{color:'var(--bl)',background:'var(--blg)'}}>Tout</button>
+            <button onClick={()=>setJsonExpSel({})} className="text-[10px] px-2 py-1 rounded ba" style={{color:'var(--t3)',background:'var(--inp)'}}>Aucun</button>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={()=>setJsonExpMod(false)} className="ba px-3 py-2 rounded-lg text-xs" style={{background:'var(--inp)',color:'var(--t2)'}}>Annuler</button>
+            <button onClick={()=>{const sel=Object.entries(jsonExpSel).filter(([,v])=>v).map(([k])=>parseInt(k));if(!sel.length){alert('Sélectionne au moins une zone');return}exportProjectJSON(sel);setJsonExpMod(false)}}
+              className="ba px-4 py-2 rounded-lg text-xs font-bold" style={{background:'var(--bl)',color:'#fff',border:'none'}}>
+              💾 Exporter {Object.values(jsonExpSel).filter(Boolean).length} zone{Object.values(jsonExpSel).filter(Boolean).length>1?'s':''}
+            </button>
+          </div>
+        </div>
+      </div></div>}
+
+      {/* ══ MODAL IMPORT JSON ══ */}
+      {jsonImpMod&&<div className="ov"><div className="mbx" style={{maxWidth:520}}>
+        <div className="flex items-center justify-between mb-1">
+          <div className="text-sm font-bold" style={{color:'var(--t1)'}}>📥 Importer JSON — {jsonImpFile?.name||'Fichier'}</div>
+          <button onClick={()=>{setJsonImpMod(false);setJsonImpFile(null)}} className="ba px-2 py-1 rounded text-xs" style={{color:'var(--t3)'}}>✕</button>
+        </div>
+        <div className="text-[10px] mb-4" style={{color:'var(--t3)'}}>
+          {jsonImpZones.length} zone{jsonImpZones.length>1?'s':''} trouvée{jsonImpZones.length>1?'s':''} — sélectionne celles à importer
+        </div>
+        <div className="space-y-2 mb-5">
+          {jsonImpZones.map((z,i)=>(
+            <label key={i} className="flex items-center gap-3 p-2.5 rounded-lg cursor-pointer" style={{background:jsonImpSel[i]?'rgba(14,165,233,.08)':'var(--inp)',border:`1px solid ${jsonImpSel[i]?'rgba(14,165,233,.5)':'var(--bd)'}`,transition:'.15s'}}>
+              <input type="checkbox" checked={!!jsonImpSel[i]} onChange={e=>setJsonImpSel(s=>({...s,[i]:e.target.checked}))}/>
+              <div style={{flex:1}}>
+                <div className="text-xs font-semibold" style={{color:'var(--t1)'}}>{z.name}</div>
+                <div className="text-[9px]" style={{color:'var(--t3)'}}>{z.L/1000}×{z.H/1000}m · {z.ouvs?.length||0} ouverture{(z.ouvs?.length||0)>1?'s':''}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+        <div className="text-[10px] font-semibold mb-2" style={{color:'var(--t2)'}}>Mode d'import :</div>
+        <div className="flex gap-2">
+          <button onClick={()=>confirmJsonImport('replace')}
+            className="ba flex-1 py-2.5 rounded-lg text-xs font-bold" style={{background:'rgba(239,68,68,.12)',border:'1px solid rgba(239,68,68,.3)',color:'#ef4444'}}>
+            🔄 Remplacer le projet
+          </button>
+          <button onClick={()=>confirmJsonImport('append')}
+            className="ba flex-1 py-2.5 rounded-lg text-xs font-bold" style={{background:'rgba(14,165,233,.1)',border:'1px solid rgba(14,165,233,.35)',color:'#0ea5e9'}}>
+            ➕ Ajouter comme onglet{Object.values(jsonImpSel).filter(Boolean).length>1?'s':''}
+          </button>
+        </div>
+      </div></div>}
 
       {xlsxExpMod&&<div className="ov"><div className="mbx">
         <h3 className="font-bold text-base mb-1">Export Excel</h3>
