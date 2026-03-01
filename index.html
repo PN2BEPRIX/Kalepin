@@ -13,6 +13,7 @@
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <meta name="description" content="Outil professionnel de calepinage bardage metallique avec vue 3D, export PDF et metres">
   <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -81,6 +82,14 @@
     .wc-shine{background:linear-gradient(90deg,transparent,rgba(196,50,74,.15),transparent);background-size:200% 100%;animation:shimmer 3s linear infinite}
     .opt-card{border:1px solid var(--bd);border-radius:10px;padding:10px;cursor:pointer;transition:.15s}
     .opt-card:hover{border-color:var(--bl)}.opt-card.best{border-color:var(--gn);background:var(--gnd)}
+
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,600;0,700;0,800;1,800&display=swap');
+    .lp-body{font-family:'Plus Jakarta Sans',sans-serif;scroll-behavior:smooth;color:#1e293b;}
+    .gradient-brand{background:linear-gradient(135deg,#c4324a 0%,#ff4d6a 100%)}
+    .card-hover{transition:all .3s ease;border:1px solid #e2e8f0}
+    .card-hover:hover{transform:translateY(-10px);box-shadow:0 20px 40px rgba(0,0,0,.05);border-color:#c4324a}
+    .italic-black{font-style:italic;font-weight:800}
+
   </style>
 </head>
 <body>
@@ -1363,103 +1372,114 @@ async function ensureProfile(user){
   }catch(e){return{data:null,error:'network',details:e.message}}
 }
 
-// Admin functions
-async function adminListUsers(filterStatus){
-  const s=getAuthSession();if(!s)return[];
-  const q=filterStatus?'&status=eq.'+filterStatus:'';
+// ══ Admin helper: call Supabase RPC (SECURITY DEFINER) ══
+async function adminRPC(fnName,params){
+  const s=getAuthSession();if(!s)return null;
   try{
-    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?select=*&order=created_at.desc'+q,{
-      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    const res=await fetch(SUPA.url+'/rest/v1/rpc/'+fnName,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
+      body:JSON.stringify(params||{})
     });
-    if(!res.ok)return[];return await res.json();
-  }catch(e){return[]}
+    if(!res.ok){const t=await res.text();console.warn('[Admin RPC '+fnName+'] HTTP '+res.status+':',t);return null}
+    return await res.json();
+  }catch(e){console.error('[Admin RPC '+fnName+']',e);return null}
+}
+
+// ══ Admin helper: standard REST with logging ══
+async function adminFetch(method,path,body){
+  const s=getAuthSession();if(!s)return null;
+  const headers={'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token};
+  if(body){headers['Content-Type']='application/json'}
+  if(method==='POST')headers['Prefer']='return=representation';
+  if(method==='PATCH')headers['Prefer']='return=minimal';
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/'+path,{
+      method,headers,body:body?JSON.stringify(body):undefined
+    });
+    if(!res.ok){
+      const t=await res.text();
+      console.warn('[Admin '+method+' '+path+'] HTTP '+res.status+':',t);
+      return null;
+    }
+    if(method==='PATCH'||method==='DELETE')return true;
+    return await res.json();
+  }catch(e){console.error('[Admin '+method+' '+path+']',e);return null}
+}
+
+// Admin functions — try RPC first (SECURITY DEFINER), fallback to REST
+async function adminListUsers(filterStatus){
+  // Try RPC
+  const rpc=await adminRPC('admin_list_profiles');
+  if(rpc&&Array.isArray(rpc)){
+    if(filterStatus)return rpc.filter(u=>u.status===filterStatus);
+    return rpc;
+  }
+  // Fallback REST
+  const q=filterStatus?'&status=eq.'+filterStatus:'';
+  const data=await adminFetch('GET','kalepin_profiles?select=*&order=created_at.desc'+q);
+  return data||[];
 }
 
 async function adminSetUserStatus(userId,status){
-  const s=getAuthSession();if(!s)return false;
-  try{
-    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?id=eq.'+userId,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
-      body:JSON.stringify({status,updated_at:new Date().toISOString()})
-    });
-    return res.ok;
-  }catch(e){return false}
+  // Try RPC
+  const rpc=await adminRPC('admin_update_profile',{target_user_id:userId,new_status:status,new_role:null});
+  if(rpc!==null)return true;
+  // Fallback REST
+  const ok=await adminFetch('PATCH','kalepin_profiles?id=eq.'+userId,{status,updated_at:new Date().toISOString()});
+  return !!ok;
 }
 
 async function adminSetUserRole(userId,role){
-  const s=getAuthSession();if(!s)return false;
-  try{
-    const res=await fetch(SUPA.url+'/rest/v1/kalepin_profiles?id=eq.'+userId,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
-      body:JSON.stringify({role,updated_at:new Date().toISOString()})
-    });
-    return res.ok;
-  }catch(e){return false}
+  // Try RPC
+  const rpc=await adminRPC('admin_update_profile',{target_user_id:userId,new_status:null,new_role:role});
+  if(rpc!==null)return true;
+  // Fallback REST
+  const ok=await adminFetch('PATCH','kalepin_profiles?id=eq.'+userId,{role,updated_at:new Date().toISOString()});
+  return !!ok;
 }
+
 async function adminGetAllSubs(){
-  const s=getAuthSession();if(!s)return[];
-  try{
-    const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions?select=*&order=updated_at.desc',{
-      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
-    });
-    if(!res.ok)return[];return await res.json();
-  }catch(e){return[]}
+  const rpc=await adminRPC('admin_list_subscriptions');
+  if(rpc&&Array.isArray(rpc))return rpc;
+  const data=await adminFetch('GET','kalepin_subscriptions?select=*&order=created_at.desc');
+  return data||[];
 }
 
 async function adminGetUserSub(userId){
-  const s=getAuthSession();if(!s)return null;
-  try{
-    const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions?user_id=eq.'+userId+'&select=*&order=created_at.desc&limit=1',{
-      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
-    });
-    if(!res.ok)return null;const d=await res.json();return d[0]||null;
-  }catch(e){return null}
+  const data=await adminFetch('GET','kalepin_subscriptions?user_id=eq.'+userId+'&select=*&order=created_at.desc&limit=1');
+  return data&&data[0]||null;
 }
 
 async function adminSetUserSub(userId,email,plan,status,endDate){
-  // endDate = ISO string ou null (accès illimité)
   const s=getAuthSession();if(!s)return false;
-  const existing=await adminGetUserSub(userId);
   const now=new Date().toISOString();
-  const payload={user_id:userId,email,plan,status,
-    updated_at:now,
-    trial_start:existing?.trial_start||now,
-    trial_end:endDate||null,
-    stripe_customer_id:existing?.stripe_customer_id||null,
-    stripe_subscription_id:existing?.stripe_subscription_id||null,
-    admin_override:true,
-    admin_note:null,
-  };
-  try{
-    if(existing){
-      const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions?user_id=eq.'+userId,{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
-        body:JSON.stringify({plan,status,trial_end:endDate||null,updated_at:now,admin_override:true})
-      });
-      return res.ok;
-    }else{
-      const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token,'Prefer':'return=minimal'},
-        body:JSON.stringify(payload)
-      });
-      return res.ok;
-    }
-  }catch(e){return false}
+  const existing=await adminGetUserSub(userId);
+  // Try RPC first
+  const rpc=await adminRPC('admin_upsert_subscription',{
+    target_user_id:userId,target_email:email,
+    new_plan:plan,new_status:status,
+    new_trial_end:endDate||null
+  });
+  if(rpc!==null)return true;
+  // Fallback REST
+  if(existing){
+    const ok=await adminFetch('PATCH','kalepin_subscriptions?user_id=eq.'+userId,
+      {plan,status,trial_end:endDate||null,admin_override:true});
+    return !!ok;
+  }else{
+    const payload={user_id:userId,email,plan,status,
+      trial_start:now,trial_end:endDate||null,
+      stripe_customer_id:null,stripe_subscription_id:null,
+      admin_override:true,admin_note:null};
+    const ok=await adminFetch('POST','kalepin_subscriptions',payload);
+    return !!ok;
+  }
 }
 
 async function adminProjectStats(){
-  const s=getAuthSession();if(!s)return[];
-  try{
-    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?select=user_id,updated_at,name,total_surface',{
-      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
-    });
-    if(!res.ok)return[];
-    return await res.json();
-  }catch(e){return[]}
+  const data=await adminFetch('GET','kalepin_projects?select=user_id,updated_at,name,total_surface');
+  return data||[];
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -2137,13 +2157,16 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
   const activeUsers=Object.keys(projByUser).length;
   const topUsers=Object.entries(projByUser).sort((a,b)=>b[1].count-a[1].count).slice(0,10);
 
+  const[actError,setActError]=useState(null);
   const act=async(userId,action)=>{
-    setActing(userId);
-    if(action==='approve')await adminSetUserStatus(userId,'approved');
-    else if(action==='reject')await adminSetUserStatus(userId,'rejected');
-    else if(action==='pending')await adminSetUserStatus(userId,'pending');
-    else if(action==='admin')await adminSetUserRole(userId,'admin');
-    else if(action==='user')await adminSetUserRole(userId,'user');
+    setActing(userId);setActError(null);
+    let ok=false;
+    if(action==='approve')ok=await adminSetUserStatus(userId,'approved');
+    else if(action==='reject')ok=await adminSetUserStatus(userId,'rejected');
+    else if(action==='pending')ok=await adminSetUserStatus(userId,'pending');
+    else if(action==='admin')ok=await adminSetUserRole(userId,'admin');
+    else if(action==='user')ok=await adminSetUserRole(userId,'user');
+    if(!ok){setActError({userId,action,msg:'Erreur — vérifiez les policies RLS Supabase (voir console F12)'});console.error('[Admin] Action "'+action+'" failed for user '+userId+'. Check Supabase RLS policies.');}
     await loadUsers();setActing(null);
   };
 
@@ -2206,6 +2229,12 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         <div style={{fontSize:11,color:'#4a4a6a'}}>Kalepin Bêta — {currentUser?.email}</div>
       </div>
       <div style={{flex:1}}/>
+      <button onClick={async()=>{
+        console.log('=== ADMIN DIAGNOSTIC ===');
+        const s=getAuthSession();
+        console.log('Session:',s?'OK':'MISSING');
+        try{const r=await fetch(SUPA.url+'/rest/v1/rpc/is_admin',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},body:'{}'});const d=await r.text();console.log('is_admin() →',r.status,d);alert('is_admin() → HTTP '+r.status+' : '+d)}catch(e){console.log('is_admin() ERROR',e);alert('is_admin() ERROR: '+e.message)}
+      }} style={{padding:'5px 10px',borderRadius:8,border:'1px solid rgba(245,158,11,.3)',background:'rgba(245,158,11,.08)',color:'#f59e0b',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginRight:6}}>🔧 Test RLS</button>
       <div style={{display:'flex',gap:2,background:'rgba(255,255,255,.05)',borderRadius:10,padding:3}}>
         {[{k:'overview',ic:'📊',l:'Vue d\'ensemble'},{k:'users',ic:'👥',l:'Utilisateurs'},{k:'pending',ic:'⏳',l:`Approbations${pending?' ('+pending+')':''}`},{k:'abonnements',ic:'💳',l:'Abonnements'},{k:'stats',ic:'📈',l:'Statistiques'}].map(t=>(
           <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:'7px 14px',borderRadius:8,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .15s',
@@ -2313,6 +2342,10 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
           ))}
           <button onClick={loadUsers} style={{padding:'7px 12px',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',background:'transparent',color:'#5a5a7e',fontSize:12,cursor:'pointer'}}>↻</button>
         </div>
+        {actError&&<div style={{padding:'10px 16px',marginBottom:12,borderRadius:10,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#ef4444',fontSize:11,display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontWeight:700}}>⚠ Erreur:</span> {actError.msg}
+          <button onClick={()=>setActError(null)} style={{marginLeft:'auto',background:'transparent',border:'none',color:'#ef4444',cursor:'pointer',fontSize:14}}>×</button>
+        </div>}
         {loadingUsers?<div style={{textAlign:'center',padding:60,color:'#3a3a5a'}}>Chargement…</div>
         :<div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,overflow:'hidden'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
@@ -2543,9 +2576,11 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         const subByUser={};
         subs.forEach(s=>{ if(!subByUser[s.user_id])subByUser[s.user_id]=s; });
         const planBadge=(plan,status)=>{
-          if(status==='active')return{label:PLAN_LIMITS[plan]?.name||plan,color:'#10b981',bg:'rgba(16,185,129,.12)'};
-          if(status==='trialing')return{label:'Essai Pro',color:'#f59e0b',bg:'rgba(245,158,11,.12)'};
-          if(status==='past_due')return{label:'Impayé',color:'#ef4444',bg:'rgba(239,68,68,.12)'};
+          const pName=PLAN_LIMITS[plan]?.name||plan||'Freemium';
+          if(status==='active')return{label:pName,color:'#10b981',bg:'rgba(16,185,129,.12)'};
+          if(status==='trialing')return{label:'Essai '+pName,color:'#f59e0b',bg:'rgba(245,158,11,.12)'};
+          if(status==='past_due')return{label:pName+' (Impayé)',color:'#ef4444',bg:'rgba(239,68,68,.12)'};
+          if(plan&&plan!=='free')return{label:pName,color:PLAN_LIMITS[plan]?.color||'#5a5a7e',bg:(PLAN_LIMITS[plan]?.color||'#5a5a7e')+'1a'};
           return{label:'Freemium',color:'#5a5a7e',bg:'rgba(90,90,126,.12)'};
         };
         const now=new Date();
@@ -2565,7 +2600,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
               {ic:'💰',label:'MRR estimé',val:mrr+'€',col:'#10b981'},
               {ic:'✅',label:'Actifs payants',val:subActive,col:'#10b981'},
               {ic:'⏳',label:'En essai',val:subTrialing,col:'#f59e0b'},
-              {ic:'⚡',label:'Accès admin',val:subOverride,col:'#c4324a'},
+              {ic:'✏',label:'Modifiés manuellement',val:subOverride,col:'#c4324a'},
               {ic:'🔒',label:'Expirés/Freemium',val:users.length-subActive-subTrialing,col:'#5a5a7e'},
             ].map(k=>(
               <div key={k.label} style={{padding:'16px 18px',borderRadius:14,background:`${k.col}0f`,border:`1px solid ${k.col}22`}}>
@@ -2586,7 +2621,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
               <table style={{width:'100%',borderCollapse:'collapse'}}>
                 <thead>
                   <tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>
-                    {['Utilisateur','Statut accès','Plan','Statut sub','Expire le','Accès admin','Actions'].map(h=>(
+                    {['Utilisateur','Statut accès','Plan','Statut sub','Expire le','Modifié par','Actions'].map(h=>(
                       <th key={h} style={{padding:'10px 16px',fontSize:10,fontWeight:700,color:'#4a4a6a',textAlign:'left',whiteSpace:'nowrap'}}>{h}</th>
                     ))}
                   </tr>
@@ -2630,7 +2665,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
                       </td>
                       <td style={{padding:'12px 16px'}}>
                         {isOverride
-                          ?<span style={{fontSize:9,padding:'2px 8px',borderRadius:20,background:'rgba(196,50,74,.15)',color:'#c4324a',fontWeight:700}}>⚡ Admin</span>
+                          ?<span style={{fontSize:9,padding:'2px 8px',borderRadius:20,background:'rgba(167,139,250,.15)',color:'#a78bfa',fontWeight:700}}>✏ Manuel</span>
                           :<span style={{fontSize:10,color:'#3a3a5a'}}>—</span>}
                       </td>
                       <td style={{padding:'12px 16px'}}>
@@ -2698,11 +2733,13 @@ function SubManageModal({user,currentSub,onClose,onSaved}){
 
   const handleSave=async()=>{
     setSaving(true);setMsg(null);
+    console.log('[SubManageModal] Saving for user:',user.id,user.email,'plan:',plan,'status:',status,'endDate:',useEndDate?endDate:'none');
     const finalEnd=useEndDate&&endDate?new Date(endDate).toISOString():null;
     const ok=await adminSetUserSub(user.id,user.email,plan,status,finalEnd);
+    console.log('[SubManageModal] Result:',ok);
     setSaving(false);
     if(ok){setMsg({type:'ok',text:'Abonnement mis à jour !'});setTimeout(onSaved,800);}
-    else setMsg({type:'err',text:'Erreur lors de la mise à jour'});
+    else setMsg({type:'err',text:'Erreur — ouvre la console (F12) pour voir les détails'});
   };
 
   const planColor={free:'#5a5a7e',pro:'#c4324a',entreprise:'#0ea5e9'};
@@ -2733,7 +2770,7 @@ function SubManageModal({user,currentSub,onClose,onSaved}){
             <span style={{fontSize:13,fontWeight:700,color:planColor[currentSub.plan]||'#5a5a7e'}}>{PLAN_LIMITS[currentSub.plan]?.name||currentSub.plan}</span>
             <span style={{fontSize:10,padding:'1px 7px',borderRadius:20,background:'rgba(255,255,255,.06)',color:'#6a6a8a'}}>{currentSub.status}</span>
             {currentSub.trial_end&&<span style={{fontSize:10,color:'#5a5a7e'}}>expire le {new Date(currentSub.trial_end).toLocaleDateString('fr-FR')}</span>}
-            {currentSub.admin_override&&<span style={{fontSize:9,padding:'1px 7px',borderRadius:20,background:'rgba(196,50,74,.15)',color:'#c4324a',fontWeight:700}}>⚡ Admin</span>}
+            {currentSub.admin_override&&<span style={{fontSize:9,padding:'1px 7px',borderRadius:20,background:'rgba(167,139,250,.15)',color:'#a78bfa',fontWeight:700}}>✏ Modifié manuellement</span>}
           </div>
         </div>}
 
@@ -2991,120 +3028,214 @@ function AuthGate({children}){
   // ── Page de présentation (landing) ──
   const isLogin=mode==='login',isSignup=mode==='signup',isForgot=mode==='forgot',isLanding=mode==='landing';
 
-  if(isLanding)return<div style={{minHeight:'100vh',background:'#060609',fontFamily:'DM Sans,sans-serif',overflow:'auto'}}>
-    {/* Fond */}
-    <div style={{position:'fixed',inset:0,pointerEvents:'none'}}>
-      <div style={{position:'absolute',top:'-10%',left:'20%',width:600,height:600,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.08),transparent 60%)',filter:'blur(100px)'}}/>
-      <div style={{position:'absolute',bottom:'-5%',right:'15%',width:400,height:400,borderRadius:'50%',background:'radial-gradient(circle,rgba(14,165,233,.05),transparent 60%)',filter:'blur(80px)'}}/>
-    </div>
-    {/* Nav */}
-    <div style={{position:'sticky',top:0,zIndex:20,background:'rgba(6,6,9,.85)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'12px 28px',display:'flex',alignItems:'center',gap:12}}>
-        <div style={{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,fontWeight:900,color:'#fff',boxShadow:'0 4px 16px rgba(196,50,74,.3)'}}>K</div>
-        <span style={{fontSize:16,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Kale<span style={{color:'#c4324a'}}>pin</span></span>
-        <div style={{flex:1}}/>
-        <button onClick={()=>setMode('login')} style={{padding:'7px 18px',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',background:'transparent',color:'#9a9aac',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Se connecter</button>
-        <button onClick={()=>setMode('signup')} style={{padding:'7px 18px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 4px 16px rgba(196,50,74,.3)'}}>Créer un compte</button>
-      </div>
-    </div>
-    {/* Hero */}
-    <div style={{maxWidth:1100,margin:'0 auto',padding:'80px 28px 48px',textAlign:'center',position:'relative',zIndex:1}}>
-      <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'5px 16px',borderRadius:20,background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.12)',marginBottom:28}}>
-        <span style={{width:6,height:6,borderRadius:3,background:'#34d399',animation:'pulse-ring 2s infinite'}}/><span style={{fontSize:11,fontWeight:600,color:'#34d399'}}>Bêta ouverte — Accès gratuit</span>
-      </div>
-      <h1 style={{fontSize:'clamp(30px,5vw,48px)',fontWeight:800,lineHeight:1.1,color:'#f0ece6',marginBottom:20,letterSpacing:'-.03em'}}>
-        De l'import de vos plans au<br/><span style={{background:'linear-gradient(135deg,#c4324a,#e8697f)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>bon de commande en 5 minutes</span>
-      </h1>
-      <p style={{fontSize:16,color:'rgba(255,255,255,.4)',maxWidth:600,margin:'0 auto 36px',lineHeight:1.7}}>
-        L'outil métier conçu pour les <b style={{color:'rgba(255,255,255,.6)'}}>bardeurs et façadiers</b> qui souhaitent automatiser le calepinage, générer des métrés précis et visualiser le rendu 3D.
-      </p>
-      <div style={{display:'flex',justifyContent:'center',gap:12,flexWrap:'wrap'}}>
-        <button onClick={()=>setMode('signup')} style={{padding:'14px 32px',borderRadius:12,border:'none',background:'#c4324a',color:'#fff',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 6px 24px rgba(196,50,74,.35)'}}>Commencer gratuitement →</button>
-        <button onClick={()=>setMode('login')} style={{padding:'14px 28px',borderRadius:12,border:'1px solid rgba(255,255,255,.1)',background:'rgba(255,255,255,.03)',color:'#9a9aac',fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>J'ai déjà un compte</button>
-      </div>
-    </div>
-    {/* Modules */}
-    <div style={{maxWidth:1100,margin:'0 auto',padding:'32px 28px 48px'}}>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))',gap:20}}>
-        {[{icon:'🏢',title:'Facade Cassettes',desc:'Bardage métallique, cassettes, panneaux composites (Alucobond, Trespa, Equitone).',tags:['Import PDF/DXF','Calcul auto','3D RAL','Ossature','QR Chantier'],color:'196,50,74'},
-          {icon:'🧱',title:'Facade Brique',desc:'Briques de parement, plaquettes. Appareillages classiques, joints, ouvertures et retours.',tags:['6 appareillages','Coupes auto','Retours','Drag & drop','Métrés'],color:'217,119,6'},
-          {icon:'🔲',title:'Calepinage Carrelage',desc:'Sol, mur, piscine. Motifs de pose, calepins, coupes périphériques automatiques.',tags:['6 motifs','Sol/Mur/Piscine','Coupes','3D','Export'],color:'14,165,233'}
-        ].map(m=><div key={m.title} style={{padding:28,borderRadius:20,background:'linear-gradient(135deg,rgba('+m.color+',.04),rgba('+m.color+',.01))',border:'1.5px solid rgba('+m.color+',.1)',transition:'all .25s'}}
-          onMouseOver={e=>{e.currentTarget.style.borderColor='rgba('+m.color+',.3)';e.currentTarget.style.transform='translateY(-4px)'}}
-          onMouseOut={e=>{e.currentTarget.style.borderColor='rgba('+m.color+',.1)';e.currentTarget.style.transform='none'}}>
-          <div style={{fontSize:32,marginBottom:12}}>{m.icon}</div>
-          <div style={{fontSize:17,fontWeight:700,color:'#f0ece6',marginBottom:6}}>{m.title}</div>
-          <div style={{fontSize:12,color:'#5a5a6e',lineHeight:1.7,marginBottom:14}}>{m.desc}</div>
-          <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>{m.tags.map(t=><span key={t} style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba('+m.color+',.08)',color:'rgb('+m.color+')'}}>{t}</span>)}</div>
-        </div>)}
-      </div>
-    </div>
-    {/* Features */}
-    <div style={{maxWidth:1100,margin:'0 auto',padding:'32px 28px 48px'}}>
-      <div style={{textAlign:'center',marginBottom:32}}>
-        <div style={{fontSize:26,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Tout ce qu'il faut pour vos chantiers</div>
-        <div style={{fontSize:13,color:'#5a5a6e',marginTop:8}}>Du métré au bon de commande, en quelques clics</div>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:14}}>
-        {[['📐','Import PDF & DXF','Importez vos plans architecte, calibrez et tracez vos zones'],
-          ['🎨','Couleurs RAL réelles','Bibliothèque RAL et Arcelor intégrée avec rendu fidèle'],
-          ['🧊','Visualisation 3D','Vue 3D interactive avec ombres, matériaux et rotation'],
-          ['📊','Export PDF & Excel','Rapports détaillés, métrés automatiques, bons de commande'],
-          ['🔗','QR Code Chantier','Partagez une vue 3D consultable sur smartphone'],
-          ['☁️','Sauvegarde cloud','Projets synchronisés dans le cloud, accessible partout']
-        ].map(([ic,t,d])=><div key={t} style={{padding:'18px 20px',borderRadius:14,background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.05)'}}>
-          <div style={{fontSize:22,marginBottom:8}}>{ic}</div>
-          <div style={{fontSize:13,fontWeight:700,color:'#e0dcd6',marginBottom:4}}>{t}</div>
-          <div style={{fontSize:11,color:'#5a5a6e',lineHeight:1.6}}>{d}</div>
-        </div>)}
-      </div>
-    </div>
-    {/* CTA bottom */}
-    {/* ── Pourquoi Kalepin ── */}
-    <div style={{background:'rgba(255,255,255,.012)',borderTop:'1px solid rgba(255,255,255,.04)',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'48px 28px'}}>
-        <div style={{textAlign:'center',marginBottom:36}}>
-          <div style={{fontSize:26,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Pourquoi choisir Kalepin ?</div>
-          <div style={{fontSize:13,color:'#5a5a6e',marginTop:8}}>4 problèmes métier résolus par un seul outil</div>
+  if(isLanding)return<div className="lp-body min-h-screen bg-white">
+    {/* ── NAV ── */}
+    <nav className="fixed w-full z-50 bg-white/90 backdrop-blur-md border-b border-slate-100 h-20 flex items-center">
+      <div className="max-w-7xl mx-auto px-6 w-full flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-[#c4324a] rounded-xl flex items-center justify-center shadow-lg text-white font-bold text-xl tracking-tighter italic">K</div>
+          <span className="text-2xl font-black tracking-tighter italic uppercase">KALEPIN</span>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:16}}>
-          {[{icon:'🎯',title:'Zéro erreur de commande',desc:'Calcul auto des surfaces nettes, chutes et nombre exact de panneaux incluant les cassettes pliées avec le détail des plis.',color:'#c4324a'},
-            {icon:'🧊',title:'Vente simplifiée en 3D',desc:'Montrez à vos clients le rendu final avec les finitions RAL (mat, brillant, métallisé) dans le navigateur ou sur mobile.',color:'#0ea5e9'},
-            {icon:'📊',title:'Métrés instantanés',desc:"Excel récapitulant les métrés par zone, les ouvertures et les linéaires d'ossature en 1 clic.",color:'#34d399'},
-            {icon:'📐',title:'Import DXF / PDF',desc:"Importez vos plans d'architecte et travaillez directement dessus par transparence. Calibration automatique.",color:'#f59e0b'},
-          ].map((f,i)=><div key={i} style={{padding:24,borderRadius:18,background:'rgba(0,0,0,.2)',border:'1px solid rgba(255,255,255,.04)',position:'relative',overflow:'hidden'}}>
-            <div style={{fontSize:30,marginBottom:14}}>{f.icon}</div>
-            <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:8}}>{f.title}</div>
-            <div style={{fontSize:11,color:'rgba(255,255,255,.4)',lineHeight:1.65}}>{f.desc}</div>
-          </div>)}        </div>
+        <div className="hidden lg:flex items-center gap-6 font-bold text-[11px] uppercase tracking-[0.2em] text-slate-500">
+          <a href="#concept" className="hover:text-[#c4324a] transition-colors">Concept</a>
+          <a href="#ao" className="hover:text-[#c4324a] transition-colors">Appels d'Offres</a>
+          <a href="#rentabilite" className="hover:text-[#c4324a] transition-colors">Rentabilité</a>
+          <a href="#tarifs" className="hover:text-[#c4324a] transition-colors">Tarifs</a>
+        </div>
+        <button onClick={()=>setMode('login')} className="bg-slate-900 text-white px-6 py-3 rounded-full font-extrabold hover:bg-[#c4324a] transition-all text-xs tracking-widest shadow-xl">ESPACE PRO</button>
       </div>
-    </div>
-    {/* ── QR Code Spotlight ── */}
-    <div style={{background:'rgba(196,50,74,.035)',borderBottom:'1px solid rgba(196,50,74,.08)'}}>
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'40px 28px',display:'flex',alignItems:'center',gap:28,flexWrap:'wrap'}}>
-        <div style={{width:80,height:80,borderRadius:18,background:'linear-gradient(135deg,rgba(196,50,74,.1),rgba(196,50,74,.04))',border:'1px solid rgba(196,50,74,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:36,flexShrink:0}}>📱</div>
-        <div style={{flex:1,minWidth:240}}>
-          <div style={{fontSize:18,fontWeight:700,color:'#f0ece6',marginBottom:8}}>Le QR Code Chantier</div>
-          <div style={{fontSize:12,color:'rgba(255,255,255,.4)',lineHeight:1.7}}>
-            Posez vos panneaux avec le plan 3D accessible sur votre téléphone via un simple QR code collé sur votre plan papier. Partagez la vue avec vos clients directement sur site.
+    </nav>
+
+    {/* ── HERO ── */}
+    <section className="pt-40 pb-20 px-6 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
+      <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
+        <div>
+          <span className="inline-block px-4 py-1.5 mb-6 text-xs font-black tracking-[0.2em] text-[#c4324a] bg-red-50 rounded-full uppercase italic">Le futur du chantier digital</span>
+          <h1 className="text-5xl lg:text-8xl font-black leading-[0.95] tracking-tighter mb-8 italic uppercase">Gagnez vos <br/><span className="text-[#c4324a]">chantiers</span> <br/>en 3D.</h1>
+          <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-xl">Kalepin est le premier SaaS tout-en-un qui automatise le calepinage technique pour le <b>Bardage</b>, la <b>Brique</b> et le <b>Carrelage</b>. Générez des dossiers d'exécution pro en 30 secondes.</p>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button onClick={()=>setMode('signup')} className="px-12 py-6 bg-[#c4324a] text-white rounded-2xl font-black text-xl shadow-2xl shadow-red-200 hover:scale-105 transition-all italic uppercase">Essayer gratuitement</button>
+            <div className="flex flex-col justify-center text-xs font-bold text-slate-400 uppercase tracking-widest"><span>Sans carte bancaire</span><span>Installation immédiate</span></div>
+          </div>
+        </div>
+        <div className="relative group">
+          <div className="absolute -inset-1 bg-gradient-to-r from-[#c4324a] to-pink-500 rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+          <div className="relative bg-slate-900 rounded-[2rem] p-4 shadow-2xl overflow-hidden border border-white/10">
+            <div className="aspect-video bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden relative">
+              <img src="https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&q=80&w=1000" className="object-cover w-full h-full opacity-40" />
+              <div className="absolute flex flex-col items-center"><i className="fa-solid fa-play text-white text-5xl opacity-80 mb-4"></i><span className="text-white font-black italic uppercase tracking-widest">Démo Technique</span></div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-    {/* CTA */}
-    <div style={{maxWidth:600,margin:'0 auto',padding:'40px 28px 80px',textAlign:'center'}}>
-      <div style={{padding:'36px 32px',borderRadius:24,background:'linear-gradient(135deg,rgba(196,50,74,.08),rgba(196,50,74,.02))',border:'1px solid rgba(196,50,74,.15)'}}>
-        <div style={{fontSize:22,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Prêt à gagner du temps ?</div>
-        <div style={{fontSize:13,color:'#5a5a6e',marginBottom:24}}>Créez votre compte et commencez votre premier calepinage en quelques minutes.</div>
-        <button onClick={()=>setMode('signup')} style={{padding:'14px 36px',borderRadius:12,border:'none',background:'#c4324a',color:'#fff',fontSize:15,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 6px 24px rgba(196,50,74,.35)'}}>Créer mon compte gratuitement</button>
+    </section>
+
+    {/* ── POURQUOI KALEPIN ── */}
+    <section id="concept" className="py-24 px-6 max-w-7xl mx-auto">
+      <div className="text-center mb-20">
+        <h2 className="text-3xl lg:text-5xl font-black italic uppercase tracking-tighter mb-4">Stop au gâchis de temps et de matériaux</h2>
+        <p className="text-slate-500 max-w-2xl mx-auto">Le calepinage manuel est la source de 80% des erreurs de commande et des litiges sur chantier.</p>
       </div>
-    </div>
-    <div style={{borderTop:'1px solid rgba(255,255,255,.04)',padding:'20px 28px',textAlign:'center'}}>
-      <span style={{fontSize:10,color:'#3a3a4e'}}>Kalepin © 2025 — Outil professionnel de calepinage</span>
-    </div>
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+        {[
+          {ic:'fa-clock-rotate-left',bg:'bg-red-100',tc:'text-[#c4324a]',t:'Vitesse X10',d:'Finies les soirées à dessiner sur papier. Entrez vos dimensions, placez vos ouvertures, Kalepin calcule tout instantanément.'},
+          {ic:'fa-layer-group',bg:'bg-blue-100',tc:'text-blue-600',t:'Multi-Matériaux',d:'Un seul outil pour le bardage cassettes, la brique de parement et le carrelage XXL. Une polyvalence totale.'},
+          {ic:'fa-file-pdf',bg:'bg-emerald-100',tc:'text-emerald-600',t:'Dossiers Pro',d:'Exportez des fiches de débit Excel et des plans PDF 3D à joindre à vos devis pour impressionner vos clients.'}
+        ].map((c,i)=><div key={i} className="p-10 rounded-[2.5rem] card-hover bg-white">
+          <div className={`w-16 h-16 ${c.bg} rounded-2xl flex items-center justify-center ${c.tc} text-2xl mb-8`}><i className={`fa-solid ${c.ic}`}></i></div>
+          <h3 className="text-2xl font-extrabold mb-4 italic uppercase tracking-tight">{c.t}</h3>
+          <p className="text-slate-500 leading-relaxed italic">{c.d}</p>
+        </div>)}
+      </div>
+    </section>
+
+    {/* ── APPELS D'OFFRES ── */}
+    <section id="ao" className="bg-slate-900 py-24 text-white overflow-hidden relative">
+      <div className="absolute top-0 right-0 w-1/3 h-full bg-[#c4324a]/10 skew-x-12 transform translate-x-20"></div>
+      <div className="max-w-7xl mx-auto px-6 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div>
+            <h2 className="text-4xl lg:text-6xl font-black italic uppercase tracking-tighter mb-8 leading-tight">Dominez vos <br/><span className="text-[#c4324a]">Appels d'Offres</span></h2>
+            <p className="text-slate-400 text-lg mb-10 leading-relaxed">Dans une mise en concurrence, le prix ne suffit plus. Kalepin vous donne l'avantage technique pour rassurer le Maître d'Ouvrage et le Bureau de Contrôle.</p>
+            <ul className="space-y-6">
+              {[
+                {t:'Mémoire Technique Augmenté',d:'Joignez des plans 3D précis qui prouvent votre maîtrise du projet.'},
+                {t:'Justification du Prix',d:'Détaillez chaque coupe et chaque m² pour justifier vos devis sans contestation.'},
+                {t:"Image d'Expertise",d:"Positionnez-vous comme l'entreprise la plus moderne du lot."}
+              ].map((item,i)=><li key={i} className="flex gap-4">
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#c4324a] flex items-center justify-center text-[10px]"><i className="fa-solid fa-check"></i></div>
+                <div><b className="block text-white uppercase italic tracking-widest text-sm mb-1">{item.t}</b><span className="text-slate-500 text-sm">{item.d}</span></div>
+              </li>)}
+            </ul>
+          </div>
+          <div className="bg-white/5 border border-white/10 p-8 rounded-[3rem] backdrop-blur-md">
+            <div className="text-center mb-8"><span className="text-[#c4324a] font-black text-6xl italic">85%</span><p className="text-xs font-bold uppercase tracking-widest text-slate-400 mt-2">Taux d'acceptation des devis avec visuels 3D</p></div>
+            <div className="space-y-4">
+              {['AO Résidence Les Pins','AO Centre Commercial','AO Façade Mairie'].map((n,i)=><div key={i} className="h-12 bg-white/10 rounded-xl flex items-center px-4 justify-between italic text-xs font-bold"><span>{n}</span><span className="text-emerald-500 uppercase">Gagné</span></div>)}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* ── RENTABILITÉ ── */}
+    <section id="rentabilite" className="py-24 px-6 bg-white">
+      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-20">
+        <div className="lg:w-1/3">
+          <h2 className="text-4xl font-black italic uppercase tracking-tighter mb-6">Un investissement, <br/>pas une dépense.</h2>
+          <p className="text-slate-500 mb-8 font-medium">Pourquoi payer 39€/mois ? Parce que l'outil vous en fait gagner 1000€ dès le premier chantier.</p>
+          <div className="p-6 bg-slate-50 rounded-2xl border-l-4 border-[#c4324a] italic text-sm text-slate-600">"Avant Kalepin, nous commandions 10% de stock en plus 'au cas où'. Aujourd'hui, on commande au carreau près."</div>
+        </div>
+        <div className="lg:w-2/3 grid sm:grid-cols-2 gap-6">
+          <div className="p-8 bg-slate-900 text-white rounded-[2rem] flex flex-col justify-between">
+            <h4 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-10">Gain de temps moyen</h4>
+            <div><span className="text-6xl font-black italic text-[#c4324a]">-4h</span><p className="text-sm mt-4 text-slate-400 italic">Par semaine sur la préparation de chantiers.</p></div>
+          </div>
+          <div className="p-8 bg-[#c4324a] text-white rounded-[2rem] flex flex-col justify-between">
+            <h4 className="text-white/60 font-bold uppercase tracking-widest text-xs mb-10">Réduction des pertes</h4>
+            <div><span className="text-6xl font-black italic">-15%</span><p className="text-sm mt-4 text-white/80 italic">Économie directe sur l'achat de matériaux.</p></div>
+          </div>
+          <div className="p-8 bg-slate-100 rounded-[2rem] flex flex-col justify-between sm:col-span-2">
+            <h4 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 text-center">Simulateur de rentabilité</h4>
+            <div className="flex justify-around items-center text-center">
+              <div><p className="text-2xl font-black italic uppercase">1200€</p><p className="text-[10px] uppercase font-bold text-slate-400">Coût Erreur Manuel</p></div>
+              <div className="text-[#c4324a] text-2xl font-black tracking-widest">VS</div>
+              <div><p className="text-2xl font-black italic uppercase">39€</p><p className="text-[10px] uppercase font-bold text-slate-400">Abonnement Kalepin</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* ── QR CODE ── */}
+    <section className="py-24 bg-slate-50 overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-20 items-center">
+        <div className="relative">
+          <div className="absolute -inset-20 bg-[#c4324a]/5 rounded-full blur-3xl"></div>
+          <div className="relative bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center border border-slate-100">
+            <div className="w-56 h-56 bg-slate-50 rounded-3xl flex items-center justify-center mb-8 border-2 border-dashed border-slate-200"><i className="fa-solid fa-qrcode text-9xl text-slate-800"></i></div>
+            <div className="text-center italic uppercase font-black text-[#c4324a] tracking-widest">Scan pour vue 3D</div>
+            <p className="text-[10px] text-slate-400 mt-2 uppercase font-bold tracking-widest">Projet #8492 — Résidence Horizon</p>
+          </div>
+        </div>
+        <div>
+          <span className="text-[#c4324a] font-black uppercase text-xs tracking-[0.3em] mb-4 block italic">Technologie sans-fil</span>
+          <h2 className="text-4xl lg:text-5xl font-black italic uppercase tracking-tighter mb-8 leading-tight">Le plan dans <br/>la poche des poseurs.</h2>
+          <p className="text-slate-500 mb-8 leading-relaxed">Plus besoin d'imprimer des plans A0 fragiles. Générez un QR Code pour chaque zone. Vos équipes le flashent et voient immédiatement :</p>
+          <div className="grid grid-cols-2 gap-4">
+            {['Ordre de pose','Détail des coupes','Vues 3D interactives','Métrés par zone'].map((t,i)=><div key={i} className="flex items-center gap-3 text-sm font-bold italic uppercase tracking-tight text-slate-700"><i className="fa-solid fa-check text-[#c4324a]"></i> {t}</div>)}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    {/* ── TARIFS ── */}
+    <section id="tarifs" className="py-24 px-6 bg-white">
+      <div className="max-w-4xl mx-auto text-center mb-16">
+        <h2 className="text-4xl lg:text-6xl font-black italic uppercase tracking-tighter mb-4">Tarification Transparente</h2>
+        <p className="text-slate-500 uppercase text-xs font-bold tracking-widest italic">Choisissez le plan qui correspond à votre volume d'activité</p>
+      </div>
+      <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
+        {/* Free */}
+        <div className="p-10 rounded-[2.5rem] border border-slate-100 bg-slate-50 flex flex-col justify-between">
+          <div>
+            <h4 className="font-black italic uppercase tracking-widest mb-4">Découverte</h4>
+            <div className="flex items-baseline gap-1 mb-8"><span className="text-4xl font-black italic">0€</span><span className="text-slate-400 text-xs font-bold uppercase tracking-widest">/mois</span></div>
+            <ul className="space-y-4 text-xs font-bold text-slate-500 uppercase italic tracking-wider mb-12">
+              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> 2 Projets max</li>
+              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> Module Bardage</li>
+              <li><i className="fa-solid fa-xmark text-red-300 mr-2"></i> Pas d'export PDF/Excel</li>
+            </ul>
+          </div>
+          <button onClick={()=>setMode('signup')} className="w-full py-4 border-2 border-slate-200 rounded-xl font-black uppercase italic tracking-widest hover:bg-slate-200 transition-colors">Gratuit</button>
+        </div>
+        {/* Pro */}
+        <div className="p-10 rounded-[3rem] border-4 border-[#c4324a] bg-white shadow-2xl relative flex flex-col justify-between scale-110 z-10">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#c4324a] text-white px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest italic shadow-lg">Le plus populaire</div>
+          <div>
+            <h4 className="font-black italic uppercase tracking-widest mb-4">Artisan Pro</h4>
+            <div className="flex items-baseline gap-1 mb-8"><span className="text-5xl font-black italic">39€</span><span className="text-slate-400 text-xs font-bold uppercase tracking-widest">/mois</span></div>
+            <ul className="space-y-4 text-[10px] font-bold text-slate-700 uppercase italic tracking-widest mb-12">
+              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Projets Illimités</li>
+              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Tous les modules (3D)</li>
+              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Exports PDF & Excel</li>
+              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> QR Codes Chantier</li>
+              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Support Prioritaire</li>
+            </ul>
+          </div>
+          <button onClick={()=>setMode('signup')} className="w-full py-4 bg-[#c4324a] text-white rounded-xl font-black uppercase italic tracking-widest shadow-xl shadow-red-200 hover:scale-105 transition-transform">Démarrer l'essai</button>
+        </div>
+        {/* Enterprise */}
+        <div className="p-10 rounded-[2.5rem] border border-slate-100 bg-slate-50 flex flex-col justify-between">
+          <div>
+            <h4 className="font-black italic uppercase tracking-widest mb-4">Entreprise</h4>
+            <div className="flex items-baseline gap-1 mb-8"><span className="text-4xl font-black italic">99€</span><span className="text-slate-400 text-xs font-bold uppercase tracking-widest">/mois</span></div>
+            <ul className="space-y-4 text-xs font-bold text-slate-500 uppercase italic tracking-wider mb-12">
+              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> Jusqu'à 5 Utilisateurs</li>
+              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> Marque Blanche (Logo)</li>
+              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> API Accès DXF/BIM</li>
+            </ul>
+          </div>
+          <button onClick={()=>setMode('login')} className="w-full py-4 border-2 border-slate-200 rounded-xl font-black uppercase italic tracking-widest hover:bg-slate-200 transition-colors">Contacter</button>
+        </div>
+      </div>
+    </section>
+
+    {/* ── FOOTER CTA ── */}
+    <footer className="py-32 bg-slate-900 text-white text-center px-6 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[#c4324a]/5"></div>
+      <div className="relative z-10">
+        <h2 className="text-5xl lg:text-7xl font-black italic mb-8 uppercase tracking-tighter">Votre prochain <br/><span className="text-[#c4324a]">Chantier</span> commence ici.</h2>
+        <button onClick={()=>setMode('signup')} className="px-16 py-8 bg-[#c4324a] text-white rounded-[2rem] font-black text-3xl shadow-2xl hover:scale-110 transition-all uppercase italic tracking-tighter">Accès immédiat</button>
+        <div className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto opacity-40 font-black italic uppercase text-[10px] tracking-[0.4em]">
+          <span>Façadiers</span><span>Carreleurs</span><span>Architectes</span><span>Constructeurs</span>
+        </div>
+        <p className="mt-20 text-slate-600 text-[10px] uppercase font-bold tracking-widest">© 2025 KALEPIN SaaS • Le calepinage réinventé</p>
+      </div>
+    </footer>
   </div>;
 
-  // ── Écran de connexion / inscription avec présentation ──
+    // ── Écran de connexion / inscription avec présentation ──
   return<div style={{minHeight:'100vh',background:'#060609',fontFamily:'DM Sans,sans-serif',position:'relative',overflow:'auto'}}>
     <div style={{position:'fixed',inset:0,pointerEvents:'none'}}>
       <div style={{position:'absolute',top:'-5%',left:'15%',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.07),transparent 60%)',filter:'blur(90px)'}}/>
