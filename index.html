@@ -3028,211 +3028,322 @@ function AuthGate({children}){
   // ── Page de présentation (landing) ──
   const isLogin=mode==='login',isSignup=mode==='signup',isForgot=mode==='forgot',isLanding=mode==='landing';
 
-  if(isLanding)return<div className="lp-body min-h-screen bg-white">
+  if(isLanding)return<div style={{position:'fixed',inset:0,overflowY:'auto',overflowX:'hidden',background:'#0a0a0f',fontFamily:'DM Sans,sans-serif',color:'#f0ece6',zIndex:0}}>
+
+    {/* ── AMBIENT BACKGROUND ── */}
+    <div style={{position:'fixed',inset:0,pointerEvents:'none',zIndex:0}}>
+      <div style={{position:'absolute',top:'-10%',left:'-5%',width:700,height:700,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.06) 0%,transparent 65%)',filter:'blur(60px)'}}/>
+      <div style={{position:'absolute',top:'30%',right:'-10%',width:600,height:600,borderRadius:'50%',background:'radial-gradient(circle,rgba(14,165,233,.04) 0%,transparent 65%)',filter:'blur(60px)'}}/>
+      <div style={{position:'absolute',bottom:'-5%',left:'25%',width:800,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.04) 0%,transparent 65%)',filter:'blur(80px)'}}/>
+      {/* Grid pattern */}
+      <div style={{position:'absolute',inset:0,backgroundImage:'radial-gradient(rgba(196,50,74,.04) 1px,transparent 1px)',backgroundSize:'40px 40px',opacity:.5}}/>
+    </div>
+
     {/* ── NAV ── */}
-    <nav className="fixed w-full z-50 bg-white/90 backdrop-blur-md border-b border-slate-100 h-20 flex items-center">
-      <div className="max-w-7xl mx-auto px-6 w-full flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <div className="w-10 h-10 bg-[#c4324a] rounded-xl flex items-center justify-center shadow-lg text-white font-bold text-xl tracking-tighter italic">K</div>
-          <span className="text-2xl font-black tracking-tighter italic uppercase">KALEPIN</span>
+    <nav style={{position:'sticky',top:0,zIndex:50,background:'rgba(10,10,15,.88)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
+      <div style={{maxWidth:1200,margin:'0 auto',padding:'0 32px',height:68,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        {/* Logo */}
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,fontWeight:900,color:'#fff',boxShadow:'0 4px 16px rgba(196,50,74,.35)',fontStyle:'italic'}}>K</div>
+          <span style={{fontSize:18,fontWeight:800,letterSpacing:'-.02em',color:'#f0ece6'}}>Kale<span style={{color:'#c4324a'}}>pin</span></span>
         </div>
-        <div className="hidden lg:flex items-center gap-6 font-bold text-[11px] uppercase tracking-[0.2em] text-slate-500">
-          <a href="#concept" className="hover:text-[#c4324a] transition-colors">Concept</a>
-          <a href="#ao" className="hover:text-[#c4324a] transition-colors">Appels d'Offres</a>
-          <a href="#rentabilite" className="hover:text-[#c4324a] transition-colors">Rentabilité</a>
-          <a href="#tarifs" className="hover:text-[#c4324a] transition-colors">Tarifs</a>
+        {/* Nav links */}
+        <div style={{display:'flex',alignItems:'center',gap:32}}>
+          {[['#modules','Modules'],['#comment','Comment ça marche'],['#metiers','Métiers'],['#avantages','Avantages']].map(([h,l])=>(
+            <a key={h} href={h} style={{fontSize:12,fontWeight:600,color:'#5a5a6e',textDecoration:'none',transition:'color .2s',letterSpacing:'.02em'}}
+              onMouseOver={e=>e.target.style.color='#f0ece6'} onMouseOut={e=>e.target.style.color='#5a5a6e'}>{l}</a>
+          ))}
         </div>
-        <button onClick={()=>setMode('login')} className="bg-slate-900 text-white px-6 py-3 rounded-full font-extrabold hover:bg-[#c4324a] transition-all text-xs tracking-widest shadow-xl">ESPACE PRO</button>
+        {/* CTAs */}
+        <div style={{display:'flex',alignItems:'center',gap:10}}>
+          <button onClick={()=>setMode('login')} style={{padding:'8px 18px',borderRadius:8,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'#9a9aac',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .2s'}}
+            onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.2)';e.currentTarget.style.color='#f0ece6'}} onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.1)';e.currentTarget.style.color='#9a9aac'}}>
+            Se connecter
+          </button>
+          <button onClick={()=>setMode('signup')} style={{padding:'8px 20px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 4px 14px rgba(196,50,74,.4)',transition:'all .2s'}}
+            onMouseOver={e=>{e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 6px 20px rgba(196,50,74,.5)'}} onMouseOut={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='0 4px 14px rgba(196,50,74,.4)'}}>
+            Accès gratuit →
+          </button>
+        </div>
       </div>
     </nav>
 
-    {/* ── HERO ── */}
-    <section className="pt-40 pb-20 px-6 bg-gradient-to-b from-slate-50 to-white overflow-hidden">
-      <div className="max-w-7xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
-        <div>
-          <span className="inline-block px-4 py-1.5 mb-6 text-xs font-black tracking-[0.2em] text-[#c4324a] bg-red-50 rounded-full uppercase italic">Le futur du chantier digital</span>
-          <h1 className="text-5xl lg:text-8xl font-black leading-[0.95] tracking-tighter mb-8 italic uppercase">Gagnez vos <br/><span className="text-[#c4324a]">chantiers</span> <br/>en 3D.</h1>
-          <p className="text-xl text-slate-600 mb-10 leading-relaxed max-w-xl">Kalepin est le premier SaaS tout-en-un qui automatise le calepinage technique pour le <b>Bardage</b>, la <b>Brique</b> et le <b>Carrelage</b>. Générez des dossiers d'exécution pro en 30 secondes.</p>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <button onClick={()=>setMode('signup')} className="px-12 py-6 bg-[#c4324a] text-white rounded-2xl font-black text-xl shadow-2xl shadow-red-200 hover:scale-105 transition-all italic uppercase">Essayer gratuitement</button>
-            <div className="flex flex-col justify-center text-xs font-bold text-slate-400 uppercase tracking-widest"><span>Sans carte bancaire</span><span>Installation immédiate</span></div>
-          </div>
+
+    {/* ══ HERO ══ */}
+    <section style={{position:'relative',zIndex:1,padding:'100px 32px 80px',maxWidth:1200,margin:'0 auto'}}>
+      <div style={{display:'flex',justifyContent:'center',marginBottom:32}}>
+        <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'6px 16px',borderRadius:20,background:'rgba(196,50,74,.1)',border:'1px solid rgba(196,50,74,.2)'}}>
+          <div style={{width:6,height:6,borderRadius:'50%',background:'#c4324a',boxShadow:'0 0 8px #c4324a',animation:'glow 2s ease-in-out infinite'}}/>
+          <span style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.12em',textTransform:'uppercase'}}>Calepinage technique professionnel</span>
         </div>
-        <div className="relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-[#c4324a] to-pink-500 rounded-[2rem] blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
-          <div className="relative bg-slate-900 rounded-[2rem] p-4 shadow-2xl overflow-hidden border border-white/10">
-            <div className="aspect-video bg-slate-800 rounded-xl flex items-center justify-center overflow-hidden relative">
-              <img src="https://images.unsplash.com/photo-1581094794329-c8112a89af12?auto=format&fit=crop&q=80&w=1000" className="object-cover w-full h-full opacity-40" />
-              <div className="absolute flex flex-col items-center"><i className="fa-solid fa-play text-white text-5xl opacity-80 mb-4"></i><span className="text-white font-black italic uppercase tracking-widest">Démo Technique</span></div>
+      </div>
+      <h1 style={{textAlign:'center',fontSize:'clamp(42px,7vw,86px)',fontWeight:900,lineHeight:.95,letterSpacing:'-.04em',marginBottom:28}}>
+        Du plan au chantier,<br/><span style={{color:'#c4324a',fontStyle:'italic'}}>en 30 secondes.</span>
+      </h1>
+      <p style={{textAlign:'center',fontSize:17,color:'#5a5a6e',maxWidth:600,margin:'0 auto 44px',lineHeight:1.75}}>
+        Kalepin automatise le calepinage pour le <strong style={{color:'#9a9aac'}}>bardage cassettes</strong>, la <strong style={{color:'#9a9aac'}}>brique de parement</strong> et le <strong style={{color:'#9a9aac'}}>carrelage</strong>. Plans d’exécution, métrés et dossiers techniques en quelques clics.
+      </p>
+      <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:14,flexWrap:'wrap'}}>
+        <button onClick={()=>setMode('signup')} style={{padding:'16px 36px',borderRadius:12,border:'none',background:'#c4324a',color:'#fff',fontSize:15,fontWeight:800,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 8px 32px rgba(196,50,74,.45)',transition:'all .2s'}}
+          onMouseOver={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 12px 40px rgba(196,50,74,.55)'}} onMouseOut={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='0 8px 32px rgba(196,50,74,.45)'}}>
+          Créer un compte gratuit
+        </button>
+        <button onClick={()=>setMode('login')} style={{padding:'16px 28px',borderRadius:12,border:'1px solid rgba(255,255,255,.1)',background:'rgba(255,255,255,.04)',color:'#9a9aac',fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .2s'}}
+          onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.2)';e.currentTarget.style.color='#f0ece6'}} onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.1)';e.currentTarget.style.color='#9a9aac'}}>
+          J'ai déjà un compte
+        </button>
+      </div>
+      <div style={{textAlign:'center',marginTop:14,fontSize:11,color:'#3a3a4e',letterSpacing:'.05em'}}>Sans carte bancaire · Accès immédiat · Module Cassettes gratuit</div>
+
+      {/* App UI mockup */}
+      <div style={{marginTop:60,position:'relative'}}>
+        <div style={{position:'absolute',inset:-1,borderRadius:22,background:'linear-gradient(135deg,rgba(196,50,74,.18),rgba(14,165,233,.08),transparent)',filter:'blur(1px)',zIndex:0}}/>
+        <div style={{position:'relative',zIndex:1,background:'#16161f',border:'1px solid rgba(255,255,255,.07)',borderRadius:20,overflow:'hidden',boxShadow:'0 40px 100px rgba(0,0,0,.6)'}}>
+          <div style={{padding:'10px 18px',borderBottom:'1px solid rgba(255,255,255,.06)',display:'flex',alignItems:'center',gap:10,background:'rgba(255,255,255,.02)'}}>
+            <div style={{display:'flex',gap:6}}>{['#ef4444','#f59e0b','#10b981'].map(c=><div key={c} style={{width:10,height:10,borderRadius:'50%',background:c,opacity:.6}}/>)}</div>
+            <div style={{flex:1,margin:'0 12px',height:22,borderRadius:6,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.05)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+              <span style={{fontSize:10,color:'#3a3a4e',fontFamily:'JetBrains Mono,monospace'}}>kalepin.fr — Façade Cassettes · Zone 1 · 18 400 × 7 200 mm</span>
+            </div>
+            <div style={{display:'flex',gap:6}}>
+              {[{l:'🧊 3D',c:'rgba(167,139,250,.2)',t:'#a78bfa'},{l:'📄 PDF',c:'rgba(196,50,74,.15)',t:'#c4324a'},{l:'📊 Excel',c:'rgba(16,185,129,.12)',t:'#10b981'}].map(b=>(
+                <div key={b.l} style={{padding:'3px 9px',borderRadius:6,background:b.c,fontSize:9,fontWeight:700,color:b.t}}>{b.l}</div>
+              ))}
+            </div>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'200px 1fr 185px',height:300}}>
+            <div style={{borderRight:'1px solid rgba(255,255,255,.06)',padding:12,display:'flex',flexDirection:'column',gap:7}}>
+              {[{l:'Zone',v:'Façade Nord',c:'#c4324a'},{l:'Longueur',v:'18 400 mm',c:'#f0ece6'},{l:'Hauteur',v:'7 200 mm',c:'#f0ece6'},{l:'Panneau',v:'2000×600',c:'#0ea5e9'},{l:'Pose',v:'Vertical',c:'#10b981'},{l:'Joint H/V',v:'8 mm',c:'#9a9aac'}].map((r,i)=>(
+                <div key={i} style={{background:'rgba(255,255,255,.03)',borderRadius:7,padding:'7px 9px',border:'1px solid rgba(255,255,255,.04)'}}>
+                  <div style={{fontSize:7,color:'#3a3a4e',marginBottom:2,textTransform:'uppercase',letterSpacing:'.06em'}}>{r.l}</div>
+                  <div style={{fontSize:11,fontWeight:700,color:r.c,fontFamily:'JetBrains Mono,monospace'}}>{r.v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{background:'#0e0e18',backgroundImage:'radial-gradient(rgba(196,50,74,.06) 1px,transparent 1px)',backgroundSize:'24px 24px',position:'relative',display:'flex',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(9,1fr)',gridTemplateRows:'repeat(5,1fr)',gap:2,width:'88%',height:'82%'}}>
+                {Array.from({length:45}).map((_,i)=>{
+                  const isEdge=i%9===0||i%9===8||i<9||i>=36;
+                  const isCut=i===0||i===8||i===36||i===44;
+                  return<div key={i} style={{borderRadius:2,background:isCut?'rgba(245,158,11,.2)':isEdge?'rgba(196,50,74,.22)':'rgba(196,50,74,.1)',border:`1px solid ${isCut?'rgba(245,158,11,.35)':isEdge?'rgba(196,50,74,.3)':'rgba(196,50,74,.18)'}`}}/>;
+                })}
+              </div>
+              <div style={{position:'absolute',top:10,left:10,padding:'3px 9px',borderRadius:5,background:'rgba(196,50,74,.15)',border:'1px solid rgba(196,50,74,.3)',fontSize:9,fontWeight:700,color:'#c4324a'}}>45 panneaux</div>
+              <div style={{position:'absolute',top:10,right:10,padding:'3px 9px',borderRadius:5,background:'rgba(16,185,129,.1)',border:'1px solid rgba(16,185,129,.25)',fontSize:9,fontWeight:700,color:'#10b981'}}>132.48 m²</div>
+              <div style={{position:'absolute',bottom:10,right:10,padding:'3px 9px',borderRadius:5,background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.25)',fontSize:9,fontWeight:700,color:'#f59e0b'}}>6 chutes</div>
+            </div>
+            <div style={{borderLeft:'1px solid rgba(255,255,255,.06)',padding:12,display:'flex',flexDirection:'column',gap:8}}>
+              <div style={{fontSize:8,fontWeight:700,color:'#3a3a4e',textTransform:'uppercase',letterSpacing:'.08em'}}>Teinte RAL</div>
+              {[{c:'#c45a3a',n:'RAL 3009'},{c:'#7a8c6e',n:'RAL 6011'},{c:'#4a6480',n:'RAL 5014'}].map((r,i)=>(
+                <div key={i} style={{display:'flex',alignItems:'center',gap:7,padding:'5px 7px',borderRadius:7,background:i===0?'rgba(196,50,74,.08)':'transparent',border:i===0?'1px solid rgba(196,50,74,.2)':'1px solid transparent'}}>
+                  <div style={{width:18,height:18,borderRadius:4,background:r.c,boxShadow:'0 2px 6px rgba(0,0,0,.3)'}}/>
+                  <span style={{fontSize:9,fontWeight:700,color:i===0?'#c4324a':'#4a4a5e',fontFamily:'JetBrains Mono,monospace'}}>{r.n}</span>
+                </div>
+              ))}
+              <div style={{marginTop:4,height:1,background:'rgba(255,255,255,.06)'}}/>
+              <div style={{fontSize:8,fontWeight:700,color:'#3a3a4e',textTransform:'uppercase',letterSpacing:'.08em'}}>Métrés</div>
+              {[{l:'Surface brute',v:'132.5 m²'},{l:'Coupes',v:'8.3 m²'},{l:'Net panneau',v:'124.2 m²'},{l:'Chutes',v:'6 pcs'}].map((s,i)=>(
+                <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'3px 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+                  <span style={{fontSize:9,color:'#3a3a4e'}}>{s.l}</span>
+                  <span style={{fontSize:10,fontWeight:700,color:'#f0ece6',fontFamily:'JetBrains Mono,monospace'}}>{s.v}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    {/* ── POURQUOI KALEPIN ── */}
-    <section id="concept" className="py-24 px-6 max-w-7xl mx-auto">
-      <div className="text-center mb-20">
-        <h2 className="text-3xl lg:text-5xl font-black italic uppercase tracking-tighter mb-4">Stop au gâchis de temps et de matériaux</h2>
-        <p className="text-slate-500 max-w-2xl mx-auto">Le calepinage manuel est la source de 80% des erreurs de commande et des litiges sur chantier.</p>
-      </div>
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-10">
+    {/* ══ CHIFFRES CLÉS ══ */}
+    <section style={{position:'relative',zIndex:1,borderTop:'1px solid rgba(255,255,255,.05)',borderBottom:'1px solid rgba(255,255,255,.05)',background:'rgba(255,255,255,.015)'}}>
+      <div style={{maxWidth:1200,margin:'0 auto',padding:'36px 32px',display:'grid',gridTemplateColumns:'repeat(4,1fr)'}}>
         {[
-          {ic:'fa-clock-rotate-left',bg:'bg-red-100',tc:'text-[#c4324a]',t:'Vitesse X10',d:'Finies les soirées à dessiner sur papier. Entrez vos dimensions, placez vos ouvertures, Kalepin calcule tout instantanément.'},
-          {ic:'fa-layer-group',bg:'bg-blue-100',tc:'text-blue-600',t:'Multi-Matériaux',d:'Un seul outil pour le bardage cassettes, la brique de parement et le carrelage XXL. Une polyvalence totale.'},
-          {ic:'fa-file-pdf',bg:'bg-emerald-100',tc:'text-emerald-600',t:'Dossiers Pro',d:'Exportez des fiches de débit Excel et des plans PDF 3D à joindre à vos devis pour impressionner vos clients.'}
-        ].map((c,i)=><div key={i} className="p-10 rounded-[2.5rem] card-hover bg-white">
-          <div className={`w-16 h-16 ${c.bg} rounded-2xl flex items-center justify-center ${c.tc} text-2xl mb-8`}><i className={`fa-solid ${c.ic}`}></i></div>
-          <h3 className="text-2xl font-extrabold mb-4 italic uppercase tracking-tight">{c.t}</h3>
-          <p className="text-slate-500 leading-relaxed italic">{c.d}</p>
-        </div>)}
+          {n:'3',u:'modules',d:'Cassettes · Brique · Carrelage',c:'#c4324a'},
+          {n:'30s',u:'par projet',d:"Un calepin complet, du calibrage à l'export",c:'#0ea5e9'},
+          {n:'100%',u:'cloud',d:'Aucune installation, accessible partout',c:'#10b981'},
+          {n:'∞',u:'zones',d:"Autant de zones que votre projet l'exige",c:'#f59e0b'},
+        ].map((s,i)=>(
+          <div key={i} style={{padding:'24px 28px',borderRight:i<3?'1px solid rgba(255,255,255,.05)':'none',textAlign:'center'}}>
+            <div style={{fontSize:40,fontWeight:900,color:s.c,fontFamily:'JetBrains Mono,monospace',lineHeight:1,letterSpacing:'-.04em'}}>{s.n} <span style={{fontSize:18,opacity:.8}}>{s.u}</span></div>
+            <div style={{fontSize:11,color:'#4a4a5e',marginTop:6,lineHeight:1.5}}>{s.d}</div>
+          </div>
+        ))}
       </div>
     </section>
 
-    {/* ── APPELS D'OFFRES ── */}
-    <section id="ao" className="bg-slate-900 py-24 text-white overflow-hidden relative">
-      <div className="absolute top-0 right-0 w-1/3 h-full bg-[#c4324a]/10 skew-x-12 transform translate-x-20"></div>
-      <div className="max-w-7xl mx-auto px-6 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
-          <div>
-            <h2 className="text-4xl lg:text-6xl font-black italic uppercase tracking-tighter mb-8 leading-tight">Dominez vos <br/><span className="text-[#c4324a]">Appels d'Offres</span></h2>
-            <p className="text-slate-400 text-lg mb-10 leading-relaxed">Dans une mise en concurrence, le prix ne suffit plus. Kalepin vous donne l'avantage technique pour rassurer le Maître d'Ouvrage et le Bureau de Contrôle.</p>
-            <ul className="space-y-6">
-              {[
-                {t:'Mémoire Technique Augmenté',d:'Joignez des plans 3D précis qui prouvent votre maîtrise du projet.'},
-                {t:'Justification du Prix',d:'Détaillez chaque coupe et chaque m² pour justifier vos devis sans contestation.'},
-                {t:"Image d'Expertise",d:"Positionnez-vous comme l'entreprise la plus moderne du lot."}
-              ].map((item,i)=><li key={i} className="flex gap-4">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-[#c4324a] flex items-center justify-center text-[10px]"><i className="fa-solid fa-check"></i></div>
-                <div><b className="block text-white uppercase italic tracking-widest text-sm mb-1">{item.t}</b><span className="text-slate-500 text-sm">{item.d}</span></div>
-              </li>)}
-            </ul>
-          </div>
-          <div className="bg-white/5 border border-white/10 p-8 rounded-[3rem] backdrop-blur-md">
-            <div className="text-center mb-8"><span className="text-[#c4324a] font-black text-6xl italic">85%</span><p className="text-xs font-bold uppercase tracking-widest text-slate-400 mt-2">Taux d'acceptation des devis avec visuels 3D</p></div>
-            <div className="space-y-4">
-              {['AO Résidence Les Pins','AO Centre Commercial','AO Façade Mairie'].map((n,i)=><div key={i} className="h-12 bg-white/10 rounded-xl flex items-center px-4 justify-between italic text-xs font-bold"><span>{n}</span><span className="text-emerald-500 uppercase">Gagné</span></div>)}
+    {/* ══ MODULES ══ */}
+    <section id="modules" style={{position:'relative',zIndex:1,padding:'96px 32px',maxWidth:1200,margin:'0 auto'}}>
+      <div style={{textAlign:'center',marginBottom:60}}>
+        <div style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:10}}>Les modules</div>
+        <h2 style={{fontSize:'clamp(30px,4.5vw,52px)',fontWeight:900,letterSpacing:'-.03em',marginBottom:14}}>Tout ce qu’il faut pour<br/><span style={{color:'#c4324a'}}>chaque corps de métier</span></h2>
+        <p style={{fontSize:15,color:'#5a5a6e',maxWidth:480,margin:'0 auto'}}>Trois modules spécialisés, construits pour les contraintes réelles du terrain.</p>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:18}}>
+        {[
+          {emoji:'🏢',title:'Façade Cassettes',sub:'Bardage métallique · Composite · Trespa · Alucobond',color:'#c4324a',bg:'rgba(196,50,74,.055)',border:'rgba(196,50,74,.14)',badge:'Gratuit',features:['Calepinage multi-zones sur photo ou PDF',"Gestion de l'ossature (montants, lisses, renforts)","Placement d'ouvertures (fenêtres, portes, allèges)",'Palette RAL complète, finitions mat/brillant/satiné','Vue 3D interactive avec rotation et ombres','Export PDF plan numéroté + fiche de débit Excel','QR Code chantier scannable par zone']},
+          {emoji:'🧱',title:'Façade Brique',sub:'Parement · Plaquettes · Clinker · Béton',color:'#d97706',bg:'rgba(217,119,6,.055)',border:'rgba(217,119,6,.14)',badge:'Pro',features:['Appareillages classiques (Panneresse, Flamande, Anglaise)','Joints horizontaux et verticaux au mm près','Coupes et retours calculés automatiquement','Multi-façades dans un même projet','Personnalisation couleur brique et joint','Métrés détaillés par façade et par type','Export PDF + tableau quantitatif Excel']},
+          {emoji:'🔲',title:'Carrelage',sub:'Sol · Mur · Piscine · Terrasse · Pièce humide',color:'#0ea5e9',bg:'rgba(14,165,233,.055)',border:'rgba(14,165,233,.14)',badge:'Pro',features:['Pose droite, décalée, diagonale, en chevron','Formats et joints entièrement personnalisables','Zones polygonales complexes (pièces non rectangulaires)','Gestion des départs de pose et seuils','Coupes périphériques et chutes calculées','Tableau de métrés avec ratio de chutes','Motifs de pose avancés et répétition']},
+        ].map((m,i)=>(
+          <div key={i} style={{background:m.bg,border:`1.5px solid ${m.border}`,borderRadius:18,padding:26,position:'relative',transition:'all .25s'}}
+            onMouseOver={e=>{e.currentTarget.style.transform='translateY(-4px)';e.currentTarget.style.boxShadow=`0 24px 56px ${m.bg}`}}
+            onMouseOut={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+            {m.badge&&<div style={{position:'absolute',top:16,right:16,padding:'2px 9px',borderRadius:20,background:`${m.color}18`,border:`1px solid ${m.color}35`,fontSize:9,fontWeight:700,color:m.color,letterSpacing:'.06em'}}>{m.badge}</div>}
+            <div style={{fontSize:34,marginBottom:12}}>{m.emoji}</div>
+            <div style={{fontSize:18,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em',marginBottom:3}}>{m.title}</div>
+            <div style={{fontSize:11,color:'#4a4a5e',marginBottom:18,fontStyle:'italic'}}>{m.sub}</div>
+            <div style={{height:1,background:'rgba(255,255,255,.06)',marginBottom:18}}/>
+            <div style={{display:'flex',flexDirection:'column',gap:9}}>
+              {m.features.map((f,j)=>(
+                <div key={j} style={{display:'flex',alignItems:'flex-start',gap:9,fontSize:12,color:'#6a6a7e',lineHeight:1.5}}>
+                  <div style={{width:15,height:15,borderRadius:'50%',background:`${m.color}15`,border:`1px solid ${m.color}28`,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1}}>
+                    <svg width="7" height="7" viewBox="0 0 8 8" fill="none"><path d="M1.5 4l2 2 3-3" stroke={m.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  </div>
+                  {f}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        ))}
       </div>
     </section>
 
-    {/* ── RENTABILITÉ ── */}
-    <section id="rentabilite" className="py-24 px-6 bg-white">
-      <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-20">
-        <div className="lg:w-1/3">
-          <h2 className="text-4xl font-black italic uppercase tracking-tighter mb-6">Un investissement, <br/>pas une dépense.</h2>
-          <p className="text-slate-500 mb-8 font-medium">Pourquoi payer 39€/mois ? Parce que l'outil vous en fait gagner 1000€ dès le premier chantier.</p>
-          <div className="p-6 bg-slate-50 rounded-2xl border-l-4 border-[#c4324a] italic text-sm text-slate-600">"Avant Kalepin, nous commandions 10% de stock en plus 'au cas où'. Aujourd'hui, on commande au carreau près."</div>
+    {/* ══ COMMENT ÇA MARCHE ══ */}
+    <section id="comment" style={{position:'relative',zIndex:1,padding:'96px 32px',background:'rgba(255,255,255,.014)',borderTop:'1px solid rgba(255,255,255,.05)',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
+      <div style={{maxWidth:1200,margin:'0 auto'}}>
+        <div style={{textAlign:'center',marginBottom:68}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:10}}>Workflow</div>
+          <h2 style={{fontSize:'clamp(30px,4.5vw,50px)',fontWeight:900,letterSpacing:'-.03em',marginBottom:10}}>De l’image au dossier d’exécution</h2>
+          <p style={{fontSize:15,color:'#5a5a6e'}}>Un processus guidé, pensé pour aller vite sans sacrifier la précision.</p>
         </div>
-        <div className="lg:w-2/3 grid sm:grid-cols-2 gap-6">
-          <div className="p-8 bg-slate-900 text-white rounded-[2rem] flex flex-col justify-between">
-            <h4 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-10">Gain de temps moyen</h4>
-            <div><span className="text-6xl font-black italic text-[#c4324a]">-4h</span><p className="text-sm mt-4 text-slate-400 italic">Par semaine sur la préparation de chantiers.</p></div>
-          </div>
-          <div className="p-8 bg-[#c4324a] text-white rounded-[2rem] flex flex-col justify-between">
-            <h4 className="text-white/60 font-bold uppercase tracking-widest text-xs mb-10">Réduction des pertes</h4>
-            <div><span className="text-6xl font-black italic">-15%</span><p className="text-sm mt-4 text-white/80 italic">Économie directe sur l'achat de matériaux.</p></div>
-          </div>
-          <div className="p-8 bg-slate-100 rounded-[2rem] flex flex-col justify-between sm:col-span-2">
-            <h4 className="text-slate-400 font-bold uppercase tracking-widest text-xs mb-6 text-center">Simulateur de rentabilité</h4>
-            <div className="flex justify-around items-center text-center">
-              <div><p className="text-2xl font-black italic uppercase">1200€</p><p className="text-[10px] uppercase font-bold text-slate-400">Coût Erreur Manuel</p></div>
-              <div className="text-[#c4324a] text-2xl font-black tracking-widest">VS</div>
-              <div><p className="text-2xl font-black italic uppercase">39€</p><p className="text-[10px] uppercase font-bold text-slate-400">Abonnement Kalepin</p></div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:0,position:'relative'}}>
+          <div style={{position:'absolute',top:42,left:'12.5%',right:'12.5%',height:1,background:'linear-gradient(90deg,transparent,rgba(196,50,74,.5),rgba(196,50,74,.2),rgba(196,50,74,.05),transparent)',zIndex:0}}/>
+          {[
+            {n:'01',ic:'📐',title:'Importer le plan',desc:"Chargez une photo, un PDF ou un DXF. Kalepin vous guide pour calibrer l'échelle en 2 clics via deux points de référence."},
+            {n:'02',ic:'✏️',title:'Définir les zones',desc:'Tracez vos zones à la souris — rectangulaires ou polygonales. Placez vos ouvertures, seuils et contraintes de pose.'},
+            {n:'03',ic:'⚙️',title:'Paramétrer',desc:'Choisissez format, pose, joints, décalage et coloris. Tout se recalcule visuellement en temps réel à chaque modification.'},
+            {n:'04',ic:'📤',title:'Exporter',desc:'Générez en un clic le PDF, la fiche de débit Excel, le QR Code chantier ou la vue 3D pour votre devis.'},
+          ].map((s,i)=>(
+            <div key={i} style={{padding:'0 24px',textAlign:'center',position:'relative',zIndex:1}}>
+              <div style={{width:84,height:84,borderRadius:18,background:'#16161f',border:'1.5px solid rgba(255,255,255,.08)',margin:'0 auto 22px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:30,boxShadow:'0 8px 32px rgba(0,0,0,.4)',position:'relative'}}>
+                {s.ic}
+                <div style={{position:'absolute',top:-9,right:-9,width:24,height:24,borderRadius:7,background:'#c4324a',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,fontWeight:800,fontFamily:'JetBrains Mono,monospace',color:'#fff',boxShadow:'0 3px 10px rgba(196,50,74,.5)'}}>{s.n}</div>
+              </div>
+              <div style={{fontSize:15,fontWeight:800,color:'#f0ece6',marginBottom:8,letterSpacing:'-.01em'}}>{s.title}</div>
+              <div style={{fontSize:12,color:'#5a5a6e',lineHeight:1.7}}>{s.desc}</div>
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>
 
-    {/* ── QR CODE ── */}
-    <section className="py-24 bg-slate-50 overflow-hidden">
-      <div className="max-w-7xl mx-auto px-6 grid lg:grid-cols-2 gap-20 items-center">
-        <div className="relative">
-          <div className="absolute -inset-20 bg-[#c4324a]/5 rounded-full blur-3xl"></div>
-          <div className="relative bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col items-center border border-slate-100">
-            <div className="w-56 h-56 bg-slate-50 rounded-3xl flex items-center justify-center mb-8 border-2 border-dashed border-slate-200"><i className="fa-solid fa-qrcode text-9xl text-slate-800"></i></div>
-            <div className="text-center italic uppercase font-black text-[#c4324a] tracking-widest">Scan pour vue 3D</div>
-            <p className="text-[10px] text-slate-400 mt-2 uppercase font-bold tracking-widest">Projet #8492 — Résidence Horizon</p>
-          </div>
-        </div>
+    {/* ══ AVANTAGES ══ */}
+    <section id="avantages" style={{position:'relative',zIndex:1,padding:'96px 32px',maxWidth:1200,margin:'0 auto'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:80,alignItems:'center'}}>
         <div>
-          <span className="text-[#c4324a] font-black uppercase text-xs tracking-[0.3em] mb-4 block italic">Technologie sans-fil</span>
-          <h2 className="text-4xl lg:text-5xl font-black italic uppercase tracking-tighter mb-8 leading-tight">Le plan dans <br/>la poche des poseurs.</h2>
-          <p className="text-slate-500 mb-8 leading-relaxed">Plus besoin d'imprimer des plans A0 fragiles. Générez un QR Code pour chaque zone. Vos équipes le flashent et voient immédiatement :</p>
-          <div className="grid grid-cols-2 gap-4">
-            {['Ordre de pose','Détail des coupes','Vues 3D interactives','Métrés par zone'].map((t,i)=><div key={i} className="flex items-center gap-3 text-sm font-bold italic uppercase tracking-tight text-slate-700"><i className="fa-solid fa-check text-[#c4324a]"></i> {t}</div>)}
+          <div style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:14}}>Pourquoi Kalepin ?</div>
+          <h2 style={{fontSize:'clamp(26px,3.5vw,44px)',fontWeight:900,letterSpacing:'-.03em',marginBottom:18,lineHeight:1.1}}>Tout ce que vous faisiez<br/>à la main, <span style={{color:'#c4324a'}}>automatisé.</span></h2>
+          <p style={{fontSize:14,color:'#5a5a6e',lineHeight:1.75,marginBottom:32}}>Le calepinage manuel — dessins papier, tableurs bricolés, retours client interminables — représente des heures perdues sur chaque chantier. Kalepin centralise et automatise tout ce processus.</p>
+          <div style={{display:'flex',flexDirection:'column',gap:16}}>
+            {[
+              {ic:'⚡',t:'10x plus rapide',d:'Un calepin complet en 30 secondes là où un dessinateur met 3 à 4 heures.'},
+              {ic:'🎯',t:'Zéro erreur de commande',d:'Les métrés sont calculés automatiquement, coupes et chutes incluses.'},
+              {ic:'🏆',t:"Dossiers d'AO qui gagnent",d:"Plans 3D professionnels dans vos devis. L'avantage technique qui fait la différence."},
+              {ic:'📱',t:'Plans directement sur chantier',d:'QR Code par zone : vos poseurs flashent et voient leur plan sur téléphone, sans imprimer.'},
+            ].map((a,i)=>(
+              <div key={i} style={{display:'flex',gap:14,alignItems:'flex-start'}}>
+                <div style={{width:38,height:38,borderRadius:10,background:'rgba(196,50,74,.1)',border:'1px solid rgba(196,50,74,.18)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,flexShrink:0}}>{a.ic}</div>
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:3}}>{a.t}</div>
+                  <div style={{fontSize:12,color:'#5a5a6e',lineHeight:1.6}}>{a.d}</div>
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          {[
+            {ic:'📱',t:'QR Code chantier',d:"Chaque zone génère un QR Code unique. Le poseur le scanne et accède instantanément au plan, aux coupes et aux métrés de sa zone — sans impression.",bc:'rgba(196,50,74,.1)',bb:'rgba(196,50,74,.2)',bh:'rgba(196,50,74,.3)'},
+            {ic:'🧊',t:'Vue 3D interactive',d:"Visualisez votre façade en 3D directement dans l'outil. Rotation libre, ombres dynamiques, couleurs RAL réelles. Parfait pour valider avec le client avant toute pose.",bc:'rgba(167,139,250,.1)',bb:'rgba(167,139,250,.2)',bh:'rgba(167,139,250,.3)'},
+            {ic:'📋',t:'Export PDF & Excel clés en main',d:"Plan numéroté, fiche de débit avec dimensions exactes, tableau de métrés complet. Tout ce qu'il faut pour commander et poser sans erreur.",bc:'rgba(16,185,129,.1)',bb:'rgba(16,185,129,.2)',bh:'rgba(16,185,129,.3)'},
+            {ic:'☁️',t:'Projets sauvegardés dans le cloud',d:"Accédez à vos projets depuis n'importe quel appareil. Reprenez là où vous en étiez, retrouvez l'historique de tous vos chantiers.",bc:'rgba(14,165,233,.1)',bb:'rgba(14,165,233,.2)',bh:'rgba(14,165,233,.3)'},
+          ].map((c,i)=>(
+            <div key={i} style={{background:'#16161f',border:`1px solid ${c.bb}`,borderRadius:16,padding:20,display:'flex',gap:16,alignItems:'flex-start',transition:'all .2s'}}
+              onMouseOver={e=>e.currentTarget.style.borderColor=c.bh} onMouseOut={e=>e.currentTarget.style.borderColor=c.bb}>
+              <div style={{width:52,height:52,borderRadius:12,background:c.bc,border:`1px solid ${c.bb}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>{c.ic}</div>
+              <div>
+                <div style={{fontSize:14,fontWeight:700,color:'#f0ece6',marginBottom:5}}>{c.t}</div>
+                <div style={{fontSize:12,color:'#5a5a6e',lineHeight:1.65}}>{c.d}</div>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </section>
 
-    {/* ── TARIFS ── */}
-    <section id="tarifs" className="py-24 px-6 bg-white">
-      <div className="max-w-4xl mx-auto text-center mb-16">
-        <h2 className="text-4xl lg:text-6xl font-black italic uppercase tracking-tighter mb-4">Tarification Transparente</h2>
-        <p className="text-slate-500 uppercase text-xs font-bold tracking-widest italic">Choisissez le plan qui correspond à votre volume d'activité</p>
-      </div>
-      <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
-        {/* Free */}
-        <div className="p-10 rounded-[2.5rem] border border-slate-100 bg-slate-50 flex flex-col justify-between">
-          <div>
-            <h4 className="font-black italic uppercase tracking-widest mb-4">Découverte</h4>
-            <div className="flex items-baseline gap-1 mb-8"><span className="text-4xl font-black italic">0€</span><span className="text-slate-400 text-xs font-bold uppercase tracking-widest">/mois</span></div>
-            <ul className="space-y-4 text-xs font-bold text-slate-500 uppercase italic tracking-wider mb-12">
-              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> 2 Projets max</li>
-              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> Module Bardage</li>
-              <li><i className="fa-solid fa-xmark text-red-300 mr-2"></i> Pas d'export PDF/Excel</li>
-            </ul>
-          </div>
-          <button onClick={()=>setMode('signup')} className="w-full py-4 border-2 border-slate-200 rounded-xl font-black uppercase italic tracking-widest hover:bg-slate-200 transition-colors">Gratuit</button>
+    {/* ══ MÉTIERS ══ */}
+    <section id="metiers" style={{position:'relative',zIndex:1,padding:'80px 32px',background:'rgba(255,255,255,.014)',borderTop:'1px solid rgba(255,255,255,.05)',borderBottom:'1px solid rgba(255,255,255,.05)'}}>
+      <div style={{maxWidth:1200,margin:'0 auto'}}>
+        <div style={{textAlign:'center',marginBottom:48}}>
+          <div style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:10}}>Fait pour vous</div>
+          <h2 style={{fontSize:'clamp(28px,4vw,46px)',fontWeight:900,letterSpacing:'-.03em'}}>Qui utilise Kalepin ?</h2>
         </div>
-        {/* Pro */}
-        <div className="p-10 rounded-[3rem] border-4 border-[#c4324a] bg-white shadow-2xl relative flex flex-col justify-between scale-110 z-10">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#c4324a] text-white px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest italic shadow-lg">Le plus populaire</div>
-          <div>
-            <h4 className="font-black italic uppercase tracking-widest mb-4">Artisan Pro</h4>
-            <div className="flex items-baseline gap-1 mb-8"><span className="text-5xl font-black italic">39€</span><span className="text-slate-400 text-xs font-bold uppercase tracking-widest">/mois</span></div>
-            <ul className="space-y-4 text-[10px] font-bold text-slate-700 uppercase italic tracking-widest mb-12">
-              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Projets Illimités</li>
-              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Tous les modules (3D)</li>
-              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Exports PDF & Excel</li>
-              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> QR Codes Chantier</li>
-              <li><i className="fa-solid fa-check text-[#c4324a] mr-2"></i> Support Prioritaire</li>
-            </ul>
-          </div>
-          <button onClick={()=>setMode('signup')} className="w-full py-4 bg-[#c4324a] text-white rounded-xl font-black uppercase italic tracking-widest shadow-xl shadow-red-200 hover:scale-105 transition-transform">Démarrer l'essai</button>
-        </div>
-        {/* Enterprise */}
-        <div className="p-10 rounded-[2.5rem] border border-slate-100 bg-slate-50 flex flex-col justify-between">
-          <div>
-            <h4 className="font-black italic uppercase tracking-widest mb-4">Entreprise</h4>
-            <div className="flex items-baseline gap-1 mb-8"><span className="text-4xl font-black italic">99€</span><span className="text-slate-400 text-xs font-bold uppercase tracking-widest">/mois</span></div>
-            <ul className="space-y-4 text-xs font-bold text-slate-500 uppercase italic tracking-wider mb-12">
-              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> Jusqu'à 5 Utilisateurs</li>
-              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> Marque Blanche (Logo)</li>
-              <li><i className="fa-solid fa-check text-slate-300 mr-2"></i> API Accès DXF/BIM</li>
-            </ul>
-          </div>
-          <button onClick={()=>setMode('login')} className="w-full py-4 border-2 border-slate-200 rounded-xl font-black uppercase italic tracking-widest hover:bg-slate-200 transition-colors">Contacter</button>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
+          {[
+            {ic:'🏗️',t:'Façadiers & bardeurs',d:"Calepins cassettes et brique sur le terrain ou au bureau. Gagnez vos AO avec des dossiers techniques impeccables."},
+            {ic:'🔲',t:'Carreleurs & poseurs',d:'Optimisez vos poses et réduisez les chutes. Générez vos commandes exactes dès la visite de site.'},
+            {ic:'📐',t:"Architectes & maîtres d'œuvre",d:"Intégrez des visuels 3D techniques dans vos DCE et validez le rendu avec vos clients avant toute pose."},
+            {ic:'🏢',t:"Bureaux d'études",d:"Centralisez les projets de vos équipes. Standardisez les rendus et optimisez les commandes groupées."},
+          ].map((m,i)=>(
+            <div key={i} style={{padding:22,borderRadius:14,background:'#16161f',border:'1px solid rgba(255,255,255,.07)',transition:'all .2s'}}
+              onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.22)';e.currentTarget.style.transform='translateY(-3px)'}} onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.07)';e.currentTarget.style.transform='none'}}>
+              <div style={{fontSize:30,marginBottom:12}}>{m.ic}</div>
+              <div style={{fontSize:14,fontWeight:700,color:'#f0ece6',marginBottom:6}}>{m.t}</div>
+              <div style={{fontSize:12,color:'#5a5a6e',lineHeight:1.65}}>{m.d}</div>
+            </div>
+          ))}
         </div>
       </div>
     </section>
 
-    {/* ── FOOTER CTA ── */}
-    <footer className="py-32 bg-slate-900 text-white text-center px-6 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[#c4324a]/5"></div>
-      <div className="relative z-10">
-        <h2 className="text-5xl lg:text-7xl font-black italic mb-8 uppercase tracking-tighter">Votre prochain <br/><span className="text-[#c4324a]">Chantier</span> commence ici.</h2>
-        <button onClick={()=>setMode('signup')} className="px-16 py-8 bg-[#c4324a] text-white rounded-[2rem] font-black text-3xl shadow-2xl hover:scale-110 transition-all uppercase italic tracking-tighter">Accès immédiat</button>
-        <div className="mt-24 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto opacity-40 font-black italic uppercase text-[10px] tracking-[0.4em]">
-          <span>Façadiers</span><span>Carreleurs</span><span>Architectes</span><span>Constructeurs</span>
+    {/* ══ FOOTER CTA ══ */}
+    <section style={{position:'relative',zIndex:1,padding:'110px 32px',textAlign:'center',overflow:'hidden'}}>
+      <div style={{position:'absolute',inset:0,background:'radial-gradient(ellipse 70% 50% at 50% 100%,rgba(196,50,74,.055),transparent)',pointerEvents:'none'}}/>
+      <div style={{position:'relative',zIndex:1}}>
+        <div style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:18}}>Commencez maintenant</div>
+        <h2 style={{fontSize:'clamp(34px,5.5vw,68px)',fontWeight:900,letterSpacing:'-.04em',marginBottom:18,lineHeight:.95}}>
+          Votre prochain chantier<br/>commence <span style={{color:'#c4324a',fontStyle:'italic'}}>ici.</span>
+        </h2>
+        <p style={{fontSize:15,color:'#5a5a6e',maxWidth:460,margin:'0 auto 44px',lineHeight:1.75}}>
+          Créez votre compte en 30 secondes. Le module Cassettes est gratuit sans limite de durée. Passez Pro quand vous en avez besoin.
+        </p>
+        <div style={{display:'flex',justifyContent:'center',gap:12,flexWrap:'wrap',marginBottom:28}}>
+          <button onClick={()=>setMode('signup')} style={{padding:'16px 40px',borderRadius:12,border:'none',background:'#c4324a',color:'#fff',fontSize:15,fontWeight:800,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 10px 36px rgba(196,50,74,.5)',transition:'all .2s'}}
+            onMouseOver={e=>{e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 14px 44px rgba(196,50,74,.6)'}} onMouseOut={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='0 10px 36px rgba(196,50,74,.5)'}}>
+            Créer mon compte gratuit
+          </button>
+          <button onClick={()=>setMode('login')} style={{padding:'16px 26px',borderRadius:12,border:'1px solid rgba(255,255,255,.1)',background:'rgba(255,255,255,.04)',color:'#7a7a8e',fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .2s'}}
+            onMouseOver={e=>{e.currentTarget.style.color='#f0ece6';e.currentTarget.style.borderColor='rgba(255,255,255,.2)'}} onMouseOut={e=>{e.currentTarget.style.color='#7a7a8e';e.currentTarget.style.borderColor='rgba(255,255,255,.1)'}}>
+            Se connecter
+          </button>
         </div>
-        <p className="mt-20 text-slate-600 text-[10px] uppercase font-bold tracking-widest">© 2025 KALEPIN SaaS • Le calepinage réinventé</p>
+        <div style={{display:'flex',justifyContent:'center',gap:28,flexWrap:'wrap'}}>
+          {['✓ Sans carte bancaire','✓ Accès immédiat','✓ Données sécurisées','✓ Support réactif'].map(t=>(
+            <span key={t} style={{fontSize:12,color:'#3a3a4e',fontWeight:600}}>{t}</span>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <footer style={{position:'relative',zIndex:1,borderTop:'1px solid rgba(255,255,255,.05)',padding:'28px 32px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:10}}>
+      <div style={{display:'flex',alignItems:'center',gap:8}}>
+        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,color:'#fff',fontStyle:'italic'}}>K</div>
+        <span style={{fontSize:13,fontWeight:700,color:'#f0ece6'}}>Kalepin</span>
+      </div>
+      <p style={{fontSize:10,color:'#2a2a3a',textAlign:'center'}}>© 2025 Kalepin · Calepinage technique automatisé pour les professionnels du bâtiment</p>
+      <div style={{display:'flex',gap:18}}>
+        {['Façadiers','Carreleurs','Architectes'].map(t=><span key={t} style={{fontSize:10,color:'#2a2a3a',fontWeight:600}}>{t}</span>)}
       </div>
     </footer>
+
   </div>;
 
     // ── Écran de connexion / inscription avec présentation ──
