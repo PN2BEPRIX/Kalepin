@@ -1398,6 +1398,59 @@ async function adminSetUserRole(userId,role){
     return res.ok;
   }catch(e){return false}
 }
+async function adminGetAllSubs(){
+  const s=getAuthSession();if(!s)return[];
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions?select=*&order=updated_at.desc',{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return[];return await res.json();
+  }catch(e){return[]}
+}
+
+async function adminGetUserSub(userId){
+  const s=getAuthSession();if(!s)return null;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions?user_id=eq.'+userId+'&select=*&order=created_at.desc&limit=1',{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return null;const d=await res.json();return d[0]||null;
+  }catch(e){return null}
+}
+
+async function adminSetUserSub(userId,email,plan,status,endDate){
+  // endDate = ISO string ou null (accès illimité)
+  const s=getAuthSession();if(!s)return false;
+  const existing=await adminGetUserSub(userId);
+  const now=new Date().toISOString();
+  const payload={user_id:userId,email,plan,status,
+    updated_at:now,
+    trial_start:existing?.trial_start||now,
+    trial_end:endDate||null,
+    stripe_customer_id:existing?.stripe_customer_id||null,
+    stripe_subscription_id:existing?.stripe_subscription_id||null,
+    admin_override:true,
+    admin_note:null,
+  };
+  try{
+    if(existing){
+      const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions?user_id=eq.'+userId,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},
+        body:JSON.stringify({plan,status,trial_end:endDate||null,updated_at:now,admin_override:true})
+      });
+      return res.ok;
+    }else{
+      const res=await fetch(SUPA.url+'/rest/v1/kalepin_subscriptions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token,'Prefer':'return=minimal'},
+        body:JSON.stringify(payload)
+      });
+      return res.ok;
+    }
+  }catch(e){return false}
+}
+
 async function adminProjectStats(){
   const s=getAuthSession();if(!s)return[];
   try{
@@ -1412,15 +1465,137 @@ async function adminProjectStats(){
 // ═══════════════════════════════════════════════════════════
 // SUBSCRIPTION & STRIPE
 // ═══════════════════════════════════════════════════════════
-const PLANS={
-  solo:{id:'solo',name:'Solo',price:39,features:['1 utilisateur','Projets illimites','Export PDF & Excel','Vue 3D + QR chantier']},
-  equipe:{id:'equipe',name:'Equipe',price:99,features:['5 utilisateurs','Partage de projets','Import DXF/DWG','Support prioritaire']},
-  entreprise:{id:'entreprise',name:'Entreprise',price:249,features:['Utilisateurs illimites','API & integrations','Export DSTV/CNC','Account manager']}
-};
 const TRIAL_DAYS=14;
 const STRIPE_CONFIG_KEY='kalepin_stripe';
-// User sets these after creating Stripe products
 function getStripeConfig(){try{return JSON.parse(localStorage.getItem(STRIPE_CONFIG_KEY)||'{}')}catch(e){return{}}}
+
+// ═══════════════════════════════════════════════════════════
+// PLAN LIMITS — source unique de vérité pour toutes les limites
+// ═══════════════════════════════════════════════════════════
+const PLAN_LIMITS={
+  free:{
+    id:'free', name:'Freemium', price:0,
+    maxProjects:2,          // nb de projets cloud max
+    maxZonesPerProject:1,   // zones par projet cassettes
+    modules:['cassettes'],  // modules accessibles
+    has3D:false,
+    hasQR:false,
+    hasDXF:true,            // import image/PDF ok, DXF non
+    hasDXFimport:false,
+    hasExcel:false,
+    pdfPerMonth:3,          // exports PDF / mois
+    users:1,
+    badge:null,
+    color:'#5a5a7e',
+    features:[
+      '2 projets max',
+      '1 zone par projet',
+      'Module Cassettes uniquement',
+      '3 exports PDF / mois',
+      'Sauvegarde cloud',
+    ],
+    limits:[
+      'Vue 3D désactivée',
+      'Export Excel désactivé',
+      'QR chantier désactivé',
+      'Modules Brique & Carrelage verrouillés',
+    ],
+  },
+  pro:{
+    id:'pro', name:'Pro', price:39,
+    maxProjects:-1,
+    maxZonesPerProject:-1,
+    modules:['cassettes','briques','carrelage'],
+    has3D:true,
+    hasQR:true,
+    hasDXF:true,
+    hasDXFimport:true,
+    hasExcel:true,
+    pdfPerMonth:-1,
+    users:1,
+    badge:'Populaire',
+    color:'#c4324a',
+    features:[
+      'Projets & zones illimités',
+      'Tous les modules (Cassettes, Brique, Carrelage)',
+      'Vue 3D + QR chantier',
+      'Export PDF & Excel illimités',
+      'Import DXF/PDF',
+      'Support email prioritaire',
+    ],
+    limits:[],
+  },
+  entreprise:{
+    id:'entreprise', name:'Entreprise', price:99,
+    maxProjects:-1,
+    maxZonesPerProject:-1,
+    modules:['cassettes','briques','carrelage'],
+    has3D:true,
+    hasQR:true,
+    hasDXF:true,
+    hasDXFimport:true,
+    hasExcel:true,
+    pdfPerMonth:-1,
+    users:5,
+    badge:'Équipe',
+    color:'#0ea5e9',
+    features:[
+      'Tout le plan Pro',
+      '5 utilisateurs / licences',
+      'Partage de projets équipe',
+      'Import DXF/DWG avancé',
+      'Catalogue fabricants',
+      'Account manager dédié',
+    ],
+    limits:[],
+  },
+};
+
+// Retourne les limites du plan actif de l'utilisateur
+function getPlanLimits(subStatus){
+  if(!subStatus||!subStatus.active)return PLAN_LIMITS.free;
+  const plan=subStatus.plan||'free';
+  return PLAN_LIMITS[plan]||PLAN_LIMITS.free;
+}
+
+// Compteur exports PDF mensuel (localStorage, sans backend pour l'instant)
+const PDF_COUNTER_KEY='kalepin_pdf_exports';
+function getPdfExportCount(){
+  try{
+    const d=JSON.parse(localStorage.getItem(PDF_COUNTER_KEY)||'{}');
+    const month=new Date().toISOString().slice(0,7);// YYYY-MM
+    return{count:d.month===month?d.count:0,month};
+  }catch(e){return{count:0,month:new Date().toISOString().slice(0,7)}}
+}
+function incrementPdfExportCount(){
+  try{
+    const{count,month}=getPdfExportCount();
+    localStorage.setItem(PDF_COUNTER_KEY,JSON.stringify({month,count:count+1}));
+  }catch(e){}
+}
+
+// Composant cadenas réutilisable pour features verrouillées
+function LockBadge({reason,onUpgrade,style={}}){
+  return<div onClick={e=>{e.stopPropagation();onUpgrade&&onUpgrade()}}
+    style={{display:'inline-flex',alignItems:'center',gap:5,padding:'3px 10px',borderRadius:20,
+      background:'rgba(196,50,74,.12)',border:'1px solid rgba(196,50,74,.25)',cursor:'pointer',
+      fontSize:10,fontWeight:700,color:'#c4324a',...style}}>
+    🔒 {reason||'Pro'}
+  </div>;
+}
+
+// Overlay de verrouillage sur un module entier
+function ModuleLock({label,onUpgrade}){
+  return<div onClick={e=>{e.stopPropagation();onUpgrade&&onUpgrade()}}
+    style={{position:'absolute',inset:0,borderRadius:20,display:'flex',flexDirection:'column',
+      alignItems:'center',justifyContent:'center',gap:8,cursor:'pointer',
+      background:'rgba(8,8,16,.75)',backdropFilter:'blur(3px)',zIndex:5}}>
+    <div style={{fontSize:24}}>🔒</div>
+    <div style={{fontSize:12,fontWeight:700,color:'#f0ece6'}}>{label}</div>
+    <div style={{fontSize:10,color:'#c4324a',fontWeight:600,background:'rgba(196,50,74,.15)',
+      padding:'3px 12px',borderRadius:20,border:'1px solid rgba(196,50,74,.3)'}}>Passer au Pro →</div>
+  </div>;
+}
 
 async function fetchSubscription(userId){
   const s=getAuthSession();if(!s)return null;
@@ -1449,36 +1624,33 @@ async function createTrialSubscription(userId,email){
 }
 
 function getSubscriptionStatus(sub){
-  if(!sub)return{active:false,status:'none',daysLeft:0};
-  if(sub.status==='active')return{active:true,status:'active',plan:sub.plan,daysLeft:null};
+  if(!sub)return{active:true,status:'free',plan:'free',daysLeft:null};
+  if(sub.status==='active')return{active:true,status:'active',plan:sub.plan||'pro',daysLeft:null};
   if(sub.status==='trialing'){
     const now=new Date();const end=new Date(sub.trial_end);
     const diff=Math.ceil((end-now)/86400000);
-    return{active:diff>0,status:'trialing',plan:sub.plan,daysLeft:Math.max(0,diff)};
+    // Essai encore valide → accès Pro temporaire
+    if(diff>0)return{active:true,status:'trialing',plan:'pro',daysLeft:Math.max(0,diff)};
+    // Essai expiré → retombe sur Freemium
+    return{active:true,status:'free',plan:'free',daysLeft:0};
   }
-  if(sub.status==='past_due')return{active:true,status:'past_due',plan:sub.plan,daysLeft:null};
-  return{active:false,status:sub.status||'expired',daysLeft:0};
+  if(sub.status==='past_due')return{active:true,status:'past_due',plan:sub.plan||'pro',daysLeft:null};
+  if(sub.status==='free')return{active:true,status:'free',plan:'free',daysLeft:null};
+  return{active:true,status:'free',plan:'free',daysLeft:0};
 }
 
 // ── Paywall Component ──
-function Paywall({user,onClose,currentPlan}){
+function Paywall({user,onClose,currentPlan,subStatus}){
   const[billing,setBilling]=useState('monthly');
-  const[selected,setSelected]=useState('equipe');
+  const[selected,setSelected]=useState('pro');
   const[loading,setLoading]=useState(false);
-
   const discount=billing==='annual'?0.17:0;
-  const plans=[
-    {id:'solo',name:'Solo',monthly:39,color:'#5a5a7e',badge:null,
-     features:['1 utilisateur','Projets illimités','Export PDF & Excel','Vue 3D + QR chantier','Support email']},
-    {id:'equipe',name:'Équipe',monthly:99,color:'#c4324a',badge:'Populaire',
-     features:['5 utilisateurs','Partage de projets','Import DXF/DWG','Catalogue fabricants','Support prioritaire']},
-    {id:'entreprise',name:'Entreprise',monthly:249,color:'#0ea5e9',badge:'Best value',
-     features:['Utilisateurs illimités','API & intégrations','Export DSTV/CNC','Marque blanche','Account manager']},
-  ];
+  const price=(p)=>p===0?0:billing==='annual'?Math.round(p*(1-discount)):p;
 
-  const price=(p)=>billing==='annual'?Math.round(p*(1-discount)):p;
+  const plans=[PLAN_LIMITS.free,PLAN_LIMITS.pro,PLAN_LIMITS.entreprise];
 
   const handleCheckout=async(planId)=>{
+    if(planId==='free'){onClose&&onClose();return;}
     setLoading(planId);
     const s=getAuthSession();
     try{
@@ -1489,30 +1661,42 @@ function Paywall({user,onClose,currentPlan}){
       if(res.ok){const d=await res.json();if(d.url)window.location.href=d.url;else throw new Error()}
       else throw new Error();
     }catch(e){
-      alert('Paiement non configuré.\nDéployez la Edge Function stripe-checkout sur Supabase.');
+      alert('Paiement non configuré.\nDéployez la Edge Function stripe-checkout sur Supabase pour activer le paiement.');
     }
     setLoading(false);
   };
 
+  const isCurPlan=(planId)=>{
+    if(!subStatus||!subStatus.active) return planId==='free';
+    return subStatus.plan===planId;
+  };
+
   return<div className="ov" onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:'#0e0e18',border:'1px solid var(--bd)',borderRadius:24,width:'min(900px,96vw)',maxHeight:'92vh',overflowY:'auto',boxShadow:'0 40px 100px rgba(0,0,0,.7)',animation:'fu .25s ease-out'}}>
+    <div onClick={e=>e.stopPropagation()} style={{background:'#0e0e18',border:'1px solid var(--bd)',borderRadius:24,
+      width:'min(960px,97vw)',maxHeight:'94vh',overflowY:'auto',
+      boxShadow:'0 40px 100px rgba(0,0,0,.7)',animation:'fu .25s ease-out'}}>
 
       {/* Header */}
       <div style={{padding:'28px 32px 0',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
         <div>
           <div style={{fontSize:22,fontWeight:800,color:'var(--t1)',letterSpacing:'-.02em'}}>Choisissez votre plan</div>
-          <div style={{fontSize:13,color:'var(--t3)',marginTop:4}}>Essai gratuit 14 jours — résiliez à tout moment</div>
+          <div style={{fontSize:13,color:'var(--t3)',marginTop:4}}>Passez au Pro pour débloquer tous les modules et exports illimités</div>
         </div>
-        <button onClick={onClose} style={{background:'var(--crd)',border:'1px solid var(--bd)',borderRadius:8,width:34,height:34,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)',fontSize:18,flexShrink:0}}>×</button>
+        <button onClick={onClose} style={{background:'var(--crd)',border:'1px solid var(--bd)',borderRadius:8,width:34,height:34,
+          display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)',fontSize:18,flexShrink:0}}>×</button>
       </div>
 
-      {/* Billing toggle */}
-      <div style={{display:'flex',justifyContent:'center',margin:'20px 0 24px',gap:0}}>
+      {/* Billing toggle — masqué pour freemium */}
+      <div style={{display:'flex',justifyContent:'center',margin:'20px 0 24px'}}>
         <div style={{display:'inline-flex',background:'var(--crd)',borderRadius:10,border:'1px solid var(--bd)',padding:3,gap:2}}>
           {['monthly','annual'].map(b=><button key={b} onClick={()=>setBilling(b)} style={{
-            padding:'6px 20px',borderRadius:7,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',
-            background:billing===b?'var(--bl)':'transparent',color:billing===b?'#fff':'var(--t3)'
-          }}>{b==='monthly'?'Mensuel':'Annuel'}{b==='annual'&&<span style={{marginLeft:6,padding:'1px 6px',background:'rgba(16,185,129,.25)',color:'#10b981',borderRadius:20,fontSize:9,fontWeight:700}}>-17%</span>}</button>)}
+            padding:'6px 20px',borderRadius:7,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
+            fontFamily:'inherit',transition:'all .2s',
+            background:billing===b?'var(--bl)':'transparent',color:billing===b?'#fff':'var(--t3)'}}>
+            {b==='monthly'?'Mensuel':'Annuel'}
+            {b==='annual'&&<span style={{marginLeft:6,padding:'1px 6px',background:'rgba(16,185,129,.25)',
+              color:'#10b981',borderRadius:20,fontSize:9,fontWeight:700}}>-17%</span>}
+          </button>)}
         </div>
       </div>
 
@@ -1520,49 +1704,67 @@ function Paywall({user,onClose,currentPlan}){
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,padding:'0 24px 28px'}}>
         {plans.map(plan=>{
           const isSel=selected===plan.id;
-          const isCur=currentPlan===plan.id;
+          const isCur=isCurPlan(plan.id);
+          const p=price(plan.price);
           return<div key={plan.id} onClick={()=>setSelected(plan.id)} style={{
-            background:isSel?'rgba(196,50,74,.06)':'var(--crd)',
+            background:isSel?`rgba(${plan.color.startsWith('#c')? '196,50,74':plan.color.startsWith('#0')? '14,165,233':'90,90,126'},.06)`:'var(--crd)',
             border:`2px solid ${isSel?plan.color:isCur?'var(--gn)':'var(--bd)'}`,
             borderRadius:16,padding:22,cursor:'pointer',transition:'all .2s',position:'relative',
-            boxShadow:isSel?`0 0 0 3px ${plan.color}22`:'none'
-          }}>
-            {plan.badge&&<div style={{position:'absolute',top:-11,left:'50%',transform:'translateX(-50%)',
+            boxShadow:isSel?`0 0 0 3px ${plan.color}22`:'none'}}>
+
+            {plan.badge&&<div style={{position:'absolute',top:-12,left:'50%',transform:'translateX(-50%)',
               background:plan.color,color:'#fff',padding:'3px 14px',borderRadius:20,fontSize:9,fontWeight:700,whiteSpace:'nowrap'}}>
               {plan.badge}</div>}
-            {isCur&&<div style={{position:'absolute',top:-11,right:14,
+            {isCur&&<div style={{position:'absolute',top:-12,right:14,
               background:'var(--gn)',color:'#fff',padding:'2px 10px',borderRadius:20,fontSize:9,fontWeight:700}}>Plan actuel</div>}
 
             <div style={{fontSize:11,fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.1em',marginBottom:8}}>{plan.name}</div>
             <div style={{display:'flex',alignItems:'baseline',gap:4,marginBottom:4}}>
-              <span style={{fontSize:38,fontWeight:900,color:'var(--t1)',letterSpacing:'-.03em'}}>{price(plan.monthly)}</span>
-              <span style={{fontSize:13,color:'var(--t3)'}}>€/mois</span>
+              {p===0
+                ?<span style={{fontSize:34,fontWeight:900,color:'var(--t1)',letterSpacing:'-.03em'}}>Gratuit</span>
+                :<><span style={{fontSize:38,fontWeight:900,color:'var(--t1)',letterSpacing:'-.03em'}}>{p}</span>
+                  <span style={{fontSize:13,color:'var(--t3)'}}>€/mois</span></>}
             </div>
-            {billing==='annual'&&<div style={{fontSize:11,color:'#10b981',marginBottom:12}}>
-              soit {price(plan.monthly)*12} €/an — {Math.round(plan.monthly*discount*12)} € économisés
+            {billing==='annual'&&plan.price>0&&<div style={{fontSize:11,color:'#10b981',marginBottom:4}}>
+              soit {p*12}€/an — {Math.round(plan.price*discount*12)}€ économisés
             </div>}
+            {plan.users>1&&<div style={{fontSize:10,color:'#0ea5e9',marginBottom:4,fontWeight:600}}>{plan.users} utilisateurs inclus</div>}
+
             <div style={{height:1,background:'var(--bd)',margin:'12px 0'}}/>
-            <div style={{display:'flex',flexDirection:'column',gap:7,marginBottom:20}}>
-              {plan.features.map((f,i)=><div key={i} style={{fontSize:12,color:'var(--t2)',display:'flex',alignItems:'center',gap:8}}>
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="6" fill={plan.color} opacity=".2"/><path d="M3.5 6l2 2 3-3" stroke={plan.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+
+            <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:plan.limits.length?10:20}}>
+              {plan.features.map((f,i)=><div key={i} style={{fontSize:11,color:'var(--t2)',display:'flex',alignItems:'center',gap:8}}>
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <circle cx="6" cy="6" r="6" fill={plan.color} opacity=".2"/>
+                  <path d="M3.5 6l2 2 3-3" stroke={plan.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
                 {f}
               </div>)}
             </div>
+            {plan.limits.length>0&&<div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:16}}>
+              {plan.limits.map((f,i)=><div key={i} style={{fontSize:10,color:'var(--t3)',display:'flex',alignItems:'center',gap:8}}>
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <circle cx="5" cy="5" r="5" fill="rgba(100,100,130,.3)"/>
+                  <line x1="3" y1="3" x2="7" y2="7" stroke="#6a6a8a" strokeWidth="1.5" strokeLinecap="round"/>
+                  <line x1="7" y1="3" x2="3" y2="7" stroke="#6a6a8a" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                {f}
+              </div>)}
+            </div>}
+
             <button onClick={e=>{e.stopPropagation();handleCheckout(plan.id)}}
               disabled={isCur||loading===plan.id}
               style={{width:'100%',padding:'11px',borderRadius:10,border:'none',fontSize:13,fontWeight:700,
                 cursor:isCur?'default':'pointer',fontFamily:'inherit',transition:'all .2s',
                 background:isCur?'var(--crd2)':isSel?plan.color:'var(--crd2)',
                 color:isCur?'var(--t3)':isSel?'#fff':'var(--t1)',
-                opacity:loading===plan.id?.6:1
-              }}>
-              {isCur?'Plan actuel':loading===plan.id?'…':'Commencer →'}
+                opacity:loading===plan.id?.6:1}}>
+              {isCur?'Plan actuel':loading===plan.id?'…':plan.price===0?'Rester en Freemium':'Commencer →'}
             </button>
-          </div>
+          </div>;
         })}
       </div>
 
-      {/* Footer */}
       <div style={{borderTop:'1px solid var(--bd)',padding:'14px 28px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:8}}>
         <div style={{display:'flex',gap:20}}>
           {['🔒 Paiement sécurisé Stripe','📧 Support réactif','↩ Résiliation libre'].map(t=><span key={t} style={{fontSize:11,color:'var(--t3)'}}>{t}</span>)}
@@ -1573,12 +1775,29 @@ function Paywall({user,onClose,currentPlan}){
   </div>;
 }
 
-// ── Trial Banner ──
+// ── Trial / Freemium Banner ──
 function TrialBanner({subStatus,onUpgrade}){
-  if(!subStatus||subStatus.status==='active')return null;
+  if(!subStatus)return null;
+  if(subStatus.status==='active')return null;
   if(subStatus.status==='trialing'&&subStatus.daysLeft>7)return null;
-  const urgent=subStatus.daysLeft<=3;
-  const expired=!subStatus.active;
+
+  const isFreemium=subStatus.status==='free'||subStatus.plan==='free';
+  const urgent=subStatus.status==='trialing'&&subStatus.daysLeft<=3;
+  const expired=subStatus.status==='trialing'&&subStatus.daysLeft===0;
+
+  if(isFreemium){
+    return<div onClick={onUpgrade} style={{cursor:'pointer',marginBottom:6,padding:'6px 14px',borderRadius:10,
+      display:'flex',alignItems:'center',justifyContent:'space-between',
+      background:'rgba(90,90,126,.12)',border:'1px solid rgba(90,90,126,.25)'}}>
+      <span style={{fontSize:11,color:'var(--t3)'}}>
+        🔒 <strong style={{color:'var(--t2)'}}>Plan Freemium</strong> — Brique, Carrelage, 3D et exports illimités verrouillés
+      </span>
+      <span style={{fontSize:10,fontWeight:700,color:'#c4324a',background:'rgba(196,50,74,.12)',
+        padding:'2px 10px',borderRadius:20,border:'1px solid rgba(196,50,74,.25)',whiteSpace:'nowrap',marginLeft:10}}>
+        Passer Pro →
+      </span>
+    </div>;
+  }
   const col=expired?'#ef4444':urgent?'#f59e0b':'#0ea5e9';
   return<div style={{
     background:`${col}12`,border:`1px solid ${col}30`,
@@ -1598,13 +1817,18 @@ function TrialBanner({subStatus,onUpgrade}){
 }
 
 // ── AccountSettings Modal ──
-function AccountSettings({user,onClose}){
+function AccountSettings({user,onClose,subStatus,onUpgrade}){
   const[tab,setTab]=useState('profil');
   const[name,setName]=useState(user?.user_metadata?.full_name||'');
   const[saving,setSaving]=useState(false);
   const[msg,setMsg]=useState(null);
   const[pwd,setPwd]=useState({cur:'',next:'',confirm:''});
   const[showPwd,setShowPwd]=useState({cur:false,next:false});
+
+  const limits=getPlanLimits(subStatus);
+  const pdfCount=getPdfExportCount().count;
+  const planLabel={free:'Freemium',pro:'Pro',entreprise:'Entreprise',trialing:'Essai Pro',past_due:'Paiement en attente'}[subStatus?.status==='trialing'?'trialing':subStatus?.status==='past_due'?'past_due':limits.id]||'Freemium';
+  const planColor={free:'#5a5a7e',pro:'#c4324a',entreprise:'#0ea5e9',trialing:'#f59e0b',past_due:'#ef4444'}[subStatus?.status==='trialing'?'trialing':subStatus?.status==='past_due'?'past_due':limits.id]||'#5a5a7e';
 
   const saveName=async()=>{
     setSaving(true);setMsg(null);
@@ -1633,17 +1857,15 @@ function AccountSettings({user,onClose}){
   };
 
   const initials=(user?.user_metadata?.full_name||user?.email||'U').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-
   const tabStyle=(t)=>({padding:'8px 16px',borderRadius:8,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',
     fontFamily:'inherit',transition:'all .15s',
     background:tab===t?'var(--bl)':'transparent',color:tab===t?'#fff':'var(--t3)'});
-
   const inpStyle={width:'100%',padding:'11px 14px',background:'var(--inp)',border:'1.5px solid var(--bd)',borderRadius:10,
     color:'var(--t1)',fontSize:13,fontFamily:'inherit',outline:'none',boxSizing:'border-box',transition:'border .2s'};
 
   return<div className="ov" onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:20,
-      width:'min(480px,95vw)',maxHeight:'85vh',overflowY:'auto',boxShadow:'0 30px 80px rgba(0,0,0,.6)',animation:'fu .2s ease-out'}}>
+      width:'min(520px,95vw)',maxHeight:'88vh',overflowY:'auto',boxShadow:'0 30px 80px rgba(0,0,0,.6)',animation:'fu .2s ease-out'}}>
 
       {/* Header */}
       <div style={{padding:'20px 24px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:14}}>
@@ -1652,14 +1874,17 @@ function AccountSettings({user,onClose}){
         </div>
         <div style={{flex:1,minWidth:0}}>
           <div style={{fontSize:15,fontWeight:700,color:'var(--t1)'}}>{user?.user_metadata?.full_name||'Mon compte'}</div>
-          <div style={{fontSize:11,color:'var(--t3)',marginTop:2}}>{user?.email}</div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
+            <div style={{fontSize:11,color:'var(--t3)'}}>{user?.email}</div>
+            <span style={{padding:'1px 8px',borderRadius:20,fontSize:9,fontWeight:700,background:`${planColor}20`,color:planColor,border:`1px solid ${planColor}40`}}>{planLabel}</span>
+          </div>
         </div>
         <button onClick={onClose} style={{background:'var(--crd)',border:'1px solid var(--bd)',borderRadius:8,width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)',fontSize:16,flexShrink:0}}>×</button>
       </div>
 
       {/* Tabs */}
       <div style={{display:'flex',gap:4,padding:'12px 16px 0',borderBottom:'1px solid var(--bd)'}}>
-        {[['profil','👤 Profil'],['securite','🔒 Sécurité']].map(([t,l])=>(
+        {[['profil','👤 Profil'],['abonnement','💳 Abonnement'],['securite','🔒 Sécurité']].map(([t,l])=>(
           <button key={t} onClick={()=>{setTab(t);setMsg(null);}} style={tabStyle(t)}>{l}</button>
         ))}
       </div>
@@ -1672,6 +1897,7 @@ function AccountSettings({user,onClose}){
           {msg.type==='ok'?'✓':'⚠'} {msg.text}
         </div>}
 
+        {/* ── ONGLET PROFIL ── */}
         {tab==='profil'&&<div style={{display:'flex',flexDirection:'column',gap:16}}>
           <div>
             <label style={{fontSize:11,fontWeight:600,color:'var(--t3)',marginBottom:6,display:'block',textTransform:'uppercase',letterSpacing:'.06em'}}>Nom complet</label>
@@ -1689,9 +1915,103 @@ function AccountSettings({user,onClose}){
           </button>
         </div>}
 
+        {/* ── ONGLET ABONNEMENT ── */}
+        {tab==='abonnement'&&<div style={{display:'flex',flexDirection:'column',gap:16}}>
+
+          {/* Plan actuel */}
+          <div style={{padding:'16px 18px',borderRadius:14,background:`${planColor}10`,border:`1.5px solid ${planColor}30`}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12}}>
+              <div>
+                <div style={{fontSize:11,fontWeight:600,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:3}}>Plan actuel</div>
+                <div style={{fontSize:20,fontWeight:800,color:planColor}}>{planLabel}</div>
+              </div>
+              {limits.price>0&&<div style={{textAlign:'right'}}>
+                <div style={{fontSize:22,fontWeight:800,color:'var(--t1)'}}>{limits.price}€</div>
+                <div style={{fontSize:10,color:'var(--t3)'}}>/ mois HT</div>
+              </div>}
+            </div>
+            {subStatus?.status==='trialing'&&subStatus.daysLeft>0&&<div style={{fontSize:12,color:'#f59e0b',fontWeight:600}}>
+              ⏳ Essai Pro — {subStatus.daysLeft} jour{subStatus.daysLeft>1?'s':''} restant{subStatus.daysLeft>1?'s':''}
+            </div>}
+            {subStatus?.status==='past_due'&&<div style={{fontSize:12,color:'#ef4444',fontWeight:600}}>
+              ⚠ Paiement en attente — mettez à jour votre moyen de paiement
+            </div>}
+          </div>
+
+          {/* Compteurs d'utilisation */}
+          <div style={{display:'flex',flexDirection:'column',gap:10}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--t2)',textTransform:'uppercase',letterSpacing:'.06em'}}>Utilisation ce mois</div>
+
+            {/* PDF exports */}
+            <div style={{padding:'12px 14px',borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+                <span style={{fontSize:12,color:'var(--t2)'}}>📄 Exports PDF</span>
+                <span style={{fontSize:12,fontWeight:700,color:limits.pdfPerMonth>0&&pdfCount>=limits.pdfPerMonth?'#ef4444':'var(--t1)'}}>
+                  {pdfCount} / {limits.pdfPerMonth===-1?'∞':limits.pdfPerMonth}
+                </span>
+              </div>
+              {limits.pdfPerMonth>0&&<div style={{height:4,borderRadius:2,background:'var(--bd)',overflow:'hidden'}}>
+                <div style={{height:'100%',borderRadius:2,transition:'width .4s',
+                  width:`${Math.min(100,pdfCount/limits.pdfPerMonth*100)}%`,
+                  background:pdfCount>=limits.pdfPerMonth?'#ef4444':pdfCount/limits.pdfPerMonth>0.7?'#f59e0b':'#10b981'}}/>
+              </div>}
+            </div>
+
+            {/* Modules accessibles */}
+            <div style={{padding:'12px 14px',borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+              <div style={{fontSize:12,color:'var(--t2)',marginBottom:8}}>🧩 Modules accessibles</div>
+              <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+                {[{id:'cassettes',label:'🏢 Cassettes',color:'196,50,74'},
+                  {id:'briques',label:'🧱 Brique',color:'217,119,6'},
+                  {id:'carrelage',label:'🔲 Carrelage',color:'14,165,233'}].map(m=>{
+                  const ok=limits.modules.includes(m.id);
+                  return<span key={m.id} style={{padding:'4px 12px',borderRadius:20,fontSize:10,fontWeight:700,
+                    background:ok?`rgba(${m.color},.12)`:'rgba(100,100,130,.08)',
+                    color:ok?`rgb(${m.color})`:'#4a4a6a',
+                    border:`1px solid ${ok?`rgba(${m.color},.25)`:'rgba(100,100,130,.15)'}`,
+                    textDecoration:ok?'none':'line-through',opacity:ok?1:.5}}>
+                    {ok?'':''}{m.label}
+                  </span>;
+                })}
+              </div>
+            </div>
+
+            {/* Features */}
+            <div style={{padding:'12px 14px',borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+              <div style={{display:'flex',flexDirection:'column',gap:7}}>
+                {[
+                  {label:'Vue 3D',ok:limits.has3D},
+                  {label:'QR chantier',ok:limits.hasQR},
+                  {label:'Export Excel',ok:limits.hasExcel},
+                  {label:'Import DXF/PDF',ok:limits.hasDXFimport},
+                  {label:`Projets max`,ok:true,val:limits.maxProjects===-1?'Illimité':limits.maxProjects},
+                  {label:`Zones par projet`,ok:true,val:limits.maxZonesPerProject===-1?'Illimité':limits.maxZonesPerProject},
+                ].map(f=><div key={f.label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:12}}>
+                  <span style={{color:f.ok?'var(--t2)':'var(--t3)'}}>{f.label}</span>
+                  {f.val!==undefined
+                    ?<span style={{fontWeight:700,color:'var(--t1)',fontSize:11}}>{f.val}</span>
+                    :<span style={{fontSize:13}}>{f.ok?'✅':'🔒'}</span>}
+                </div>)}
+              </div>
+            </div>
+          </div>
+
+          {/* CTA upgrade */}
+          {limits.id==='free'&&<button onClick={()=>{onClose();setTimeout(()=>onUpgrade&&onUpgrade(),100)}}
+            style={{padding:'13px',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',border:'none',
+              borderRadius:12,fontSize:14,fontWeight:700,cursor:'pointer',fontFamily:'inherit',
+              boxShadow:'0 6px 20px rgba(196,50,74,.3)',transition:'all .2s'}}>
+            🚀 Passer au Pro — 39€/mois
+          </button>}
+          {limits.id!=='free'&&<div style={{fontSize:11,color:'var(--t3)',textAlign:'center'}}>
+            Pour modifier ou annuler votre abonnement, contactez <a href="mailto:contact@kalepin.fr" style={{color:'#c4324a'}}>contact@kalepin.fr</a>
+          </div>}
+        </div>}
+
+        {/* ── ONGLET SÉCURITÉ ── */}
         {tab==='securite'&&<div style={{display:'flex',flexDirection:'column',gap:14}}>
           <div style={{padding:'12px 14px',background:'rgba(14,165,233,.06)',border:'1px solid rgba(14,165,233,.15)',borderRadius:10,fontSize:12,color:'var(--t3)'}}>
-            ℹ Changez votre mot de passe Kalepin. Vous serez redirigé pour vous reconnecter.
+            ℹ Changez votre mot de passe Kalepin.
           </div>
           {[
             {key:'next',label:'Nouveau mot de passe',ph:'6 caractères minimum'},
@@ -1728,10 +2048,10 @@ function AccountSettings({user,onClose}){
 function UserMenuPanel({user,subStatus,onUpgrade,onSettings,onSignOut,onClose}){
   const name=user?.user_metadata?.full_name||user?.email?.split('@')[0]||'Utilisateur';
   const initials=name.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-  const planLabel=subStatus?.status==='active'?'Actif':subStatus?.status==='trialing'?`Essai — ${subStatus.daysLeft}j`:subStatus?.status==='past_due'?'Paiement en attente':'Expiré';
-  const planColor=subStatus?.status==='active'?'var(--gn)':subStatus?.status==='trialing'?'var(--am)':'var(--rs)';
-  const planBg=subStatus?.status==='active'?'var(--gnd)':subStatus?.status==='trialing'?'var(--amd)':'var(--rsd)';
-  const planName=(subStatus?.plan||'solo').charAt(0).toUpperCase()+(subStatus?.plan||'solo').slice(1);
+  const limits=getPlanLimits(subStatus);
+  const planLabel=subStatus?.status==='trialing'?`Essai Pro — ${subStatus.daysLeft}j`:subStatus?.status==='past_due'?'Paiement en attente':subStatus?.status==='active'?limits.name:limits.name;
+  const planColor=subStatus?.status==='trialing'?'var(--am)':subStatus?.status==='past_due'?'var(--rs)':subStatus?.status==='active'?'var(--gn)':'#5a5a7e';
+  const planBg=subStatus?.status==='trialing'?'var(--amd)':subStatus?.status==='past_due'?'var(--rsd)':subStatus?.status==='active'?'var(--gnd)':'rgba(90,90,126,.15)';
 
   return<div style={{width:240,background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:14,overflow:'hidden',boxShadow:'0 20px 50px rgba(0,0,0,.5)',animation:'fu .2s ease-out'}}>
     {/* Profile header */}
@@ -1747,7 +2067,7 @@ function UserMenuPanel({user,subStatus,onUpgrade,onSettings,onSignOut,onClose}){
       </div>
       {/* Plan badge */}
       <div style={{marginTop:10,padding:'6px 10px',background:planBg,border:`1px solid ${planColor}30`,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-        <span style={{fontSize:11,fontWeight:700,color:planColor}}>{planName}</span>
+        <span style={{fontSize:11,fontWeight:700,color:planColor}}>{limits.name}</span>
         <span style={{fontSize:10,color:planColor,opacity:.8}}>{planLabel}</span>
       </div>
     </div>
@@ -1791,18 +2111,20 @@ function UserMenuPanel({user,subStatus,onUpgrade,onSettings,onSignOut,onClose}){
 function AdminApp({onBack,currentUser,isSuperAdmin}){
   const[tab,setTab]=useState('overview');
   const[users,setUsers]=useState([]);
+  const[subs,setSubs]=useState([]);// all subscriptions
   const[projStats,setProjStats]=useState([]);
   const[loadingUsers,setLoadingUsers]=useState(true);
   const[acting,setActing]=useState(null);
   const[search,setSearch]=useState('');
   const[filterStatus,setFilterStatus]=useState('all');
-  const[sortField,setSortField]=useState('date');// name, email, status, projects, date
+  const[sortField,setSortField]=useState('date');
   const[sortDir,setSortDir]=useState('desc');
+  const[subModal,setSubModal]=useState(null);// {user} — modal de gestion abonnement
 
   const loadUsers=async()=>{
     setLoadingUsers(true);
-    const all=await adminListUsers(null);
-    setUsers(all||[]);setLoadingUsers(false);
+    const[all,allSubs]=await Promise.all([adminListUsers(null),adminGetAllSubs()]);
+    setUsers(all||[]);setSubs(allSubs||[]);setLoadingUsers(false);
     adminProjectStats().then(p=>setProjStats(p||[]));
   };
   useEffect(()=>{loadUsers();},[]);
@@ -1885,7 +2207,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
       </div>
       <div style={{flex:1}}/>
       <div style={{display:'flex',gap:2,background:'rgba(255,255,255,.05)',borderRadius:10,padding:3}}>
-        {[{k:'overview',ic:'📊',l:'Vue d\'ensemble'},{k:'users',ic:'👥',l:'Utilisateurs'},{k:'pending',ic:'⏳',l:`Approbations${pending?' ('+pending+')':''}`},{k:'stats',ic:'📈',l:'Statistiques'}].map(t=>(
+        {[{k:'overview',ic:'📊',l:'Vue d\'ensemble'},{k:'users',ic:'👥',l:'Utilisateurs'},{k:'pending',ic:'⏳',l:`Approbations${pending?' ('+pending+')':''}`},{k:'abonnements',ic:'💳',l:'Abonnements'},{k:'stats',ic:'📈',l:'Statistiques'}].map(t=>(
           <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:'7px 14px',borderRadius:8,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .15s',
             background:tab===t.k?'rgba(196,50,74,.25)':'transparent',color:tab===t.k?'#f0ece6':'#5a5a7e'}}>
             {t.ic} {t.l}
@@ -2216,10 +2538,299 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         </div>
       </div>}
 
+      {/* ══ ABONNEMENTS ══ */}
+      {tab==='abonnements'&&(()=>{
+        const subByUser={};
+        subs.forEach(s=>{ if(!subByUser[s.user_id])subByUser[s.user_id]=s; });
+        const planBadge=(plan,status)=>{
+          if(status==='active')return{label:PLAN_LIMITS[plan]?.name||plan,color:'#10b981',bg:'rgba(16,185,129,.12)'};
+          if(status==='trialing')return{label:'Essai Pro',color:'#f59e0b',bg:'rgba(245,158,11,.12)'};
+          if(status==='past_due')return{label:'Impayé',color:'#ef4444',bg:'rgba(239,68,68,.12)'};
+          return{label:'Freemium',color:'#5a5a7e',bg:'rgba(90,90,126,.12)'};
+        };
+        const now=new Date();
+
+        // Stats abonnements
+        const subActive=subs.filter(s=>s.status==='active').length;
+        const subTrialing=subs.filter(s=>s.status==='trialing'&&new Date(s.trial_end)>now).length;
+        const subExpired=subs.filter(s=>s.status==='trialing'&&new Date(s.trial_end)<=now).length;
+        const subOverride=subs.filter(s=>s.admin_override).length;
+        const mrr=subs.filter(s=>s.status==='active').reduce((a,s)=>{
+          const p=PLAN_LIMITS[s.plan];return a+(p?.price||0);},0);
+
+        return<div>
+          {/* KPIs */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:12,marginBottom:24}}>
+            {[
+              {ic:'💰',label:'MRR estimé',val:mrr+'€',col:'#10b981'},
+              {ic:'✅',label:'Actifs payants',val:subActive,col:'#10b981'},
+              {ic:'⏳',label:'En essai',val:subTrialing,col:'#f59e0b'},
+              {ic:'⚡',label:'Accès admin',val:subOverride,col:'#c4324a'},
+              {ic:'🔒',label:'Expirés/Freemium',val:users.length-subActive-subTrialing,col:'#5a5a7e'},
+            ].map(k=>(
+              <div key={k.label} style={{padding:'16px 18px',borderRadius:14,background:`${k.col}0f`,border:`1px solid ${k.col}22`}}>
+                <div style={{fontSize:20,marginBottom:6}}>{k.ic}</div>
+                <div style={{fontSize:22,fontWeight:800,color:k.col,lineHeight:1}}>{k.val}</div>
+                <div style={{fontSize:10,color:'#4a4a6a',marginTop:4}}>{k.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tableau */}
+          <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,overflow:'hidden'}}>
+            <div style={{padding:'16px 20px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#f0ece6'}}>💳 Gestion des abonnements</div>
+              <button onClick={loadUsers} style={{padding:'6px 14px',borderRadius:8,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.1)',color:'#6a6a8a',fontSize:11,cursor:'pointer',fontFamily:'inherit'}}>↻ Actualiser</button>
+            </div>
+            <div style={{overflowX:'auto'}}>
+              <table style={{width:'100%',borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{borderBottom:'1px solid rgba(255,255,255,.07)'}}>
+                    {['Utilisateur','Statut accès','Plan','Statut sub','Expire le','Accès admin','Actions'].map(h=>(
+                      <th key={h} style={{padding:'10px 16px',fontSize:10,fontWeight:700,color:'#4a4a6a',textAlign:'left',whiteSpace:'nowrap'}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u=>{
+                    const sub=subByUser[u.id];
+                    const badge=planBadge(sub?.plan,sub?.status);
+                    const expDate=sub?.trial_end?new Date(sub.trial_end):null;
+                    const isExpired=expDate&&expDate<now&&sub?.status==='trialing';
+                    const isOverride=sub?.admin_override;
+                    const daysLeft=expDate?Math.ceil((expDate-now)/86400000):null;
+                    return<tr key={u.id} style={{borderBottom:'1px solid rgba(255,255,255,.04)',transition:'background .15s'}}
+                      onMouseOver={e=>e.currentTarget.style.background='rgba(255,255,255,.02)'}
+                      onMouseOut={e=>e.currentTarget.style.background='transparent'}>
+                      <td style={{padding:'12px 16px'}}>
+                        <div style={{fontSize:12,fontWeight:600,color:'#f0ece6'}}>{u.full_name||'—'}</div>
+                        <div style={{fontSize:10,color:'#4a4a6a'}}>{u.email}</div>
+                      </td>
+                      <td style={{padding:'12px 16px'}}>
+                        <span style={{padding:'2px 8px',borderRadius:20,fontSize:9,fontWeight:700,
+                          background:u.status==='approved'?'rgba(16,185,129,.12)':u.status==='pending'?'rgba(245,158,11,.12)':'rgba(239,68,68,.12)',
+                          color:u.status==='approved'?'#10b981':u.status==='pending'?'#f59e0b':'#ef4444'}}>
+                          {u.status==='approved'?'Approuvé':u.status==='pending'?'En attente':'Refusé'}
+                        </span>
+                      </td>
+                      <td style={{padding:'12px 16px'}}>
+                        <span style={{padding:'2px 10px',borderRadius:20,fontSize:10,fontWeight:700,background:badge.bg,color:badge.color}}>
+                          {badge.label}
+                        </span>
+                      </td>
+                      <td style={{padding:'12px 16px',fontSize:11,color:isExpired?'#ef4444':'#5a5a7e'}}>
+                        {sub?sub.status:'—'}{isExpired?' ⚠ Expiré':''}
+                      </td>
+                      <td style={{padding:'12px 16px'}}>
+                        {expDate
+                          ?<span style={{fontSize:11,color:daysLeft<=3?'#ef4444':daysLeft<=7?'#f59e0b':'#5a5a7e',fontWeight:daysLeft<=3?700:400}}>
+                            {expDate.toLocaleDateString('fr-FR')}{daysLeft>0?` (${daysLeft}j)`:' ⚠'}
+                          </span>
+                          :<span style={{fontSize:11,color:'#3a3a5a'}}>—</span>}
+                      </td>
+                      <td style={{padding:'12px 16px'}}>
+                        {isOverride
+                          ?<span style={{fontSize:9,padding:'2px 8px',borderRadius:20,background:'rgba(196,50,74,.15)',color:'#c4324a',fontWeight:700}}>⚡ Admin</span>
+                          :<span style={{fontSize:10,color:'#3a3a5a'}}>—</span>}
+                      </td>
+                      <td style={{padding:'12px 16px'}}>
+                        {u.role!=='superadmin'&&<button onClick={()=>setSubModal({user:u,sub})}
+                          style={{padding:'5px 12px',borderRadius:8,background:'rgba(196,50,74,.12)',border:'1px solid rgba(196,50,74,.25)',color:'#c4324a',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                          ✏ Gérer
+                        </button>}
+                      </td>
+                    </tr>;
+                  })}
+                </tbody>
+              </table>
+              {users.length===0&&<div style={{padding:40,textAlign:'center',color:'#4a4a6a',fontSize:12}}>Aucun utilisateur</div>}
+            </div>
+          </div>
+        </div>;
+      })()}
+
+    </div>
+
+    {/* ══ MODAL GESTION ABONNEMENT ══ */}
+    {subModal&&<SubManageModal
+      user={subModal.user}
+      currentSub={subModal.sub}
+      onClose={()=>setSubModal(null)}
+      onSaved={async()=>{setSubModal(null);await loadUsers();}}
+    />}
+
+  </div>;
+}
+
+// ── Modal de gestion d'abonnement admin ──
+function SubManageModal({user,currentSub,onClose,onSaved}){
+  const now=new Date();
+  const[plan,setPlan]=useState(currentSub?.plan||'free');
+  const[status,setStatus]=useState(currentSub?.status||'free');
+  const[useEndDate,setUseEndDate]=useState(!!(currentSub?.trial_end));
+  const[endDate,setEndDate]=useState(currentSub?.trial_end
+    ?new Date(currentSub.trial_end).toISOString().slice(0,10)
+    :new Date(Date.now()+30*86400000).toISOString().slice(0,10));
+  const[note,setNote]=useState('');
+  const[saving,setSaving]=useState(false);
+  const[msg,setMsg]=useState(null);
+
+  // Presets d'accès rapides
+  const presets=[
+    {label:'7 jours Pro',plan:'pro',status:'trialing',days:7},
+    {label:'1 mois Pro',plan:'pro',status:'trialing',days:30},
+    {label:'3 mois Pro',plan:'pro',status:'trialing',days:90},
+    {label:'1 an Pro',plan:'pro',status:'active',days:365},
+    {label:'Pro illimité',plan:'pro',status:'active',days:null},
+    {label:'Entreprise 1 mois',plan:'entreprise',status:'trialing',days:30},
+    {label:'Retour Freemium',plan:'free',status:'free',days:null},
+  ];
+
+  const applyPreset=(p)=>{
+    setPlan(p.plan);setStatus(p.status);
+    if(p.days){
+      setUseEndDate(true);
+      setEndDate(new Date(Date.now()+p.days*86400000).toISOString().slice(0,10));
+    }else{
+      setUseEndDate(false);
+    }
+  };
+
+  const handleSave=async()=>{
+    setSaving(true);setMsg(null);
+    const finalEnd=useEndDate&&endDate?new Date(endDate).toISOString():null;
+    const ok=await adminSetUserSub(user.id,user.email,plan,status,finalEnd);
+    setSaving(false);
+    if(ok){setMsg({type:'ok',text:'Abonnement mis à jour !'});setTimeout(onSaved,800);}
+    else setMsg({type:'err',text:'Erreur lors de la mise à jour'});
+  };
+
+  const planColor={free:'#5a5a7e',pro:'#c4324a',entreprise:'#0ea5e9'};
+  const inp={width:'100%',padding:'9px 12px',background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.1)',borderRadius:8,color:'#f0ece6',fontSize:12,fontFamily:'DM Sans,sans-serif',outline:'none',boxSizing:'border-box'};
+
+  return<div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}}
+    onClick={onClose}>
+    <div onClick={e=>e.stopPropagation()} style={{width:'min(560px,96vw)',maxHeight:'90vh',overflowY:'auto',
+      background:'#0e0e18',border:'1px solid rgba(255,255,255,.1)',borderRadius:20,
+      boxShadow:'0 40px 100px rgba(0,0,0,.8)',animation:'fu .2s ease-out',fontFamily:'DM Sans,sans-serif'}}>
+
+      {/* Header */}
+      <div style={{padding:'18px 22px',borderBottom:'1px solid rgba(255,255,255,.07)',display:'flex',alignItems:'center',gap:12}}>
+        <div style={{width:40,height:40,borderRadius:11,background:'linear-gradient(135deg,#c4324a,#8b1a2b)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>💳</div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700,color:'#f0ece6'}}>{user.full_name||user.email}</div>
+          <div style={{fontSize:11,color:'#4a4a6a'}}>{user.email}</div>
+        </div>
+        <button onClick={onClose} style={{width:30,height:30,borderRadius:8,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'#6a6a8a',fontSize:16,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>×</button>
+      </div>
+
+      <div style={{padding:'20px 22px',display:'flex',flexDirection:'column',gap:18}}>
+
+        {/* Abonnement actuel */}
+        {currentSub&&<div style={{padding:'12px 14px',borderRadius:10,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.07)'}}>
+          <div style={{fontSize:10,fontWeight:600,color:'#4a4a6a',marginBottom:6,textTransform:'uppercase',letterSpacing:'.06em'}}>Abonnement actuel</div>
+          <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+            <span style={{fontSize:13,fontWeight:700,color:planColor[currentSub.plan]||'#5a5a7e'}}>{PLAN_LIMITS[currentSub.plan]?.name||currentSub.plan}</span>
+            <span style={{fontSize:10,padding:'1px 7px',borderRadius:20,background:'rgba(255,255,255,.06)',color:'#6a6a8a'}}>{currentSub.status}</span>
+            {currentSub.trial_end&&<span style={{fontSize:10,color:'#5a5a7e'}}>expire le {new Date(currentSub.trial_end).toLocaleDateString('fr-FR')}</span>}
+            {currentSub.admin_override&&<span style={{fontSize:9,padding:'1px 7px',borderRadius:20,background:'rgba(196,50,74,.15)',color:'#c4324a',fontWeight:700}}>⚡ Admin</span>}
+          </div>
+        </div>}
+
+        {/* Presets rapides */}
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:'#5a5a7e',marginBottom:8,textTransform:'uppercase',letterSpacing:'.06em'}}>⚡ Accès rapide</div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+            {presets.map(p=>(
+              <button key={p.label} onClick={()=>applyPreset(p)}
+                style={{padding:'5px 12px',borderRadius:20,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'DM Sans,sans-serif',
+                  border:`1px solid ${p.plan==='free'?'rgba(90,90,126,.4)':p.plan==='entreprise'?'rgba(14,165,233,.3)':'rgba(196,50,74,.3)'}`,
+                  background:p.plan==='free'?'rgba(90,90,126,.1)':p.plan==='entreprise'?'rgba(14,165,233,.08)':'rgba(196,50,74,.1)',
+                  color:p.plan==='free'?'#5a5a7e':p.plan==='entreprise'?'#0ea5e9':'#c4324a'}}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Plan */}
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:'#5a5a7e',marginBottom:8,textTransform:'uppercase',letterSpacing:'.06em'}}>Plan</div>
+          <div style={{display:'flex',gap:8}}>
+            {['free','pro','entreprise'].map(p=>(
+              <button key={p} onClick={()=>setPlan(p)}
+                style={{flex:1,padding:'10px 8px',borderRadius:10,cursor:'pointer',fontFamily:'DM Sans,sans-serif',transition:'all .15s',
+                  border:`2px solid ${plan===p?planColor[p]:'rgba(255,255,255,.08)'}`,
+                  background:plan===p?`${planColor[p]}15`:'rgba(255,255,255,.03)',
+                  color:plan===p?planColor[p]:'#5a5a7e',fontWeight:plan===p?700:400,fontSize:12}}>
+                {PLAN_LIMITS[p]?.name}<br/>
+                <span style={{fontSize:9,opacity:.7}}>{PLAN_LIMITS[p]?.price===0?'Gratuit':PLAN_LIMITS[p]?.price+'€/mois'}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Statut */}
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:'#5a5a7e',marginBottom:8,textTransform:'uppercase',letterSpacing:'.06em'}}>Statut</div>
+          <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
+            {[{v:'active',l:'✅ Actif',c:'#10b981'},{v:'trialing',l:'⏳ Essai',c:'#f59e0b'},{v:'past_due',l:'⚠ Impayé',c:'#ef4444'},{v:'free',l:'🔒 Freemium',c:'#5a5a7e'}].map(s=>(
+              <button key={s.v} onClick={()=>setStatus(s.v)}
+                style={{padding:'6px 14px',borderRadius:8,cursor:'pointer',fontFamily:'DM Sans,sans-serif',fontSize:11,fontWeight:600,transition:'all .15s',
+                  border:`1px solid ${status===s.v?s.c:'rgba(255,255,255,.08)'}`,
+                  background:status===s.v?`${s.c}18`:'rgba(255,255,255,.03)',
+                  color:status===s.v?s.c:'#5a5a7e'}}>
+                {s.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Date de fin */}
+        <div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+            <div style={{fontSize:11,fontWeight:700,color:'#5a5a7e',textTransform:'uppercase',letterSpacing:'.06em'}}>Date de fin d'accès</div>
+            <label style={{display:'flex',alignItems:'center',gap:5,cursor:'pointer',fontSize:11,color:'#6a6a8a'}}>
+              <input type="checkbox" checked={useEndDate} onChange={e=>setUseEndDate(e.target.checked)}/>
+              Limiter dans le temps
+            </label>
+          </div>
+          {useEndDate
+            ?<input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} style={inp}/>
+            :<div style={{padding:'9px 12px',borderRadius:8,background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.15)',fontSize:12,color:'#10b981'}}>
+              ✅ Accès illimité dans le temps
+            </div>}
+          {useEndDate&&endDate&&<div style={{marginTop:6,fontSize:11,color:'#5a5a7e'}}>
+            Expire dans {Math.ceil((new Date(endDate)-now)/86400000)} jours — le {new Date(endDate).toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}
+          </div>}
+        </div>
+
+        {/* Message feedback */}
+        {msg&&<div style={{padding:'10px 14px',borderRadius:10,fontSize:12,
+          background:msg.type==='ok'?'rgba(16,185,129,.1)':'rgba(239,68,68,.1)',
+          border:`1px solid ${msg.type==='ok'?'rgba(16,185,129,.25)':'rgba(239,68,68,.25)'}`,
+          color:msg.type==='ok'?'#10b981':'#ef4444'}}>
+          {msg.type==='ok'?'✓':'⚠'} {msg.text}
+        </div>}
+
+        {/* Actions */}
+        <div style={{display:'flex',gap:10,paddingTop:4}}>
+          <button onClick={onClose} style={{flex:1,padding:'11px',borderRadius:10,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'#6a6a8a',fontSize:13,cursor:'pointer',fontFamily:'DM Sans,sans-serif'}}>
+            Annuler
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            style={{flex:2,padding:'11px',borderRadius:10,border:'none',background:saving?'#5a1120':'#c4324a',color:'#fff',fontSize:13,fontWeight:700,cursor:saving?'wait':'pointer',fontFamily:'DM Sans,sans-serif',transition:'all .2s',
+              boxShadow:saving?'none':'0 4px 16px rgba(196,50,74,.3)'}}>
+            {saving?'Enregistrement…':'⚡ Appliquer l\'accès'}
+          </button>
+        </div>
+
+      </div>
     </div>
   </div>;
 }
 
+// ─────────────────────────────────────────────────────────
 function AuthGate({children}){
   const[user,setUser]=useState(null);
   const[profile,setProfile]=useState(null);
@@ -2800,6 +3411,13 @@ function ViewerApp({viewId}){
 }
 
 function App({user,profile,signOut,subStatus}){
+  const planLimits=getPlanLimits(subStatus);
+  const canUseBrique=planLimits.modules.includes('briques');
+  const canUseCarrelage=planLimits.modules.includes('carrelage');
+  const canUse3D=planLimits.has3D;
+  const canUseQR=planLimits.hasQR;
+  const canUseExcel=planLimits.hasExcel;
+  const pdfLimitReached=planLimits.pdfPerMonth>0&&getPdfExportCount().count>=planLimits.pdfPerMonth;
   const[step,setStep]=useState('dashboard');
   // Garde de sécurité : si un user non-superadmin se retrouve sur le step admin, on le renvoie
   useEffect(()=>{
@@ -4872,8 +5490,10 @@ function App({user,profile,signOut,subStatus}){
           </div>
           {/* ── ONGLETS ── */}
           <div className="flex-1 min-w-0 mx-2 self-stretch flex items-end">
-            <div className="ztab-add" title="Ajouter une zone" style={{marginBottom:1,marginRight:2,flexShrink:0}}
+            <div className="ztab-add" title={planLimits.maxZonesPerProject>0&&zones.length>=planLimits.maxZonesPerProject?"🔒 Limite Freemium (1 zone)":"Ajouter une zone"}
+              style={{marginBottom:1,marginRight:2,flexShrink:0,color:planLimits.maxZonesPerProject>0&&zones.length>=planLimits.maxZonesPerProject?'var(--rs)':'inherit'}}
               onClick={()=>{
+                if(planLimits.maxZonesPerProject>0&&zones.length>=planLimits.maxZonesPerProject){setShowPaywall(true);return;}
                 const newZ={id:Date.now(),name:'Zone '+(zones.length+1),
                   L:3000,H:2800,facOrigin:{x:(zones.length%4)*120+40,y:(Math.floor(zones.length/4))*100+30},
                   pan_:{l:2000,w:600,nom:''},vert:true,oss:{eM:600,eL:1200},
@@ -4947,11 +5567,15 @@ function App({user,profile,signOut,subStatus}){
             <button onClick={()=>setRightTab('ral')} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
               style={{background:rightTab==='ral'?'rgba(167,139,250,.2)':'transparent',border:`1px solid ${rightTab==='ral'?'var(--pp)':'rgba(167,139,250,.2)'}`,color:'var(--pp)'}}>
               <div style={{width:12,height:12,borderRadius:3,background:RAL_COLORS[zoneRalIdx]?.hex,border:'1px solid rgba(255,255,255,.2)'}}/>{RAL_COLORS[zoneRalIdx]?.code}</button>
-            <button onClick={()=>setShow3D(v=>!v)} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
-              style={{background:show3D?'rgba(167,139,250,.2)':'rgba(167,139,250,.08)',border:`1px solid ${show3D?'var(--pp)':'rgba(167,139,250,.25)'}`,color:'var(--pp)'}}>
-              🧊 {show3D?'2D':'3D'}</button>
-            <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setExpSel(s);setExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(79,110,247,.1)',border:'1px solid rgba(79,110,247,.3)',color:'var(--bl)'}}>{I.prn(12)} PDF</button>
-            <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setXlsxExpSel(s);setXlsxExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)'}}>📊 Excel</button>
+            <button onClick={()=>{if(!canUse3D){setShowPaywall(true);return;}setShow3D(v=>!v)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
+              style={{background:show3D?'rgba(167,139,250,.2)':'rgba(167,139,250,.08)',border:`1px solid ${show3D?'var(--pp)':'rgba(167,139,250,.25)'}`,color:canUse3D?'var(--pp)':'var(--t3)'}}>
+              {canUse3D?'🧊':'🔒'} {show3D?'2D':'3D'}</button>
+            <button onClick={()=>{if(pdfLimitReached){setShowPaywall(true);return;}const s={};zones.forEach((_,i)=>s[i]=true);setExpSel(s);setExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
+              style={{background:'rgba(79,110,247,.1)',border:'1px solid rgba(79,110,247,.3)',color:pdfLimitReached?'var(--t3)':'var(--bl)'}}>
+              {pdfLimitReached?'🔒':I.prn(12)} PDF{pdfLimitReached?` (${getPdfExportCount().count}/${planLimits.pdfPerMonth})`:''}</button>
+            <button onClick={()=>{if(!canUseExcel){setShowPaywall(true);return;}const s={};zones.forEach((_,i)=>s[i]=true);setXlsxExpSel(s);setXlsxExpMod(true)}} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0"
+              style={{background:'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:canUseExcel?'var(--gn)':'var(--t3)'}}>
+              {canUseExcel?'📊':'🔒'} Excel</button>
             <div className="mx-1 h-5 w-px flex-shrink-0" style={{background:'var(--bd)'}}/>
             {isAdmin&&<button onClick={()=>setStep('admin')} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'rgba(196,50,74,.12)',border:'1px solid rgba(196,50,74,.3)',color:'#c4324a'}}>⚡ Admin</button>}
             <div style={{position:'relative'}} className="flex-shrink-0">
@@ -5153,9 +5777,11 @@ function App({user,profile,signOut,subStatus}){
                 </div>
               </div>
               {/* Facade brique */}
-              <div onClick={()=>{setProjectType('brique');setStep('brique')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(217,119,6,.05),rgba(217,119,6,.01))',border:'1.5px solid rgba(217,119,6,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(217,119,6,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(217,119,6,.12)'}}
+              <div onClick={()=>{if(!canUseBrique){setShowPaywall(true);return;}setProjectType('brique');setStep('brique')}}
+                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(217,119,6,.05),rgba(217,119,6,.01))',border:'1.5px solid rgba(217,119,6,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{if(canUseBrique){e.currentTarget.style.borderColor='rgba(217,119,6,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(217,119,6,.12)'}}}
                 onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(217,119,6,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                {!canUseBrique&&<ModuleLock label="Facade Brique" onUpgrade={()=>setShowPaywall(true)}/>}
                 <div style={{fontSize:30,marginBottom:10}}>🧱</div>
                 <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Facade Brique</div>
                 <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Briques de parement, plaquettes. Appareillages classiques, joints et ouvertures.</div>
@@ -5164,9 +5790,11 @@ function App({user,profile,signOut,subStatus}){
                 </div>
               </div>
               {/* Carrelage */}
-              <div onClick={()=>{setProjectType('carrelage');setStep('carrelage')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(14,165,233,.05),rgba(14,165,233,.015))',border:'1.5px solid rgba(14,165,233,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(14,165,233,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(14,165,233,.12)'}}
+              <div onClick={()=>{if(!canUseCarrelage){setShowPaywall(true);return;}setProjectType('carrelage');setStep('carrelage')}}
+                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(14,165,233,.05),rgba(14,165,233,.015))',border:'1.5px solid rgba(14,165,233,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{if(canUseCarrelage){e.currentTarget.style.borderColor='rgba(14,165,233,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(14,165,233,.12)'}}}
                 onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(14,165,233,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                {!canUseCarrelage&&<ModuleLock label="Calepinage Carrelage" onUpgrade={()=>setShowPaywall(true)}/>}
                 <div style={{fontSize:30,marginBottom:10}}>🔲</div>
                 <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Calepinage Carrelage</div>
                 <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Sol, mur, piscine. Motifs de pose, calepins, coupes périphériques.</div>
@@ -5191,8 +5819,12 @@ function App({user,profile,signOut,subStatus}){
                   style={{padding:'6px 12px',borderRadius:8,border:'1px solid rgba(14,165,233,.25)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>📂 Dossiers</button>
                 {/* Quick create project */}
                 <div style={{position:'relative'}}>
-                  <button onClick={()=>setShowQuickCreate(!showQuickCreate)}
-                    style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 3px 12px rgba(196,50,74,.25)'}}>+ Nouveau</button>
+                  <button onClick={()=>{
+                    if(planLimits.maxProjects>0&&dashProjects.length>=planLimits.maxProjects){setShowPaywall(true);return;}
+                    setShowQuickCreate(!showQuickCreate)}}
+                    style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 3px 12px rgba(196,50,74,.25)'}}>
+                    {planLimits.maxProjects>0&&dashProjects.length>=planLimits.maxProjects?'🔒 Limite atteinte':'+ Nouveau'}
+                  </button>
                   {showQuickCreate&&<><div onClick={()=>setShowQuickCreate(false)} style={{position:'fixed',inset:0,zIndex:29}}/><div style={{position:'absolute',top:'100%',right:0,marginTop:6,width:260,padding:14,borderRadius:14,background:'rgba(16,16,24,.98)',border:'1px solid rgba(255,255,255,.08)',backdropFilter:'blur(16px)',boxShadow:'0 16px 48px rgba(0,0,0,.5)',zIndex:30}}>
                     <div style={{fontSize:11,fontWeight:700,color:'var(--t1)',marginBottom:10}}>Créer un projet</div>
                     <input type="text" value={newProjName} onChange={e=>setNewProjName(e.target.value)} placeholder="Nom du projet..."
@@ -6208,7 +6840,7 @@ function App({user,profile,signOut,subStatus}){
             <button onClick={()=>{
               if(!selList.length)return;
               const pageGroups={};selList.forEach(i=>pageGroups[i]=getPageNum(i));
-              setExpMod(false);exportPDF(selList,{showOss:pdfOss,pageGroups,showQR:pdfQR,showCass:pdfCass});}}
+              setExpMod(false);incrementPdfExportCount();exportPDF(selList,{showOss:pdfOss,pageGroups,showQR:pdfQR&&canUseQR,showCass:pdfCass});}}
               className="ba flex-1 py-2.5 rounded-lg text-sm font-medium text-white" style={{background:'var(--bl)',opacity:selList.length?1:.5}}>
               Exporter {selList.length} zone{selList.length>1?'s':''} — {[...new Set(selList.map(i=>getPageNum(i)))].length} page{[...new Set(selList.map(i=>getPageNum(i)))].length>1?'s':''}
             </button>
@@ -6375,9 +7007,9 @@ function App({user,profile,signOut,subStatus}){
         <button onClick={()=>{setMetreOpen(false);const s={};zones.forEach((_,i)=>s[i]=true);setXlsxExpSel(s);setXlsxExpMod(true)}} className="ba w-full mt-2 py-2.5 rounded-lg text-sm font-medium" style={{background:'rgba(52,211,153,.12)',border:'1px solid rgba(52,211,153,.35)',color:'var(--gn)'}}>📊 Exporter Excel (métrés + détails)</button>
       </div></div>}
       {/* ── PAYWALL MODAL ── */}
-      {showPaywall&&<Paywall user={user} currentPlan={subStatus?.plan} onClose={()=>setShowPaywall(false)}/>}
+      {showPaywall&&<Paywall user={user} currentPlan={subStatus?.plan} subStatus={subStatus} onClose={()=>setShowPaywall(false)}/>}
       {/* ── ACCOUNT SETTINGS ── */}
-      {showAccount&&<AccountSettings user={user} onClose={()=>setShowAccount(false)}/>}
+      {showAccount&&<AccountSettings user={user} subStatus={subStatus} onUpgrade={()=>setShowPaywall(true)} onClose={()=>setShowAccount(false)}/>}
       {/* ── PLAN DE MASSE ── */}
       {showMasse&&<PlanMasse zones={zones} setZones={setZones} activeZoneIdx={activeZoneIdx} setActiveZoneIdx={setActiveZoneIdx}
         pxPerMm={pxPerMm_eff} onClose={()=>setShowMasse(false)} ZONE_COLORS={ZONE_COLORS} RAL_COLORS={RAL_COLORS} ralIdx={ralIdx}/>}
