@@ -61,6 +61,10 @@
     .ztab-bar::-webkit-scrollbar{display:none}
     .ztab-add{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-size:14px;cursor:pointer;flex-shrink:0;opacity:.6;transition:.15s}
     .ztab-add:hover{opacity:1;background:var(--blg);color:var(--bl)}
+    [style*='padding:14px'] .proj-actions{opacity:0!important}
+    [style*='padding:14px']:hover .proj-actions{opacity:1!important}
+    .dash-del{display:none!important}
+    div:hover>.dash-del{display:flex!important}
     .dtbl{width:100%;border-collapse:collapse;font-size:10px}.dtbl th{text-align:left;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--bd);color:var(--t3);font-size:9px;text-transform:uppercase}.dtbl td{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.05)}
     .imp-tag{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:9px;font-weight:600}
     @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
@@ -203,7 +207,7 @@ function polyToPath(poly,sc,ox,oy){
 }
 
 /* ─── BASE COMPONENTS ─── */
-function NI({value,onChange,unit,step=100,min=0,label,compact,ph=''}){
+function NI({value,onChange,unit,step=1,min=0,label,compact,ph=''}){
   const[v,sV]=useState(value),[f,sF]=useState(false);const r=useRef();
   useEffect(()=>{if(!f)sV(value)},[value,f]);
   const cm=()=>{sF(false);const n=Number(v);if(!isNaN(n)&&n>=min)onChange(n);else sV(value)};
@@ -525,8 +529,9 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+    renderer.outputEncoding=THREE.sRGBEncoding;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
     renderer.domElement.style.pointerEvents='auto';
     renderer.domElement.style.cursor='grab';
@@ -540,8 +545,9 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     sun.shadow.camera.near=0.1;sun.shadow.camera.far=80;
     sun.shadow.camera.left=-15;sun.shadow.camera.right=15;
     sun.shadow.camera.top=15;sun.shadow.camera.bottom=-15;
-    sun.shadow.mapSize.width=1024;sun.shadow.mapSize.height=1024;
-    sun.shadow.bias=-0.0005;
+    sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
+    sun.shadow.bias=-0.0003;
+    sun.shadow.normalBias=0.02;
     scene.add(sun);
     // Contre-jour bleuté depuis le bas-gauche
     const fill=new THREE.DirectionalLight(0x8ab0ff,0.35);fill.position.set(-4,-2,3);scene.add(fill);
@@ -702,10 +708,10 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
       polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
     // ── Vitrage double couche (fond sombre + reflet) ──
     const glassBackMat=new THREE.MeshStandardMaterial({
-      color:0x1a2a3a,metalness:0.0,roughness:0.95,transparent:true,opacity:0.6,side:THREE.DoubleSide});
+      color:0x0f1a2a,metalness:0.0,roughness:0.98,transparent:true,opacity:0.7,side:THREE.DoubleSide});
     const glassMat=new THREE.MeshStandardMaterial({
-      color:0x9cc8e8,metalness:0.4,roughness:0.02,transparent:true,opacity:0.35,
-      envMap:cubeRT.texture,envMapIntensity:1.8,side:THREE.DoubleSide});
+      color:0xa8d4ef,metalness:0.45,roughness:0.01,transparent:true,opacity:0.3,
+      envMap:cubeRT.texture,envMapIntensity:2.2,side:THREE.DoubleSide});
     // Cadre menuiserie alu
     const frameMat=new THREE.MeshStandardMaterial({color:0x3a3a42,metalness:0.8,roughness:0.15,
       envMap:cubeRT.texture,envMapIntensity:0.6});
@@ -757,9 +763,16 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
           fa.position.set(ox+ow/2,Hm-(oy+oh+fv/2),panZ);facadeGroup.add(fa);}
       }
 
-      // ── VITRAGE double couche ──
+      // ── VITRAGE double couche + éclairage intérieur ──
       const maxRet=Math.max(rTG,rTD,rLin,rApp);
       const glassZ=-maxRet*0.65;
+      // Warm interior glow (point light behind glass)
+      const intLight=new THREE.PointLight(0xffe4c4,0.12,2.5);
+      intLight.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ-0.3);facadeGroup.add(intLight);
+      // Interior wall (visible through glass)
+      const intWall=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.01,oh-0.01),
+        new THREE.MeshStandardMaterial({color:0xf5efe6,roughness:0.95,metalness:0}));
+      intWall.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ-0.25);facadeGroup.add(intWall);
       // Couche arrière sombre (simule intérieur)
       const gb=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.008,oh-0.008),glassBackMat);
       gb.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ-0.003);facadeGroup.add(gb);
@@ -768,7 +781,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
       gm.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(gm);
 
       // ── CADRE MENUISERIE ALU ──
-      const ft=0.032,fd2=0.045;
+      const ft=0.030,fd2=0.042;
       const fTop=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd2),frameMat);
       fTop.position.set(ox+ow/2,Hm-(oy-ft/2),glassZ);facadeGroup.add(fTop);
       const fBot=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd2),frameMat);
@@ -777,6 +790,15 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
       fL.position.set(ox-ft/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(fL);
       const fR=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd2),frameMat);
       fR.position.set(ox+ow+ft/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(fR);
+      // Traverses pour grandes fenêtres
+      if(ow>0.7){const mull=new THREE.Mesh(new THREE.BoxGeometry(ft*0.65,oh,fd2),frameMat);mull.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(mull)}
+      if(oh>1.2){const hmull=new THREE.Mesh(new THREE.BoxGeometry(ow,ft*0.65,fd2),frameMat);hmull.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(hmull)}
+      // Poignée pour portes
+      if(o.t==='Porte'||o.t==='Porte-fenêtre'||oh>1.8){
+        const hMat=new THREE.MeshStandardMaterial({color:0x888888,metalness:0.9,roughness:0.08,envMap:cubeRT.texture,envMapIntensity:0.5});
+        const hdl=new THREE.Mesh(new THREE.BoxGeometry(0.01,0.07,0.018),hMat);
+        hdl.position.set(ox+ow*0.7,Hm-(oy+oh*0.55),glassZ+fd2/2+0.005);facadeGroup.add(hdl);
+      }
     });
 
     // ── Ossature ──
@@ -1376,6 +1398,16 @@ async function adminSetUserRole(userId,role){
     return res.ok;
   }catch(e){return false}
 }
+async function adminProjectStats(){
+  const s=getAuthSession();if(!s)return[];
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?select=user_id,updated_at,name,total_surface',{
+      headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
+    });
+    if(!res.ok)return[];
+    return await res.json();
+  }catch(e){return[]}
+}
 
 // ═══════════════════════════════════════════════════════════
 // SUBSCRIPTION & STRIPE
@@ -1759,17 +1791,29 @@ function UserMenuPanel({user,subStatus,onUpgrade,onSettings,onSignOut,onClose}){
 function AdminApp({onBack,currentUser,isSuperAdmin}){
   const[tab,setTab]=useState('overview');
   const[users,setUsers]=useState([]);
+  const[projStats,setProjStats]=useState([]);
   const[loadingUsers,setLoadingUsers]=useState(true);
   const[acting,setActing]=useState(null);
   const[search,setSearch]=useState('');
   const[filterStatus,setFilterStatus]=useState('all');
+  const[sortField,setSortField]=useState('date');// name, email, status, projects, date
+  const[sortDir,setSortDir]=useState('desc');
 
   const loadUsers=async()=>{
     setLoadingUsers(true);
     const all=await adminListUsers(null);
     setUsers(all||[]);setLoadingUsers(false);
+    adminProjectStats().then(p=>setProjStats(p||[]));
   };
   useEffect(()=>{loadUsers();},[]);
+
+  // Projects per user
+  const projByUser={};
+  projStats.forEach(p=>{if(!projByUser[p.user_id])projByUser[p.user_id]={count:0,surface:0,last:null};projByUser[p.user_id].count++;projByUser[p.user_id].surface+=(p.total_surface||0);const d=new Date(p.updated_at);if(!projByUser[p.user_id].last||d>projByUser[p.user_id].last)projByUser[p.user_id].last=d});
+  const totalProjects=projStats.length;
+  const totalSurface=projStats.reduce((a,p)=>a+(p.total_surface||0),0);
+  const activeUsers=Object.keys(projByUser).length;
+  const topUsers=Object.entries(projByUser).sort((a,b)=>b[1].count-a[1].count).slice(0,10);
 
   const act=async(userId,action)=>{
     setActing(userId);
@@ -1804,6 +1848,13 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
     const matchStatus=filterStatus==='all'||u.status===filterStatus;
     const matchSearch=!search||(u.email||'').toLowerCase().includes(search.toLowerCase())||(u.full_name||'').toLowerCase().includes(search.toLowerCase());
     return matchStatus&&matchSearch;
+  }).sort((a,b)=>{
+    const dir=sortDir==='asc'?1:-1;
+    if(sortField==='name')return dir*((a.full_name||'').localeCompare(b.full_name||''));
+    if(sortField==='email')return dir*((a.email||'').localeCompare(b.email||''));
+    if(sortField==='status')return dir*((a.status||'').localeCompare(b.status||''));
+    if(sortField==='projects')return dir*((projByUser[a.id]?.count||0)-(projByUser[b.id]?.count||0));
+    return dir*(new Date(b.created_at)-new Date(a.created_at));
   });
 
   const STATUS_COLOR={pending:'#f59e0b',approved:'#10b981',rejected:'#ef4444'};
@@ -1944,7 +1995,10 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         :<div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,overflow:'hidden'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
             <thead><tr style={{background:'rgba(0,0,0,.2)',borderBottom:'1px solid rgba(255,255,255,.07)'}}>
-              {['','Utilisateur','Email','Statut','Rôle','Inscrit le','Accès','Rôle'].map((h,i)=><th key={i} style={{textAlign:'left',padding:'12px 14px',color:'#3a3a5a',fontWeight:700,fontSize:9,textTransform:'uppercase',letterSpacing:'.07em'}}>{h}</th>)}
+              {[{l:'',k:null},{l:'Utilisateur',k:'name'},{l:'Email',k:'email'},{l:'Statut',k:'status'},{l:'Rôle',k:null},{l:'Projets',k:'projects'},{l:'Inscrit le',k:'date'},{l:'Accès',k:null},{l:'Rôle',k:null}].map((h,i)=><th key={i}
+                onClick={()=>{if(h.k){if(sortField===h.k)setSortDir(d=>d==='asc'?'desc':'asc');else{setSortField(h.k);setSortDir('desc')}}}}
+                style={{textAlign:'left',padding:'12px 14px',color:sortField===h.k?'#0ea5e9':'#3a3a5a',fontWeight:700,fontSize:9,textTransform:'uppercase',letterSpacing:'.07em',cursor:h.k?'pointer':'default',userSelect:'none'}}>
+                {h.l}{sortField===h.k?(sortDir==='asc'?' ↑':' ↓'):''}</th>)}
             </tr></thead>
             <tbody>{filteredUsers.map((u,i)=>{
               const isActing=acting===u.id;
@@ -1977,6 +2031,11 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
                     color:isSuperadminRow?'#c4324a':u.role==='admin'?'#f59e0b':'#6a6a9a'}}>
                     {isSuperadminRow?'⭐ Superadmin':u.role==='admin'?'🔑 Admin':'👤 Utilisateur'}
                   </span>
+                </td>
+                {/* Projets */}
+                <td style={{padding:'10px 6px'}}>
+                  <span style={{fontSize:12,fontWeight:800,color:projByUser[u.id]?'#0ea5e9':'#3a3a5a'}}>{projByUser[u.id]?.count||0}</span>
+                  {projByUser[u.id]&&<span style={{fontSize:8,color:'#4a4a6a',marginLeft:4}}>({projByUser[u.id].surface.toFixed(1)}m²)</span>}
                 </td>
                 {/* Date */}
                 <td style={{padding:'10px 6px',color:'#3a3a5a',fontSize:10,whiteSpace:'nowrap'}}>
@@ -2086,6 +2145,10 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
               ['Inscrits cette semaine',thisWeek,'#8b5cf6'],
               ['Inscrits ce mois',thisMonth,'#f59e0b'],
               ['Admins',admins,'#c4324a'],
+              ['Total projets',totalProjects,'#0ea5e9'],
+              ['Surface totale',totalSurface.toFixed(1)+' m²','#10b981'],
+              ['Utilisateurs actifs (avec projets)',activeUsers,'#8b5cf6'],
+              ['Moy. projets/utilisateur',activeUsers>0?(totalProjects/activeUsers).toFixed(1):'0','#f59e0b'],
             ].map(([l,v,c])=>(
               <div key={l} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
                 <span style={{fontSize:12,color:'#5a5a7e'}}>{l}</span>
@@ -2129,6 +2192,27 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
               </div>
             ))}
           </div>
+        </div>
+        {/* Top utilisateurs par projets */}
+        <div style={{background:'rgba(255,255,255,.025)',border:'1px solid rgba(255,255,255,.07)',borderRadius:16,padding:'20px 24px',marginTop:16}}>
+          <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:14}}>🏆 Top utilisateurs par projets</div>
+          <div style={{display:'grid',gridTemplateColumns:'40px 1fr 80px 80px 100px',gap:8,padding:'6px 0',borderBottom:'1px solid rgba(255,255,255,.08)',fontSize:10,fontWeight:600,color:'#5a5a7e'}}>
+            <span>#</span><span>Utilisateur</span><span>Projets</span><span>Surface</span><span>Dernier actif</span>
+          </div>
+          {topUsers.map(([uid,st],i)=>{
+            const u=users.find(u2=>u2.id===uid);
+            return<div key={uid} style={{display:'grid',gridTemplateColumns:'40px 1fr 80px 80px 100px',gap:8,padding:'8px 0',borderBottom:'1px solid rgba(255,255,255,.04)',alignItems:'center'}}>
+              <span style={{fontSize:14,fontWeight:800,color:i===0?'#fbbf24':i===1?'#94a3b8':i===2?'#c4794a':'#5a5a7e'}}>{i+1}</span>
+              <div>
+                <div style={{fontSize:12,fontWeight:600,color:'#f0ece6'}}>{u?u.full_name||u.email:'ID: '+uid.slice(0,8)}</div>
+                <div style={{fontSize:9,color:'#4a4a6a'}}>{u?.role||'user'}</div>
+              </div>
+              <span style={{fontSize:13,fontWeight:800,color:'#0ea5e9'}}>{st.count}</span>
+              <span style={{fontSize:11,fontWeight:600,color:'#10b981'}}>{st.surface.toFixed(1)} m²</span>
+              <span style={{fontSize:10,color:'#5a5a7e'}}>{st.last?st.last.toLocaleDateString('fr-FR',{day:'2-digit',month:'short'}):'-'}</span>
+            </div>
+          })}
+          {topUsers.length===0&&<div style={{padding:20,textAlign:'center',color:'#4a4a6a',fontSize:12}}>Aucun projet trouvé</div>}
         </div>
       </div>}
 
@@ -2364,6 +2448,38 @@ function AuthGate({children}){
         </div>)}
       </div>
     </div>
+    {/* CTA bottom */}
+    {/* ── Pourquoi Kalepin ── */}
+    <div style={{background:'rgba(255,255,255,.012)',borderTop:'1px solid rgba(255,255,255,.04)',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'48px 28px'}}>
+        <div style={{textAlign:'center',marginBottom:36}}>
+          <div style={{fontSize:26,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Pourquoi choisir Kalepin ?</div>
+          <div style={{fontSize:13,color:'#5a5a6e',marginTop:8}}>4 problèmes métier résolus par un seul outil</div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:16}}>
+          {[{icon:'🎯',title:'Zéro erreur de commande',desc:'Calcul auto des surfaces nettes, chutes et nombre exact de panneaux incluant les cassettes pliées avec le détail des plis.',color:'#c4324a'},
+            {icon:'🧊',title:'Vente simplifiée en 3D',desc:'Montrez à vos clients le rendu final avec les finitions RAL (mat, brillant, métallisé) dans le navigateur ou sur mobile.',color:'#0ea5e9'},
+            {icon:'📊',title:'Métrés instantanés',desc:"Excel récapitulant les métrés par zone, les ouvertures et les linéaires d'ossature en 1 clic.",color:'#34d399'},
+            {icon:'📐',title:'Import DXF / PDF',desc:"Importez vos plans d'architecte et travaillez directement dessus par transparence. Calibration automatique.",color:'#f59e0b'},
+          ].map((f,i)=><div key={i} style={{padding:24,borderRadius:18,background:'rgba(0,0,0,.2)',border:'1px solid rgba(255,255,255,.04)',position:'relative',overflow:'hidden'}}>
+            <div style={{fontSize:30,marginBottom:14}}>{f.icon}</div>
+            <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:8}}>{f.title}</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.4)',lineHeight:1.65}}>{f.desc}</div>
+          </div>)}        </div>
+      </div>
+    </div>
+    {/* ── QR Code Spotlight ── */}
+    <div style={{background:'rgba(196,50,74,.035)',borderBottom:'1px solid rgba(196,50,74,.08)'}}>
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'40px 28px',display:'flex',alignItems:'center',gap:28,flexWrap:'wrap'}}>
+        <div style={{width:80,height:80,borderRadius:18,background:'linear-gradient(135deg,rgba(196,50,74,.1),rgba(196,50,74,.04))',border:'1px solid rgba(196,50,74,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:36,flexShrink:0}}>📱</div>
+        <div style={{flex:1,minWidth:240}}>
+          <div style={{fontSize:18,fontWeight:700,color:'#f0ece6',marginBottom:8}}>Le QR Code Chantier</div>
+          <div style={{fontSize:12,color:'rgba(255,255,255,.4)',lineHeight:1.7}}>
+            Posez vos panneaux avec le plan 3D accessible sur votre téléphone via un simple QR code collé sur votre plan papier. Partagez la vue avec vos clients directement sur site.
+          </div>
+        </div>
+      </div>
+    </div>
     {/* CTA */}
     <div style={{maxWidth:600,margin:'0 auto',padding:'40px 28px 80px',textAlign:'center'}}>
       <div style={{padding:'36px 32px',borderRadius:24,background:'linear-gradient(135deg,rgba(196,50,74,.08),rgba(196,50,74,.02))',border:'1px solid rgba(196,50,74,.15)'}}>
@@ -2377,19 +2493,77 @@ function AuthGate({children}){
     </div>
   </div>;
 
-  // ── Écran de connexion / inscription (épuré) ──
-  return<div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#060609',fontFamily:'DM Sans,sans-serif',position:'relative'}}>
-    <div style={{position:'absolute',inset:0,pointerEvents:'none'}}>
-      <div style={{position:'absolute',top:'20%',left:'40%',width:400,height:400,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.08),transparent 60%)',filter:'blur(80px)'}}/>
+  // ── Écran de connexion / inscription avec présentation ──
+  return<div style={{minHeight:'100vh',background:'#060609',fontFamily:'DM Sans,sans-serif',position:'relative',overflow:'auto'}}>
+    <div style={{position:'fixed',inset:0,pointerEvents:'none'}}>
+      <div style={{position:'absolute',top:'-5%',left:'15%',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.07),transparent 60%)',filter:'blur(90px)'}}/>
+      <div style={{position:'absolute',bottom:'10%',right:'10%',width:350,height:350,borderRadius:'50%',background:'radial-gradient(circle,rgba(14,165,233,.05),transparent 60%)',filter:'blur(80px)'}}/>
     </div>
-    <div style={{width:'100%',maxWidth:380,padding:'0 24px',position:'relative',zIndex:1}}>
-      <div style={{textAlign:'center',marginBottom:32}}>
-        <div onClick={()=>setMode('landing')} style={{display:'inline-flex',alignItems:'center',gap:10,cursor:'pointer',marginBottom:16}}>
-          <div style={{width:40,height:40,borderRadius:12,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:900,color:'#fff',boxShadow:'0 6px 24px rgba(196,50,74,.3)'}}>K</div>
-          <span style={{fontSize:20,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Kale<span style={{color:'#c4324a'}}>pin</span></span>
+    {/* ── Nav bar ── */}
+    <div style={{position:'sticky',top:0,zIndex:20,background:'rgba(6,6,9,.88)',backdropFilter:'blur(14px)',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
+      <div style={{maxWidth:1100,margin:'0 auto',padding:'10px 28px',display:'flex',alignItems:'center',gap:10}}>
+        <div onClick={()=>setMode('landing')} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
+          <div style={{width:30,height:30,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:900,color:'#fff'}}>K</div>
+          <span style={{fontSize:14,fontWeight:800,color:'#f0ece6'}}>Kale<span style={{color:'#c4324a'}}>pin</span></span>
         </div>
-        <div style={{fontSize:14,color:'#5a5a6e'}}>{isForgot?'Réinitialiser le mot de passe':isSignup?'Créer votre compte':'Bon retour'}</div>
+        <div style={{flex:1}}/>
+        <span style={{fontSize:10,color:'#5a5a6e'}}>{isSignup?'Déjà inscrit ?':'Pas encore de compte ?'}</span>
+        <button onClick={()=>switchMode(isSignup?'login':'signup')} style={{padding:'5px 14px',borderRadius:7,border:'1px solid rgba(255,255,255,.08)',background:'transparent',color:'#9a9aac',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{isSignup?'Se connecter':'Créer un compte'}</button>
       </div>
+    </div>
+    {/* ── Main: 2-col layout ── */}
+    <div style={{maxWidth:1060,margin:'0 auto',padding:'48px 28px 40px',display:'flex',gap:48,alignItems:'flex-start',position:'relative',zIndex:1}}>
+      {/* ── Left: Presentation ── */}
+      <div style={{flex:1,minWidth:0,display:window.innerWidth<768?'none':'block'}}>
+        <div style={{marginBottom:36}}>
+          <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'4px 14px',borderRadius:20,background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.12)',marginBottom:20}}>
+            <span style={{width:6,height:6,borderRadius:3,background:'#34d399'}}/><span style={{fontSize:10,fontWeight:600,color:'#34d399'}}>Bêta ouverte — Accès gratuit</span>
+          </div>
+          <h1 style={{fontSize:28,fontWeight:800,lineHeight:1.15,color:'#f0ece6',marginBottom:14,letterSpacing:'-.02em'}}>
+            L'outil de calepinage<br/><span style={{background:'linear-gradient(135deg,#c4324a,#e8697f)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>pour les pros du bâtiment</span>
+          </h1>
+          <p style={{fontSize:13,color:'rgba(255,255,255,.4)',lineHeight:1.7,marginBottom:0}}>
+            Du plan à la commande en quelques minutes. Cassettes, briques, carrelage.
+          </p>
+        </div>
+        {/* ── 4 features ── */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:28}}>
+          {[{icon:'🎯',title:'Zéro erreur de commande',desc:'Calcul auto des surfaces, chutes et nombre exact de panneaux.',color:'#c4324a'},
+            {icon:'🧊',title:'Rendu 3D interactif',desc:'Visualisation réaliste avec finitions RAL, ombres et matériaux.',color:'#0ea5e9'},
+            {icon:'📊',title:'Métrés instantanés',desc:'Export Excel/PDF avec métrés par zone et ossature en 1 clic.',color:'#34d399'},
+            {icon:'📐',title:'Import DXF / PDF',desc:'Importez vos plans architecte, calibrez et tracez vos zones.',color:'#f59e0b'}
+          ].map((f,i)=><div key={i} style={{padding:'14px 16px',borderRadius:14,background:'rgba(0,0,0,.25)',border:'1px solid rgba(255,255,255,.04)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
+              <span style={{fontSize:18}}>{f.icon}</span>
+              <span style={{fontSize:11,fontWeight:700,color:f.color}}>{f.title}</span>
+            </div>
+            <div style={{fontSize:10,color:'rgba(255,255,255,.35)',lineHeight:1.6}}>{f.desc}</div>
+          </div>)}
+        </div>
+        {/* ── QR Code spotlight ── */}
+        <div style={{padding:'16px 18px',borderRadius:14,background:'rgba(196,50,74,.04)',border:'1px solid rgba(196,50,74,.1)',display:'flex',alignItems:'center',gap:14}}>
+          <div style={{width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,rgba(196,50,74,.12),rgba(196,50,74,.04))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>📱</div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:'#f0ece6',marginBottom:3}}>QR Code Chantier</div>
+            <div style={{fontSize:10,color:'rgba(255,255,255,.35)',lineHeight:1.6}}>Vue 3D sur téléphone via QR code sur le plan papier.</div>
+          </div>
+        </div>
+        {/* ── 3 modules ── */}
+        <div style={{display:'flex',gap:10,marginTop:20}}>
+          {[{icon:'🏢',name:'Cassettes',color:'196,50,74'},{icon:'🧱',name:'Brique',color:'217,119,6'},{icon:'🔲',name:'Carrelage',color:'14,165,233'}].map(m=>
+            <div key={m.name} style={{flex:1,padding:'10px 12px',borderRadius:10,background:'rgba('+m.color+',.04)',border:'1px solid rgba('+m.color+',.1)',textAlign:'center'}}>
+              <div style={{fontSize:18,marginBottom:3}}>{m.icon}</div>
+              <div style={{fontSize:10,fontWeight:700,color:'rgb('+m.color+')'}}>{m.name}</div>
+            </div>
+          )}
+        </div>
+      </div>
+      {/* ── Right: Login form ── */}
+      <div style={{width:380,flexShrink:0}}>
+        <div style={{textAlign:'center',marginBottom:24}}>
+          <div style={{fontSize:18,fontWeight:700,color:'#f0ece6',marginBottom:4}}>{isForgot?'Réinitialiser le mot de passe':isSignup?'Créer votre compte':'Bon retour 👋'}</div>
+          <div style={{fontSize:12,color:'#5a5a6e'}}>{isForgot?'On vous envoie un lien par email':isSignup?'Accès bêta gratuit':'Connectez-vous pour retrouver vos projets'}</div>
+        </div>
       <div style={{background:'rgba(22,22,31,.6)',border:'1px solid rgba(255,255,255,.06)',borderRadius:20,padding:'28px 24px',backdropFilter:'blur(12px)'}}>
         {!isForgot&&<div style={{display:'flex',background:'rgba(255,255,255,.03)',borderRadius:10,padding:3,marginBottom:24,gap:2}}>
           {[['login','Connexion'],['signup','Inscription']].map(([m,l])=><button key={m} onClick={()=>switchMode(m)} style={{
@@ -2446,7 +2620,8 @@ function AuthGate({children}){
       <div style={{marginTop:20,fontSize:10,color:'#3a3a4e',textAlign:'center',lineHeight:1.7}}>
         En continuant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité
       </div>
-    </div>
+      </div>{/* end right col */}
+    </div>{/* end 2-col */}
   </div>;
 }
 
@@ -2484,7 +2659,7 @@ async function supaFetch(viewId,cfgOverride){
 async function cloudProjectsList(){
   const s=getAuthSession();if(!s)return[];
   try{
-    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?select=id,name,updated_at,zones_count,total_surface&order=updated_at.desc',{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?select=id,name,updated_at,zones_count,total_surface,data&order=updated_at.desc',{
       headers:{'apikey':SUPA.key,'Authorization':'Bearer '+s.access_token}
     });
     if(!res.ok)return[];return await res.json();
@@ -2542,6 +2717,36 @@ async function cloudProjectDelete(projectId){
     });
     return res.ok;
   }catch(e){return false}
+}
+async function cloudProjectRename(projectId,newName){
+  const s=getAuthSession();if(!s)return false;
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects?id=eq.'+projectId,{
+      method:'PATCH',headers:{'Content-Type':'application/json','apikey':SUPA.key,
+        'Authorization':'Bearer '+s.access_token},
+      body:JSON.stringify({name:newName,updated_at:new Date().toISOString()})
+    });
+    return res.ok;
+  }catch(e){return false}
+}
+
+
+// Generic save for any module type
+async function cloudSaveModuleProject(name, projectType, moduleData){
+  const s=getAuthSession();if(!s)return null;
+  const user=await authGetUser();if(!user)return null;
+  const data={...moduleData, projectType, name};
+  const zc=moduleData.facades?.length||moduleData.zones?.length||1;
+  const ts=moduleData.total_surface||0;
+  const body={user_id:user.id,name:name||'Projet',data,
+    zones_count:zc,total_surface:Math.round(ts*100)/100,updated_at:new Date().toISOString()};
+  try{
+    const res=await fetch(SUPA.url+'/rest/v1/kalepin_projects',{
+      method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key,
+        'Authorization':'Bearer '+s.access_token,'Prefer':'return=representation'},
+      body:JSON.stringify(body)});
+    if(!res.ok)return null;const d=await res.json();return d[0]||null;
+  }catch(e){return null}
 }
 
 async function cloudProjectDuplicate(projectId){
@@ -2663,7 +2868,10 @@ function App({user,profile,signOut,subStatus}){
   const isAdmin=profile!==null && profile!==undefined && profile.role==='superadmin';
   const isSuperAdmin=isAdmin;
   const[projectType,setProjectType]=useState('facade');// 'facade' or 'carrelage'
-  const[dashProjects,setDashProjects]=useState([]);const[dashLoading,setDashLoading]=useState(true);
+  const[dashProjects,setDashProjects]=useState([]);
+  const[showQuickCreate,setShowQuickCreate]=useState(false);
+  const[newProjName,setNewProjName]=useState('');
+  const[newProjType,setNewProjType]=useState('cassette');const[dashLoading,setDashLoading]=useState(true);
   useEffect(()=>{if(step==='dashboard')cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})},[step]);
   const[cloudProjId,setCloudProjId]=useState(null);
   const[saving,setSaving]=useState(false);
@@ -2842,12 +3050,20 @@ function App({user,profile,signOut,subStatus}){
         else if(az.ouvs.length>0){setSelIds(new Set(az.ouvs.map(o=>o.id)));setSelId(null);setShowAlignPanel(true);}}
       // Ctrl+E = toggle merge panel mode
       if((e.ctrlKey||e.metaKey)&&e.key==='e'&&az){e.preventDefault();if(mergeSrc){setMergeSrc(null)}else{setMergeSrc({parentCol:-1,parentRow:-1});setEditPanel(null);setSelId(null);}}
-      // Copy openings from active zone
-      if((e.ctrlKey||e.metaKey)&&e.key==='c'&&az){e.preventDefault();window._copiedOuvs=JSON.parse(JSON.stringify(az.ouvs))}
-      // Paste openings into active zone
+      // Copy SELECTED openings only (or all if none selected)
+      if((e.ctrlKey||e.metaKey)&&e.key==='c'&&az){e.preventDefault();
+        let toCopy=[];
+        if(selIds.size>0){toCopy=az.ouvs.filter(o=>selIds.has(o.id))}
+        else if(selId){toCopy=az.ouvs.filter(o=>o.id===selId)}
+        else{toCopy=az.ouvs}
+        window._copiedOuvs=JSON.parse(JSON.stringify(toCopy));
+        window._copiedCount=toCopy.length}
+      // Paste copied openings with offset
       if((e.ctrlKey||e.metaKey)&&e.key==='v'&&window._copiedOuvs&&az){e.preventDefault();
-        const newOuvs=window._copiedOuvs.map(o=>({...o,id:Date.now()+Math.random()}));
-        updateAZ(z=>({...z,ouvs:[...z.ouvs,...newOuvs]}))}
+        const off=30;// 30mm offset so pasted items are visible
+        const newOuvs=window._copiedOuvs.map(o=>({...o,id:Date.now()+Math.random(),x:o.x+off,y:o.y+off}));
+        updateAZ(z=>({...z,ouvs:[...z.ouvs,...newOuvs]}));
+        setSelIds(new Set(newOuvs.map(o=>o.id)));setSelId(null)}
     }
     if(step==='zone'&&e.key==='Escape'){setPolyPts([]);setPolyMode(false)}
     // Enter to validate calibration
@@ -3090,6 +3306,19 @@ function App({user,profile,signOut,subStatus}){
   // Ouvrir le picker JSON et lire les zones disponibles dans le fichier
   const jsonImpRef=useRef();
   const openJsonImport=()=>{jsonImpRef.current&&jsonImpRef.current.click();};
+  const onJsonAppendFile=(file)=>{
+    if(!file)return;
+    const reader=new FileReader();reader.onload=ev=>{
+      try{
+        const data=JSON.parse(ev.target.result);
+        if(!data.zones||!Array.isArray(data.zones)){alert('Fichier projet invalide');return}
+        const imported=data.zones.map(z=>({...z,id:Date.now()+Math.random()*1000,
+          name:zones.some(ez=>ez.name===z.name)?z.name+' (imp.)':z.name}));
+        setZones(prev=>[...prev,...imported]);setActiveZoneIdx(zones.length);
+        setStep('work');setTimeout(autoFit,200);
+      }catch(e){alert('Erreur: '+e.message)}
+    };reader.readAsText(file);
+  };
   const onJsonImpFile=(file)=>{
     if(!file)return;
     const reader=new FileReader();reader.onload=ev=>{
@@ -4475,7 +4704,7 @@ function App({user,profile,signOut,subStatus}){
         'Dessinez les zones sur le plan.',
       work:measureMode?'Mode mesure: cliquez 2 points. M: quitter | Esc: annuler'
         :modeDraw?'Dessinez l\'ouverture (min 200x200mm)'
-        :'Ctrl+C/V: copier/coller ouvertures | D: dessiner | M: mesurer | Del: supprimer'};
+        :'Ctrl+C/V: copier/coller sélection | Ctrl+A: tout sélectionner | D: dessiner | M: mesurer | Del: supprimer'};
     const msg=msgs[step];if(!msg)return null;
     return<div className="px-4 py-2 text-xs font-medium flex items-center gap-2" style={{background:polyMode?'var(--gnd)':'var(--blg)',color:polyMode?'var(--gn)':'var(--bl)',borderBottom:'1px solid var(--bd)'}}>
       <span className="w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:polyMode?'var(--gn)':'var(--bl)',color:'#fff'}}>i</span>{msg}
@@ -4620,7 +4849,7 @@ function App({user,profile,signOut,subStatus}){
   return(
     <div className="h-full flex flex-col">
       {/* ── LIGNE 1 : Logo + projet + outils ── */}
-      <div className="flex items-center px-3 flex-shrink-0" style={{height:step==='dashboard'||step==='carrelage'||step==='brique'?0:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)',overflow:'hidden'}}>
+      <div className="flex items-center px-3 flex-shrink-0" style={{height:step==='dashboard'||step==='carrelage'||step==='brique'?0:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)',overflow:step==='work'?'visible':'hidden',transition:'height .2s'}}>
         <div className="flex items-center gap-2 flex-shrink-0" style={{cursor:'pointer'}} onClick={()=>{if(step!=='dashboard')setStep('dashboard')}} title="Retour au dashboard">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'linear-gradient(135deg,#c4324a,#a0243a)'}}>
             <svg width="14" height="14" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
@@ -4629,27 +4858,29 @@ function App({user,profile,signOut,subStatus}){
           <div className="mx-2 h-5 w-px flex-shrink-0" style={{background:'var(--bd)'}}/>
           <input type="text" value={projectName} onChange={e=>setProjectName(e.target.value)} className="bg-transparent border-none outline-none text-sm font-medium flex-shrink-0" style={{color:'var(--t2)',width:130}} onKeyDown={e=>e.stopPropagation()}/>
           <div className="flex gap-1 ml-1 flex-shrink-0">
-            <button onClick={()=>saveProject(false)} className="ba px-2 py-1 rounded text-[9px] font-bold"
-              style={{background:saving?'rgba(52,211,153,.2)':'rgba(52,211,153,.1)',border:'1px solid rgba(52,211,153,.3)',color:'var(--gn)',opacity:saving?.6:1}}
-              title={cloudProjId?'Sauvegarder dans le cloud':'Nouveau projet cloud'}>{saving?'⏳':'☁'} {saving?'...':'Sauver'}</button>
-            <button onClick={()=>setShowProjects(true)} className="ba px-2 py-1 rounded text-[9px] font-bold"
-              style={{background:'rgba(79,110,247,.1)',border:'1px solid rgba(79,110,247,.3)',color:'var(--bl)'}}
-              title="Mes projets cloud">📂 Projets</button>
-            <div style={{position:'relative'}} className="flex-shrink-0">
-              <button onClick={e=>{e.currentTarget.nextSibling.style.display=e.currentTarget.nextSibling.style.display==='block'?'none':'block'}}
-                className="ba px-1.5 py-1 rounded text-[9px]" style={{border:'1px solid var(--bd)',color:'var(--t3)',background:'var(--crd)'}}>⋯</button>
-              <div style={{display:'none',position:'absolute',top:'100%',left:0,marginTop:4,background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:8,padding:4,minWidth:160,boxShadow:'0 10px 30px rgba(0,0,0,.4)',zIndex:200}}>
-                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';saveProject(true)}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px]" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>☁ Sauver comme nouveau</button>
-                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';const s={};zones.forEach((_,i)=>s[i]=true);setJsonExpSel(s);setJsonExpMod(true)}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px]" style={{border:'none',background:'transparent',color:'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>💾 Exporter JSON…</button>
-                <button onClick={e=>{e.currentTarget.parentNode.style.display='none';openJsonImport()}} className="ba w-full text-left px-3 py-1.5 rounded text-[10px]" style={{border:'none',background:'transparent',color:'#0ea5e9',cursor:'pointer',fontFamily:'inherit'}}>📥 Importer JSON…</button>
-                <input ref={jsonImpRef} type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])onJsonImpFile(e.target.files[0]);e.target.value=''}}/>
-              </div>
-            </div>
+            <button onClick={()=>saveProject(false)}
+              title={cloudProjId?'Sauvegarder':'Nouveau projet cloud'}
+              style={{width:24,height:24,borderRadius:5,border:'1px solid #0ea5e9',background:saving?'rgba(14,165,233,.2)':'rgba(14,165,233,.1)',color:'#0ea5e9',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,opacity:saving?.6:1}}>{saving?'⏳':'☁'}</button>
+            <button onClick={()=>setShowProjects(true)}
+              title="Mes projets"
+              style={{width:24,height:24,borderRadius:5,border:'1px solid rgba(79,110,247,.3)',background:'rgba(79,110,247,.08)',color:'var(--bl)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>📂</button>
+            <button onClick={()=>{const s={};zones.forEach((_,i)=>s[i]=true);setJsonExpSel(s);setJsonExpMod(true)}}
+              title="Exporter JSON" style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>💾</button>
+            <label title="Importer JSON" style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>📥<input ref={jsonImpRef} type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])onJsonImpFile(e.target.files[0]);e.target.value=''}}/></label>
+            <label title="Ajouter des zones" style={{width:24,height:24,borderRadius:5,border:'1px solid #0ea5e9',background:'rgba(14,165,233,.08)',color:'#0ea5e9',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>📑<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])onJsonAppendFile(e.target.files[0]);e.target.value=''}}/></label>
             {lastSaved&&<span className="text-[8px] self-center ml-1" style={{color:'var(--t3)'}}>☁ {lastSaved.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'})}</span>}
           </div>
           {/* ── ONGLETS ── */}
           <div className="flex-1 min-w-0 mx-2 self-stretch flex items-end">
-            <div className="ztab-bar border-b w-full" style={{borderColor:'var(--bd)'}}>
+            <div className="ztab-add" title="Ajouter une zone" style={{marginBottom:1,marginRight:2,flexShrink:0}}
+              onClick={()=>{
+                const newZ={id:Date.now(),name:'Zone '+(zones.length+1),
+                  L:3000,H:2800,facOrigin:{x:(zones.length%4)*120+40,y:(Math.floor(zones.length/4))*100+30},
+                  pan_:{l:2000,w:600,nom:''},vert:true,oss:{eM:600,eL:1200},
+                  ouvs:[],offX:0,offY:0,rot:0,jointH:0,jointV:0,jointsH:[],jointsV:[],colWidths:[],rowHeights:[],exclusions:[]};
+                setZones(prev=>[...prev,newZ]);setActiveZoneIdx(zones.length);setStep('work');setTimeout(autoFit,150);
+              }}>＋</div>
+            <div className="ztab-bar border-b" style={{borderColor:'var(--bd)',flex:1,minWidth:0}}>
               {zones.map((z,i)=>(
                 <div key={z.id} className={`ztab ${i===activeZoneIdx?'on':''}`}
                   style={i===activeZoneIdx?{borderColor:'var(--bd)',color:ZONE_COLORS[i%8],background:'var(--pnl)'}:{color:'var(--t2)'}}
@@ -4693,21 +4924,13 @@ function App({user,profile,signOut,subStatus}){
                   }}>✕</span>}
                 </div>
               ))}
-              <div className="ztab-add" title="Ajouter une zone (sans plan)" style={{marginBottom:1}}
-                onClick={()=>{
-                  const newZ={id:Date.now(),name:`Zone ${zones.length+1}`,
-                    L:3000,H:2800,facOrigin:{x:(zones.length%4)*120+40,y:(Math.floor(zones.length/4))*100+30},
-                    pan_:{l:2000,w:600,nom:''},vert:true,oss:{eM:600,eL:1200},
-                    ouvs:[],offX:0,offY:0,rot:0,jointH:0,jointV:0,jointsH:[],jointsV:[],colWidths:[],rowHeights:[],exclusions:[]};
-                  setZones(prev=>[...prev,newZ]);setActiveZoneIdx(zones.length);setStep('work');setTimeout(autoFit,150);
-                }}>＋</div>
+
             </div>
           </div>
           {/* ── OUTILS DROITE ── */}
           <div className="flex items-center gap-1.5 flex-shrink-0">
             {bgSrc&&<div className="flex items-center gap-1.5 flex-shrink-0"><label className="text-[10px] flex-shrink-0" style={{color:'var(--t3)'}}>Plan</label>
               <input type="checkbox" checked={bgVis} onChange={e=>setBgVis(e.target.checked)}/><input type="range" min="5" max="90" value={bgOp*100} onChange={e=>setBgOp(e.target.value/100)} className="rng w-12"/></div>}
-            <button onClick={runOptimize} className="ba flex items-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-medium flex-shrink-0" style={{background:'var(--ppd)',border:'1px solid rgba(167,139,250,.3)',color:'var(--pp)'}}>{I.opt(12)} Optimiser</button>
             <select value={snapMode} onChange={e=>setSnapMode(e.target.value)} className="idark text-[10px] px-1.5 py-1 rounded-lg flex-shrink-0" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t2)',width:62}}>
               <option value="free">Libre</option><option value="grid">Grille</option><option value="oss">Ossature</option>
             </select>
@@ -4900,36 +5123,24 @@ function App({user,profile,signOut,subStatus}){
             </div>
           </div>
 
-          {/* ─── HERO PITCH ─── */}
-          <div style={{position:'relative',overflow:'hidden'}}>
-            <div style={{position:'absolute',top:'8%',left:'12%',width:300,height:300,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.06),transparent 70%)',pointerEvents:'none'}}/>
-            <div style={{position:'absolute',bottom:'5%',right:'8%',width:200,height:200,borderRadius:'50%',background:'radial-gradient(circle,rgba(8,145,178,.04),transparent 70%)',pointerEvents:'none'}}/>
-            <div style={{position:'absolute',top:'40%',left:'55%',width:350,height:350,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.035),transparent 60%)',pointerEvents:'none'}}/>
-            <div style={{maxWidth:1120,margin:'0 auto',padding:'60px 24px 40px',textAlign:'center',position:'relative',zIndex:1}}>
-              <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'5px 16px',borderRadius:20,background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.12)',marginBottom:24}}>
-                <span style={{width:6,height:6,borderRadius:3,background:'#34d399',animation:'pulse-ring 2s infinite'}}/>
-                <span style={{fontSize:11,fontWeight:600,color:'#34d399'}}>Bienvenue {user?.email?.split('@')[0]||''}!</span>
+          {/* ─── DASHBOARD HEADER ─── */}
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'36px 24px 10px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:6}}>
+              <div style={{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,color:'#fff',fontWeight:900,boxShadow:'0 6px 20px rgba(196,50,74,.25)'}}>K</div>
+              <div>
+                <div style={{fontSize:20,fontWeight:800,color:'#f0ece6',letterSpacing:'-.02em'}}>Bonjour{user?.email?' '+user.email.split('@')[0]:''}  👋</div>
+                <div style={{fontSize:11,color:'rgba(255,255,255,.3)',marginTop:2}}>Que souhaitez-vous calepiner aujourd'hui ?</div>
               </div>
-              <h1 style={{fontSize:38,fontWeight:800,lineHeight:1.15,color:'#f0ece6',marginBottom:16,letterSpacing:'-.03em'}}>
-                De l'import de vos plans au<br/>
-                <span style={{background:'linear-gradient(135deg,#c4324a,#e8697f)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>bon de commande en 5 minutes</span>
-              </h1>
-              <p style={{fontSize:15,color:'rgba(255,255,255,.45)',maxWidth:620,margin:'0 auto 32px',lineHeight:1.7}}>
-                L'outil métier conçu pour les <b style={{color:'rgba(255,255,255,.6)'}}>bardeurs et façadiers</b> qui souhaitent automatiser le calepinage (Alucobond, Trespa, Equitone…), générer des métrés précis d'ossature et visualiser le rendu 3D avec les codes RAL réels.
-              </p>
-              <div style={{display:'flex',justifyContent:'center',gap:10,flexWrap:'wrap'}}>
-                {['Import PDF / DXF','Calcul auto cassettes','Vue 3D RAL','Métrés Excel','QR Code Chantier','Plan de masse'].map(t=>
-                  <span key={t} style={{padding:'5px 14px',borderRadius:20,fontSize:10,fontWeight:600,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',color:'rgba(255,255,255,.5)'}}>{t}</span>
-                )}
-              </div>
+              <div style={{flex:1}}/>
+              {isAdmin&&<button onClick={()=>setStep('admin')} style={{padding:'7px 16px',borderRadius:8,border:'1px solid rgba(196,50,74,.25)',background:'rgba(196,50,74,.08)',color:'#c4324a',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>⚡ Admin</button>}
             </div>
           </div>
 
           <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 24px 44px'}}>
             <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Créer un nouveau projet
+              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Modules
             </div>
-            <div style={{display:'grid',gridTemplateColumns:`repeat(${isAdmin?4:3},1fr)`,gap:16}}>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
               {/* Facade cassettes */}
               <div onClick={()=>{setProjectType('facade');setStep('welcome')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(196,50,74,.05),rgba(196,50,74,.01))',border:'1.5px solid rgba(196,50,74,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
                 onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(196,50,74,.12)'}}
@@ -4963,99 +5174,101 @@ function App({user,profile,signOut,subStatus}){
                   {['Sol','Mur','Piscine','Coupes','Métrés','Motifs'].map(t=><span key={t} style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(14,165,233,.08)',color:'#0ea5e9'}}>{t}</span>)}
                 </div>
               </div>
-              {/* Admin card — visible uniquement pour les admins */}
-              {isAdmin&&<div onClick={()=>setStep('admin')} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(196,50,74,.09),rgba(139,26,43,.04))',border:'1.5px solid rgba(196,50,74,.22)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.55)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(196,50,74,.18)'}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.22)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                <div style={{position:'absolute',top:12,right:14,padding:'2px 8px',borderRadius:20,background:'rgba(196,50,74,.15)',border:'1px solid rgba(196,50,74,.3)',fontSize:8,fontWeight:800,color:'#c4324a',letterSpacing:'.08em'}}>ADMIN</div>
-                <div style={{fontSize:30,marginBottom:10}}>⚡</div>
-                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Dashboard Admin</div>
-                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Gestion des utilisateurs bêta, statistiques d'usage, bibliothèques.</div>
-                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-                  {['Utilisateurs','Stats','Approbations','Bibliothèques'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(196,50,74,.1)',color:'#c4324a'}}>{t}</span>)}
-                </div>
-              </div>}
+              
             </div>
           </div>
 
           {/* ─── MES PROJETS ─── */}
           <div style={{maxWidth:1120,margin:'0 auto',padding:'0 24px 56px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
               <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',display:'flex',alignItems:'center',gap:8}}>
-                <div style={{width:3,height:18,borderRadius:2,background:'#0ea5e9'}}/>Mes projets récents ({dashProjects.length})
+                <div style={{width:3,height:18,borderRadius:2,background:'#0ea5e9'}}/>Mes projets ({dashProjects.length})
               </div>
-              <button onClick={()=>{setDashLoading(true);cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})}} style={{padding:'5px 14px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>↻ Actualiser</button>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                <button onClick={()=>{setDashLoading(true);cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})}} title="Actualiser"
+                  style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>↻</button>
+                <button onClick={()=>setShowProjects(true)} title="Gérer mes projets"
+                  style={{padding:'6px 12px',borderRadius:8,border:'1px solid rgba(14,165,233,.25)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>📂 Dossiers</button>
+                {/* Quick create project */}
+                <div style={{position:'relative'}}>
+                  <button onClick={()=>setShowQuickCreate(!showQuickCreate)}
+                    style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 3px 12px rgba(196,50,74,.25)'}}>+ Nouveau</button>
+                  {showQuickCreate&&<><div onClick={()=>setShowQuickCreate(false)} style={{position:'fixed',inset:0,zIndex:29}}/><div style={{position:'absolute',top:'100%',right:0,marginTop:6,width:260,padding:14,borderRadius:14,background:'rgba(16,16,24,.98)',border:'1px solid rgba(255,255,255,.08)',backdropFilter:'blur(16px)',boxShadow:'0 16px 48px rgba(0,0,0,.5)',zIndex:30}}>
+                    <div style={{fontSize:11,fontWeight:700,color:'var(--t1)',marginBottom:10}}>Créer un projet</div>
+                    <input type="text" value={newProjName} onChange={e=>setNewProjName(e.target.value)} placeholder="Nom du projet..."
+                      onKeyDown={e=>e.stopPropagation()}
+                      style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:12,boxSizing:'border-box',marginBottom:10,fontFamily:'inherit',outline:'none'}}/>
+                    <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>TYPE</div>
+                    <div style={{display:'flex',gap:6,marginBottom:12}}>
+                      {[{t:'cassette',icon:'🏢',label:'Cassettes',color:'196,50,74'},{t:'brique',icon:'🧱',label:'Brique',color:'217,119,6'},{t:'carrelage',icon:'🔲',label:'Carrelage',color:'14,165,233'}].map(m=>
+                        <button key={m.t} onClick={()=>setNewProjType(m.t)}
+                          style={{flex:1,padding:'8px 4px',borderRadius:8,border:`1.5px solid rgba(${m.color},${newProjType===m.t?'.4':'.1'})`,
+                            background:`rgba(${m.color},${newProjType===m.t?'.12':'.03'})`,cursor:'pointer',textAlign:'center',fontFamily:'inherit'}}>
+                          <div style={{fontSize:16,marginBottom:2}}>{m.icon}</div>
+                          <div style={{fontSize:8,fontWeight:700,color:`rgb(${m.color})`}}>{m.label}</div>
+                        </button>)}
+                    </div>
+                    <button onClick={async()=>{if(!newProjName.trim())return;const stepMap={cassette:'welcome',brique:'brique',carrelage:'carrelage'};setProjectType(newProjType==='cassette'?'facade':newProjType);setShowQuickCreate(false);setStep(stepMap[newProjType]);setNewProjName('')}}
+                      style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Créer et ouvrir →</button>
+                  </div></>}
+                </div>
+              </div>
             </div>
             {dashLoading?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>Chargement...</div>
-            :dashProjects.length===0?<div style={{textAlign:'center',padding:50,borderRadius:20,border:'1.5px dashed rgba(255,255,255,.06)',background:'rgba(255,255,255,.012)'}}>
-              <div style={{fontSize:42,marginBottom:14}}>📁</div>
-              <div style={{fontSize:14,fontWeight:600,color:'var(--t2)',marginBottom:6}}>Aucun projet sauvegardé</div>
-              <div style={{fontSize:11,color:'var(--t3)'}}>Créez votre premier calepinage ci-dessus</div>
+            :dashProjects.length===0?<div style={{textAlign:'center',padding:60,borderRadius:24,border:'1.5px dashed rgba(255,255,255,.06)',background:'rgba(255,255,255,.012)'}}>
+              <div style={{fontSize:48,marginBottom:16}}>📐</div>
+              <div style={{fontSize:16,fontWeight:700,color:'var(--t2)',marginBottom:8}}>Aucun projet pour l'instant</div>
+              <div style={{fontSize:12,color:'var(--t3)',lineHeight:1.6}}>Choisissez un module ci-dessus pour créer<br/>votre premier calepinage</div>
             </div>
-            :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250,1fr))',gap:12}}>
-              {dashProjects.map(p=><div key={p.id} onClick={()=>openCloudProject(p.id)} style={{
-                padding:16,borderRadius:14,background:'rgba(255,255,255,.02)',border:'1px solid rgba(255,255,255,.05)',cursor:'pointer',transition:'all .2s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.22)';e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 10px 30px rgba(0,0,0,.25)'}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.05)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#c4324a,#a0243a)',opacity:.45}}/>
-                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}>
-                  <div style={{width:34,height:34,borderRadius:9,background:'linear-gradient(135deg,rgba(196,50,74,.08),rgba(196,50,74,.03))',border:'1px solid rgba(196,50,74,.1)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>🏗</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:700,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
-                    <div style={{fontSize:9,color:'var(--t3)',marginTop:2}}>{(()=>{try{return new Date(p.updated_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})}catch(e){return'-'}})()}</div>
+            :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
+              {dashProjects.map(p=>{
+                const pType=(()=>{try{const d=typeof p.data==='string'?JSON.parse(p.data):p.data;if(!d)return'cassette';if(d.projectType==='brique'||d.brickBond)return'brique';if(d.projectType==='carrelage'||d.tileW)return'carrelage';return'cassette'}catch(e){return'cassette'}})();
+                const typeConf={cassette:{icon:'🏢',label:'Cassettes',color:'196,50,74',gradient:'#c4324a,#a0243a'},brique:{icon:'🧱',label:'Brique',color:'217,119,6',gradient:'#d97706,#b45309'},carrelage:{icon:'🔲',label:'Carrelage',color:'14,165,233',gradient:'#0ea5e9,#0284c7'}}[pType];
+                const dateStr=(()=>{try{const d=new Date(p.updated_at);const now=new Date();const diff=now-d;if(diff<3600000)return'Il y a '+Math.max(1,Math.floor(diff/60000))+' min';if(diff<86400000)return'Il y a '+Math.floor(diff/3600000)+'h';return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})}catch(e){return'-'}})();
+                return <div key={p.id} onClick={()=>openCloudProject(p.id)} style={{
+                  padding:0,borderRadius:16,background:'rgba(255,255,255,.02)',border:'1px solid rgba('+typeConf.color+',.12)',
+                  cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                  onMouseOver={e=>{e.currentTarget.style.borderColor='rgba('+typeConf.color+',.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 12px 40px rgba(0,0,0,.3)'}}
+                  onMouseOut={e=>{e.currentTarget.style.borderColor='rgba('+typeConf.color+',.12)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                  {/* Color banner top */}
+                  <div style={{height:4,background:'linear-gradient(90deg,'+typeConf.gradient+')',opacity:.6}}/>
+                  <div style={{padding:'14px 16px'}}>
+                    {/* Header row */}
+                    <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
+                      <div style={{width:42,height:42,borderRadius:12,background:'linear-gradient(135deg,rgba('+typeConf.color+',.12),rgba('+typeConf.color+',.04))',border:'1px solid rgba('+typeConf.color+',.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{typeConf.icon}</div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>{p.name}</div>
+                        <div style={{display:'flex',alignItems:'center',gap:6}}>
+                          <span style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba('+typeConf.color+',.1)',color:'rgb('+typeConf.color+')',letterSpacing:'.03em'}}>{typeConf.label}</span>
+                          <span style={{fontSize:9,color:'var(--t3)'}}>{dateStr}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Stats row */}
+                    <div style={{display:'flex',gap:0,borderRadius:10,overflow:'hidden',background:'rgba(0,0,0,.15)'}}>
+                      <div style={{flex:1,padding:'8px 12px',borderRight:'1px solid rgba(255,255,255,.04)'}}>
+                        <div style={{fontSize:15,fontWeight:800,color:'rgb('+typeConf.color+')',fontFamily:'monospace'}}>{p.zones_count||0}</div>
+                        <div style={{fontSize:8,color:'var(--t3)',marginTop:1,fontWeight:600}}>ZONE{(p.zones_count||0)>1?'S':''}</div>
+                      </div>
+                      <div style={{flex:1,padding:'8px 12px',borderRight:'1px solid rgba(255,255,255,.04)'}}>
+                        <div style={{fontSize:15,fontWeight:800,color:'var(--t1)',fontFamily:'monospace'}}>{(p.total_surface||0).toFixed(1)}</div>
+                        <div style={{fontSize:8,color:'var(--t3)',marginTop:1,fontWeight:600}}>M²</div>
+                      </div>
+                      <div style={{flex:1,padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
+                        <span style={{fontSize:10,fontWeight:600,color:'rgb('+typeConf.color+')',display:'flex',alignItems:'center',gap:4}}>Ouvrir →</span>
+                      </div>
+                    </div>
+                    {/* Delete button */}
+                    <button onClick={async(ev)=>{ev.stopPropagation();if(!confirm('Supprimer "'+p.name+'" ?'))return;const ok=await cloudProjectDelete(p.id);if(ok)setDashProjects(prev=>prev.filter(pr=>pr.id!==p.id))}}
+                      style={{position:'absolute',top:12,right:10,width:22,height:22,borderRadius:6,border:'1px solid rgba(239,68,68,.15)',background:'rgba(239,68,68,.05)',
+                        color:'#ef4444',cursor:'pointer',fontSize:9,display:'none',alignItems:'center',justifyContent:'center',zIndex:2}}
+                      className="dash-del">🗑</button>
                   </div>
-                </div>
-                <div style={{display:'flex',gap:8,fontSize:10,color:'var(--t3)'}}><span>{p.zones_count||0} zone{(p.zones_count||0)>1?'s':''}</span><span>·</span><span>{(p.total_surface||0).toFixed(1)} m²</span></div>
-              </div>)}
+                </div>})}
             </div>}
           </div>
 
-          {/* ─── FONCTIONNALITÉS ─── */}
-          <div style={{background:'rgba(255,255,255,.012)',borderTop:'1px solid rgba(255,255,255,.04)',borderBottom:'1px solid rgba(255,255,255,.04)'}}>
-            <div style={{maxWidth:1120,margin:'0 auto',padding:'56px 24px'}}>
-              <div style={{textAlign:'center',marginBottom:40}}>
-                <h2 style={{fontSize:26,fontWeight:800,color:'#f0ece6',marginBottom:10}}>Pourquoi choisir Kalepin ?</h2>
-                <p style={{fontSize:13,color:'rgba(255,255,255,.4)',maxWidth:520,margin:'0 auto'}}>4 problèmes métier résolus par un seul outil</p>
-              </div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:16}}>
-                {[
-                  {icon:'🎯',title:'Zéro erreur de commande',desc:'Calcul auto des surfaces nettes, chutes et nombre exact de panneaux incluant les cassettes pliées avec le détail des plis.',color:'#c4324a'},
-                  {icon:'🧊',title:'Vente simplifiée en 3D',desc:'Montrez à vos clients le rendu final avec les finitions RAL (mat, brillant, métallisé) dans le navigateur ou sur mobile.',color:'#0ea5e9'},
-                  {icon:'📊',title:'Métrés instantanés',desc:'Excel récapitulant les métrés par zone, les ouvertures (fenêtres, portes) et les linéaires d\'ossature en 1 clic.',color:'#34d399'},
-                  {icon:'📐',title:'Import DXF / PDF',desc:'Importez vos plans d\'architecte et travaillez directement dessus par transparence. Calibration automatique.',color:'#f59e0b'},
-                ].map((f,i)=><div key={i} style={{padding:24,borderRadius:18,background:'rgba(0,0,0,.2)',border:'1px solid rgba(255,255,255,.04)',position:'relative',overflow:'hidden',transition:'all .2s'}}
-                  onMouseOver={e=>e.currentTarget.style.borderColor=`${f.color}30`}
-                  onMouseOut={e=>e.currentTarget.style.borderColor='rgba(255,255,255,.04)'}>
-                  <div style={{position:'absolute',top:-20,right:-20,width:70,height:70,borderRadius:'50%',background:`radial-gradient(circle,${f.color}0d,transparent)`,pointerEvents:'none'}}/>
-                  <div style={{fontSize:30,marginBottom:14}}>{f.icon}</div>
-                  <div style={{fontSize:13,fontWeight:700,color:'#f0ece6',marginBottom:8}}>{f.title}</div>
-                  <div style={{fontSize:11,color:'rgba(255,255,255,.4)',lineHeight:1.65}}>{f.desc}</div>
-                </div>)}
-              </div>
-            </div>
-          </div>
-
-          {/* ─── QR CODE CHANTIER SPOTLIGHT ─── */}
-          <div style={{background:'rgba(196,50,74,.035)',borderTop:'1px solid rgba(196,50,74,.08)',borderBottom:'1px solid rgba(196,50,74,.08)'}}>
-            <div style={{maxWidth:1120,margin:'0 auto',padding:'44px 24px',display:'flex',alignItems:'center',gap:32}}>
-              <div style={{width:88,height:88,borderRadius:20,background:'linear-gradient(135deg,rgba(196,50,74,.1),rgba(196,50,74,.04))',border:'1px solid rgba(196,50,74,.12)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:40,flexShrink:0}}>📱</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:18,fontWeight:700,color:'#f0ece6',marginBottom:8}}>Le QR Code Chantier</div>
-                <div style={{fontSize:12,color:'rgba(255,255,255,.4)',lineHeight:1.7}}>
-                  Posez vos panneaux avec le plan 3D accessible sur votre téléphone via un simple QR code collé sur votre plan papier.
-                  Partagez la vue AR avec vos clients directement sur site — un argument commercial unique qui fait la différence.
-                </div>
-              </div>
-              <div style={{flexShrink:0}}>
-                <button onClick={()=>{setProjectType('facade');setStep('welcome')}} style={{padding:'12px 28px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',fontSize:13,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 6px 20px rgba(196,50,74,.25)',transition:'all .2s'}}>Essayer maintenant</button>
-              </div>
-            </div>
-          </div>
-
-          {/* ─── FOOTER ─── */}
-          <div style={{borderTop:'1px solid rgba(255,255,255,.04)',padding:'24px 0',textAlign:'center'}}>
-            <div style={{fontSize:10,color:'rgba(255,255,255,.2)'}}>Kalepin v16 — © 2025 · Conçu pour les bardeurs et façadiers</div>
-          </div>
+          
 
         </div>}
 
@@ -5184,11 +5397,11 @@ function App({user,profile,signOut,subStatus}){
               {/* ── EXCLUSIONS / BALCONS ── */}
               <Sec icon="🚫" title="Exclusions / Balcons" badge={(az.exclusions||[]).length||null} color="var(--rs)">
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <label className="text-[9px] font-bold" style={{color:'var(--t3)'}}>Profondeur (mm)</label>
+                  <div style={{display:'flex',alignItems:'center',gap:6}}>
+                    <label style={{fontSize:9,fontWeight:700,color:'var(--t3)',flexShrink:0}}>Prof.</label>
                     <input type="number" value={excludeDepth} onChange={e=>setExcludeDepth(Math.max(100,parseInt(e.target.value)||1500))}
-                      className="idark flex-1 px-2 py-1 rounded text-[11px] mn font-bold text-center"
-                      style={{borderColor:'var(--rs)'}} min={100} step={100}/>
+                      style={{width:56,padding:'4px 6px',borderRadius:6,border:'1.5px solid var(--rs)',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontWeight:700,fontFamily:'monospace',textAlign:'center',outline:'none',boxSizing:'border-box'}} min={100} step={100}/>
+                    <span style={{fontSize:8,color:'var(--t3)'}}>mm</span>
                   </div>
                   <button onClick={()=>{if(excludeMode){setExcludeMode(false)}else{setExcludeMode(true);setMergeSrc(null);setEditPanel(null)}}}
                     className={`ba w-full py-2 rounded-lg text-[10px] font-bold ${excludeMode?'apg':''}`}
@@ -5197,16 +5410,15 @@ function App({user,profile,signOut,subStatus}){
                   </button>
                   {(az.exclusions||[]).length>0&&<div className="space-y-1">
                     <div className="text-[9px] font-bold" style={{color:'var(--t3)'}}>{(az.exclusions||[]).length} exclusion(s)</div>
-                    {(az.exclusions||[]).map((ex,i)=><div key={i} className="flex items-center justify-between px-2 py-1 rounded" style={{background:'rgba(190,18,60,.06)',border:'1px solid rgba(190,18,60,.15)'}}>
-                      <span className="text-[9px] mn font-bold" style={{color:'var(--rs)'}}>C{ex.col+1} L{ex.row+1} — {ex.depth}mm</span>
-                      <div className="flex gap-1">
-                        <input type="number" defaultValue={ex.depth} className="w-14 text-center text-[9px] px-1 py-0.5 rounded mn"
-                          style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t1)'}}
+                    {(az.exclusions||[]).map((ex,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:4,padding:'3px 6px',borderRadius:6,background:'rgba(190,18,60,.06)',border:'1px solid rgba(190,18,60,.15)'}}>
+                      <span style={{fontSize:8,fontWeight:700,color:'var(--rs)',flex:'0 0 auto',fontFamily:'monospace'}}>C{ex.col+1}L{ex.row+1}</span>
+                      <input type="number" defaultValue={ex.depth} style={{width:48,padding:'2px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:9,fontWeight:700,fontFamily:'monospace',textAlign:'center',flex:'0 0 48px'}}
                           onChange={e=>{const v=parseInt(e.target.value)||1500;
                             updateAZ(z=>({...z,exclusions:(z.exclusions||[]).map((x,j)=>j===i?{...x,depth:v}:x)}))}}/>
-                        <button onClick={()=>updateAZ(z=>({...z,exclusions:(z.exclusions||[]).filter((_,j)=>j!==i)}))}
-                          className="text-[9px] px-1.5 py-0.5 rounded" style={{background:'var(--rsd)',color:'var(--rs)'}}>x</button>
-                      </div>
+                      <span style={{fontSize:7,color:'var(--t3)'}}>mm</span>
+                      <div style={{flex:1}}/>
+                      <button onClick={()=>updateAZ(z=>({...z,exclusions:(z.exclusions||[]).filter((_,j)=>j!==i)}))}
+                        style={{width:18,height:18,borderRadius:4,background:'var(--rsd)',color:'var(--rs)',border:'none',fontSize:9,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>×</button>
                     </div>)}
                     <button onClick={()=>updateAZ(z=>({...z,exclusions:[]}))} className="w-full py-1 rounded text-[9px] font-bold" style={{background:'var(--rsd)',color:'var(--rs)'}}>Tout supprimer</button>
                   </div>}
@@ -5691,129 +5903,115 @@ function App({user,profile,signOut,subStatus}){
         const panW=Math.round(pm.pWa*1000),panH=Math.round(pm.pHa*1000);
         const pCol=pm.parentCol,pRow=pm.parentRow;
         const ralHex=RAL_COLORS[az?.ralIdx??ralIdx]?.hex||'#383E42';
-        // Compute screen position from panel coords + zoom/pan
         const ppZ=zoom*(pxPerMm_eff||manualScale||0.15);
         const scrX=(pm.pLeft*ppZ+pan.x+(az.facOrigin?.x||0)*zoom)*1+30;
         const scrY=(pm.pTop*ppZ+pan.y+(az.facOrigin?.y||0)*zoom)*1;
         const rect=cvRef.current?.getBoundingClientRect()||{left:0,top:0,width:800,height:600};
-        const popW=235,popMaxH=420;
-        let lf=rect.left+scrX+pm.pWa*ppZ+8;
+        const popW=250,popMaxH=440;
+        let lf=rect.left+scrX+pm.pWa*ppZ+12;
         let tp=rect.top+scrY;
-        if(lf+popW>window.innerWidth-10)lf=rect.left+scrX-popW-8;
+        if(lf+popW>window.innerWidth-10)lf=rect.left+scrX-popW-12;
         if(tp+popMaxH>window.innerHeight-10)tp=window.innerHeight-popMaxH-10;
         if(tp<10)tp=10;if(lf<10)lf=10;
-        return<div style={{position:'fixed',left:lf,top:tp,zIndex:200,width:popW,maxHeight:popMaxH,
-          background:'var(--pnl)',border:'1.5px solid var(--bl)',borderRadius:10,
-          boxShadow:'0 8px 30px rgba(0,0,0,.12)',overflowY:'auto',overflowX:'hidden',maxHeight:Math.min(popMaxH,window.innerHeight-tp-10)}}>
-          {/* Header compact */}
-          <div style={{padding:'6px 10px',borderBottom:'1px solid var(--bd)',background:'var(--crd)'}}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-1.5">
-                <div style={{width:20,height:20,borderRadius:4,background:ralHex,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                  <span style={{fontSize:7,fontWeight:700,color:'#fff',fontFamily:'monospace'}}>{pm.subRef}</span></div>
-                <div><span className="text-[11px] font-bold" style={{color:'var(--t1)'}}>Panneau {pm.subRef}</span>
-                  <span className="text-[8px] ml-1" style={{color:'var(--t3)'}}>C{pm.col+1} L{pm.row+1}</span></div>
+        const isExcl=(az.exclusions||[]).find(e=>e.col===pCol&&e.row===pRow);
+        return<div style={{position:'fixed',left:lf,top:tp,zIndex:200,width:popW,maxHeight:Math.min(popMaxH,window.innerHeight-tp-10),
+          background:'rgba(20,22,38,.97)',backdropFilter:'blur(24px)',border:'1px solid rgba(120,140,255,.2)',borderRadius:16,
+          boxShadow:'0 20px 60px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.03) inset, 0 1px 0 rgba(255,255,255,.05) inset',
+          overflowY:'auto',overflowX:'hidden'}}>
+          {/* ── Header ── */}
+          <div style={{padding:'10px 14px 8px',display:'flex',alignItems:'center',gap:10}}>
+            <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${ralHex},${ralHex}88)`,display:'flex',alignItems:'center',justifyContent:'center',
+              boxShadow:`0 4px 12px ${ralHex}50`}}>
+              <span style={{fontSize:12,fontWeight:900,color:'#fff',fontFamily:'monospace'}}>{pm.subRef}</span></div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:800,color:'#f0ece6',letterSpacing:'-.01em'}}>Panneau {pm.subRef}</div>
+              <div style={{display:'flex',gap:4,marginTop:3}}>
+                <span style={{fontSize:8,padding:'1px 6px',borderRadius:4,background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.4)',fontWeight:600}}>C{pm.col+1}</span>
+                <span style={{fontSize:8,padding:'1px 6px',borderRadius:4,background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.4)',fontWeight:600}}>L{pm.row+1}</span>
+                {pm.isImpacted&&<span style={{fontSize:8,padding:'1px 6px',borderRadius:4,background:'rgba(245,158,11,.12)',color:'#f59e0b',fontWeight:700}}>✂</span>}
+                {pm.polyEdge&&<span style={{fontSize:8,padding:'1px 6px',borderRadius:4,background:'rgba(34,211,238,.08)',color:'#22d3ee',fontWeight:700}}>◇</span>}
+                {isExcl&&<span style={{fontSize:8,padding:'1px 6px',borderRadius:4,background:'rgba(239,68,68,.12)',color:'#ef4444',fontWeight:700}}>🚫</span>}
               </div>
-              <button onClick={()=>setEditPanel(null)} className="w-5 h-5 rounded flex items-center justify-center text-[10px]"
-                style={{color:'var(--t3)',border:'1px solid var(--bd)'}}>✕</button>
             </div>
+            <button onClick={()=>setEditPanel(null)} style={{width:24,height:24,borderRadius:7,border:'none',
+              background:'rgba(255,255,255,.06)',color:'rgba(255,255,255,.4)',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .15s'}}
+              onMouseOver={e=>e.currentTarget.style.background='rgba(255,255,255,.12)'}
+              onMouseOut={e=>e.currentTarget.style.background='rgba(255,255,255,.06)'}>✕</button>
           </div>
-          {/* Dims row */}
-          <div className="flex gap-1 px-2 py-1.5" style={{borderBottom:'1px solid var(--bd)'}}>
-            <div className="flex-1 text-center py-1 rounded" style={{background:'rgba(196,50,74,.08)'}}>
-              <div className="text-[7px] font-bold" style={{color:'var(--t3)'}}>L</div>
-              <div className="text-[11px] font-bold mn" style={{color:'var(--bl)'}}>{panW}</div></div>
-            <div className="flex-1 text-center py-1 rounded" style={{background:'rgba(13,148,136,.06)'}}>
-              <div className="text-[7px] font-bold" style={{color:'var(--t3)'}}>H</div>
-              <div className="text-[11px] font-bold mn" style={{color:'var(--gn)'}}>{panH}</div></div>
-            <div className="flex-1 text-center py-1 rounded" style={{background:'rgba(139,92,246,.06)'}}>
-              <div className="text-[7px] font-bold" style={{color:'var(--t3)'}}>m²</div>
-              <div className="text-[11px] font-bold mn" style={{color:'var(--pp)'}}>{(panW*panH/1e6).toFixed(2)}</div></div>
+          {/* ── Dimensions display ── */}
+          <div style={{padding:'0 14px 10px',display:'flex',gap:6}}>
+            {[{l:'Largeur',v:panW,c:'#c4324a'},{l:'Hauteur',v:panH,c:'#10b981'},{l:'Surface',v:(panW*panH/1e6).toFixed(2)+'m²',c:'#8b5cf6'}].map(d=>
+              <div key={d.l} style={{flex:1,padding:'8px 6px',borderRadius:10,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.04)',textAlign:'center'}}>
+                <div style={{fontSize:16,fontWeight:900,color:d.c,fontFamily:'monospace',lineHeight:1}}>{d.v}</div>
+                <div style={{fontSize:7,fontWeight:600,color:'rgba(255,255,255,.3)',marginTop:3,textTransform:'uppercase',letterSpacing:'.5px'}}>{d.l}</div>
+              </div>)}
           </div>
-          {/* Tags */}
-          {(pm.isImpacted||pm.polyEdge)&&<div className="flex gap-1 px-2 py-1" style={{borderBottom:'1px solid var(--bd)'}}>
-            {pm.isImpacted&&<span className="text-[8px] font-bold px-1.5 py-0.5 rounded" style={{background:'var(--amd)',color:'var(--am)'}}>✂ Impacté</span>}
-            {pm.polyEdge&&<span className="text-[8px] font-bold px-1.5 py-0.5 rounded" style={{background:'rgba(34,211,238,.08)',color:'var(--cy)'}}>◇ Bord</span>}
-          </div>}
-          {/* Edit dims */}
-          <div className="px-2 py-1.5 space-y-1.5" style={{borderBottom:'1px solid var(--bd)'}}>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[8px] font-bold" style={{color:'var(--am)',minWidth:28}}>↔ Col</span>
-              <input type="number" defaultValue={(az.colWidths||[])[pCol]||az.pan_.l||600}
-                className="flex-1 px-2 py-1 rounded text-[11px] mn font-bold idark" id="ep-colw" onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){const v=parseFloat(e.target.value);if(!v||v<50)return;
-                  updateAZ(z=>{const cw=[...(z.colWidths||[])];while(cw.length<=pCol)cw.push(null);cw[pCol]=v;return{...z,colWidths:cw}});setEditPanel(null)}}}/>
-              <button onClick={()=>{const el=document.getElementById('ep-colw');const v=parseFloat(el?.value);if(!v||v<50)return;
-                updateAZ(z=>{const cw=[...(z.colWidths||[])];while(cw.length<=pCol)cw.push(null);cw[pCol]=v;return{...z,colWidths:cw}});setEditPanel(null)}}
-                className="px-3 py-1 rounded text-[9px] font-bold text-white flex-shrink-0" style={{background:'var(--bl)',minWidth:32}}>OK</button>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[8px] font-bold" style={{color:'var(--gn)',minWidth:28}}>↕ Lig</span>
-              <input type="number" defaultValue={(az.rowHeights||[])[pRow]||az.pan_.w||400}
-                className="flex-1 px-2 py-1 rounded text-[11px] mn font-bold idark" id="ep-rowh" onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){const v=parseFloat(e.target.value);if(!v||v<50)return;
-                  updateAZ(z=>{const rh=[...(z.rowHeights||[])];while(rh.length<=pRow)rh.push(null);rh[pRow]=v;return{...z,rowHeights:rh}});setEditPanel(null)}}}/>
-              <button onClick={()=>{const el=document.getElementById('ep-rowh');const v=parseFloat(el?.value);if(!v||v<50)return;
-                updateAZ(z=>{const rh=[...(z.rowHeights||[])];while(rh.length<=pRow)rh.push(null);rh[pRow]=v;return{...z,rowHeights:rh}});setEditPanel(null)}}
-                className="px-3 py-1 rounded text-[9px] font-bold text-white flex-shrink-0" style={{background:'var(--gn)',minWidth:32}}>OK</button>
-            </div>
+          {/* ── Edit dimensions ── */}
+          <div style={{padding:'8px 14px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',gap:5}}>
+            <div style={{fontSize:8,fontWeight:700,color:'rgba(255,255,255,.3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:2}}>Redimensionner</div>
+            {[{label:'↔ Colonne',id:'ep-colw',def:(az.colWidths||[])[pCol]||az.pan_.l||600,color:'#f59e0b',
+              fn:v=>updateAZ(z=>{const cw=[...(z.colWidths||[])];while(cw.length<=pCol)cw.push(null);cw[pCol]=v;return{...z,colWidths:cw}})},
+              {label:'↕ Ligne',id:'ep-rowh',def:(az.rowHeights||[])[pRow]||az.pan_.w||400,color:'#10b981',
+              fn:v=>updateAZ(z=>{const rh=[...(z.rowHeights||[])];while(rh.length<=pRow)rh.push(null);rh[pRow]=v;return{...z,rowHeights:rh}})}
+            ].map(d=><div key={d.id} style={{display:'flex',alignItems:'center',gap:5}}>
+              <span style={{fontSize:9,fontWeight:700,color:d.color,width:52,flexShrink:0}}>{d.label}</span>
+              <div style={{flex:1,display:'flex',alignItems:'center',borderRadius:8,border:'1px solid rgba(255,255,255,.1)',background:'rgba(255,255,255,.04)',overflow:'hidden'}}>
+                <button onClick={()=>{const el=document.getElementById(d.id);const v=Math.max(50,(parseFloat(el?.value)||d.def)-50);el.value=v}}
+                  style={{width:26,height:28,border:'none',borderRight:'1px solid rgba(255,255,255,.06)',background:'transparent',color:'rgba(255,255,255,.4)',cursor:'pointer',fontSize:12,fontWeight:700}}>−</button>
+                <input type="number" defaultValue={d.def} id={d.id}
+                  style={{flex:1,padding:'4px 6px',border:'none',background:'transparent',color:'#fff',fontSize:12,fontWeight:800,fontFamily:'monospace',outline:'none',textAlign:'center',minWidth:0}}
+                  onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){const v=parseFloat(e.target.value);if(v>=50){d.fn(v);setEditPanel(null)}}}}/>
+                <button onClick={()=>{const el=document.getElementById(d.id);const v=(parseFloat(el?.value)||d.def)+50;el.value=v}}
+                  style={{width:26,height:28,border:'none',borderLeft:'1px solid rgba(255,255,255,.06)',background:'transparent',color:'rgba(255,255,255,.4)',cursor:'pointer',fontSize:12,fontWeight:700}}>+</button>
+              </div>
+              <button onClick={()=>{const el=document.getElementById(d.id);const v=parseFloat(el?.value);if(v>=50){d.fn(v);setEditPanel(null)}}}
+                style={{padding:'5px 10px',borderRadius:8,border:'none',background:d.color,color:'#fff',fontSize:10,fontWeight:800,cursor:'pointer',flexShrink:0}}>✓</button>
+            </div>)}
           </div>
-          {/* Actions */}
-          <div className="px-2 py-1.5 space-y-1" style={{borderBottom:'1px solid var(--bd)'}}>
-            {(()=>{
-              const excl=(az.exclusions||[]).find(e=>e.col===pCol&&e.row===pRow);
-              if(excl)return<div className="space-y-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[8px]" style={{color:'var(--rs)'}}>Exclu ({excl.depth}mm)</span>
-                  <input type="number" defaultValue={excl.depth} className="w-14 px-1.5 py-0.5 rounded text-[10px] mn idark" id="ep-excl-depth" onKeyDown={e=>e.stopPropagation()}/>
-                  <button onClick={()=>{const el=document.getElementById('ep-excl-depth');const v=parseFloat(el?.value);if(!v||v<100)return;
-                    updateAZ(z=>{const ex=[...(z.exclusions||[])].map(e=>e.col===pCol&&e.row===pRow?{...e,depth:v}:e);return{...z,exclusions:ex}});setEditPanel(null)}}
-                    className="px-1.5 py-0.5 rounded text-[8px] font-bold text-white" style={{background:'var(--bl)'}}>✓</button>
-                  <button onClick={()=>{updateAZ(z=>({...z,exclusions:(z.exclusions||[]).filter(e=>!(e.col===pCol&&e.row===pRow))}));setEditPanel(null)}}
-                    className="px-1.5 py-0.5 rounded text-[8px] font-bold" style={{color:'var(--rs)',border:'1px solid rgba(251,113,133,.3)'}}>✕</button>
-                </div>
-              </div>;
-              return<button onClick={()=>{const depth=prompt('Profondeur extrusion (mm):','1500');if(!depth)return;const d=parseFloat(depth);if(isNaN(d)||d<100)return;
-                updateAZ(z=>{const ex=[...(z.exclusions||[])];ex.push({col:pCol,row:pRow,depth:d});return{...z,exclusions:ex}});setEditPanel(null)}}
-                className="w-full py-1 rounded text-[9px] font-bold" style={{background:'rgba(251,113,133,.06)',border:'1px solid rgba(251,113,133,.15)',color:'var(--rs)'}}>
-                🚫 Exclure (balcon)</button>;
-            })()}
-          </div>
-          {/* Transform to opening */}
-          <div className="px-2 py-1.5" style={{borderBottom:'1px solid var(--bd)'}}>
-            <button onClick={()=>{
-              const ox=Math.round(pm.pLeft*1000),oy=Math.round(pm.pTop*1000);
-              const ow=Math.round(pm.pWa*1000),oh=Math.round(pm.pHa*1000);
-              const nO={id:Date.now(),t:oh>1800?'Porte':'Fenetre',x:ox,y:oy,w:ow,h:oh};
-              updateAZ(z=>({...z,ouvs:[...z.ouvs,nO]}));setSelId(nO.id);setEditPanel(null)}}
-              className="w-full py-1 rounded text-[9px] font-bold" style={{background:'rgba(14,165,233,.06)',border:'1px solid rgba(14,165,233,.15)',color:'#0ea5e9'}}>
-              🔲 Transformer en ouverture</button>
-          </div>
-          {/* Merge */}
-          <div className="px-2 py-1.5">
-            {pm.isMerged?
-              <button onClick={()=>{updateAZ(z=>{const ms=[...(z.merges||[])].filter(m=>!(m.c1===pm.mergeSpan.c1&&m.r1===pm.mergeSpan.r1));return{...z,merges:ms}});setEditPanel(null)}}
-                className="w-full py-1 rounded text-[9px] font-bold" style={{background:'rgba(251,113,133,.06)',border:'1px solid rgba(251,113,133,.15)',color:'var(--rs)'}}>
-                ✂ Défusionner</button>
-            :<div className="space-y-1">
-              <button onClick={()=>{setMergeSrc({parentCol:pCol,parentRow:pRow});setEditPanel(null)}}
-                className="w-full py-1 rounded text-[9px] font-bold" style={{background:'rgba(139,92,246,.08)',border:'1px solid rgba(139,92,246,.15)',color:'var(--pp)'}}>
-                ⊞ Fusionner avec...</button>
-              <div className="flex gap-1">
+          {/* ── Quick actions grid ── */}
+          <div style={{padding:'10px 14px',borderTop:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',gap:4}}>
+            <div style={{fontSize:8,fontWeight:700,color:'rgba(255,255,255,.3)',textTransform:'uppercase',letterSpacing:'.5px',marginBottom:2}}>Actions</div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+              {/* Exclude/Restore */}
+              {isExcl?<button onClick={()=>{updateAZ(z=>({...z,exclusions:(z.exclusions||[]).filter(e=>!(e.col===pCol&&e.row===pRow))}));setEditPanel(null)}}
+                style={{gridColumn:'span 2',padding:'8px',borderRadius:8,border:'1px solid rgba(16,185,129,.2)',background:'rgba(16,185,129,.06)',color:'#10b981',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                ✅ Restaurer le panneau</button>
+              :<button onClick={()=>{updateAZ(z=>{const ex=[...(z.exclusions||[])];ex.push({col:pCol,row:pRow,depth:excludeDepth});return{...z,exclusions:ex}});setEditPanel(null)}}
+                style={{gridColumn:'span 2',padding:'8px',borderRadius:8,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'#ef4444',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                🚫 Exclure — {excludeDepth}mm</button>}
+              {/* Transform to opening */}
+              <button onClick={()=>{
+                const ox=Math.round(pm.pLeft*1000),oy=Math.round(pm.pTop*1000);
+                const ow=Math.round(pm.pWa*1000),oh=Math.round(pm.pHa*1000);
+                const nO={id:Date.now(),t:oh>1800?'Porte':'Fenetre',x:ox,y:oy,w:ow,h:oh};
+                updateAZ(z=>({...z,ouvs:[...z.ouvs,nO]}));setSelId(nO.id);setEditPanel(null)}}
+                style={{gridColumn:'span 2',padding:'8px',borderRadius:8,border:'1px solid rgba(14,165,233,.2)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                🔲 Transformer en ouverture</button>
+              {/* Merge */}
+              {pm.isMerged?
+                <button onClick={()=>{updateAZ(z=>{const ms=[...(z.merges||[])].filter(m=>!(m.c1===pm.mergeSpan.c1&&m.r1===pm.mergeSpan.r1));return{...z,merges:ms}});setEditPanel(null)}}
+                  style={{gridColumn:'span 2',padding:'8px',borderRadius:8,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'#ef4444',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                  ✂ Défusionner</button>
+              :<>
+                <button onClick={()=>{setMergeSrc({parentCol:pCol,parentRow:pRow});setEditPanel(null)}}
+                  style={{gridColumn:'span 2',padding:'8px',borderRadius:8,border:'1px solid rgba(139,92,246,.2)',background:'rgba(139,92,246,.06)',color:'#8b5cf6',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>
+                  ⊞ Fusionner avec…</button>
                 {pCol<C.baseNc-1&&<button onClick={()=>{updateAZ(z=>{const ms=[...(z.merges||[])];ms.push({c1:pCol,r1:pRow,c2:pCol+1,r2:pRow});return{...z,merges:ms}});setEditPanel(null)}}
-                  className="flex-1 py-0.5 rounded text-[8px] font-bold" style={{background:'rgba(79,110,247,.06)',border:'1px solid rgba(79,110,247,.12)',color:'var(--bl)'}}>→</button>}
+                  style={{padding:'6px',borderRadius:7,border:'1px solid rgba(79,110,247,.15)',background:'rgba(79,110,247,.06)',color:'#4f6ef7',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>→ Droite</button>}
                 {pRow<C.baseNr-1&&<button onClick={()=>{updateAZ(z=>{const ms=[...(z.merges||[])];ms.push({c1:pCol,r1:pRow,c2:pCol,r2:pRow+1});return{...z,merges:ms}});setEditPanel(null)}}
-                  className="flex-1 py-0.5 rounded text-[8px] font-bold" style={{background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.12)',color:'var(--gn)'}}>↓</button>}
-              </div>
-            </div>}
+                  style={{padding:'6px',borderRadius:7,border:'1px solid rgba(52,211,153,.15)',background:'rgba(52,211,153,.06)',color:'#34d399',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>↓ Bas</button>}
+              </>}
+            </div>
           </div>
-          {/* Bottom bar */}
-          <div className="flex gap-1 px-2 pb-1.5">
+          {/* ── Footer ── */}
+          <div style={{padding:'6px 14px 8px',borderTop:'1px solid rgba(255,255,255,.04)',display:'flex',gap:4}}>
             <button onClick={()=>{updateAZ(z=>{
               const cw=[...(z.colWidths||[])];if(cw[pCol]!=null)cw[pCol]=null;
               const rh=[...(z.rowHeights||[])];if(rh[pRow]!=null)rh[pRow]=null;
               return{...z,colWidths:cw,rowHeights:rh}});setEditPanel(null)}}
-              className="flex-1 py-1 rounded text-[8px] font-bold" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t3)'}}>↺ Reset</button>
+              style={{flex:1,padding:'6px',borderRadius:8,border:'1px solid rgba(255,255,255,.06)',background:'rgba(255,255,255,.03)',color:'rgba(255,255,255,.4)',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>↺ Reset tailles</button>
             <button onClick={()=>setEditPanel(null)}
-              className="px-3 py-1 rounded text-[8px] font-bold" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t2)'}}>Fermer</button>
+              style={{padding:'6px 14px',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.05)',color:'rgba(255,255,255,.5)',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Fermer</button>
           </div>
         </div>})()}
 
@@ -6193,6 +6391,44 @@ function App({user,profile,signOut,subStatus}){
 
 // BRIQUE — Module calepinage brique de parement
 // ══════════════════════════════════════════════════════════════
+
+// Helper: compute bricks for any facade config
+function computeBricksForFacade(fConf){
+  const W=fConf.facW,H=fConf.facH,bw=fConf.bkW,bh=fConf.bkH,jh=fConf.jointH,jv=fConf.jointV,bond=fConf.bond;
+  const openings=fConf.openings||[];
+  const boutW=bw/2-jv/2;
+  const rowH=bh+jh;const nRows=Math.ceil(H/rowH);
+  const bricks=[];let fullCount=0,cutCount=0,boutCount=0;
+  const oRects=openings.map(o=>({l:o.x,r:o.x+o.w,t:o.y,b:o.y+o.h}));
+  const overlapsOpening=(x,y,w,h)=>oRects.some(o=>x<o.r&&x+w>o.l&&y<o.b&&y+h>o.t);
+  for(let r=0;r<nRows;r++){
+    const by=r*rowH;if(by>=H)break;const brickH=Math.min(bh,H-by);
+    const isBoutisseRow=(bond==='anglaise'&&r%2===1)||(bond==='boutisse');
+    const curBW=isBoutisseRow?boutW:bw;const colW=curBW+jv;
+    let offset=0;
+    if(bond==='panneresse')offset=r%2===0?0:colW/2;
+    else if(bond==='flamande')offset=r%2===0?0:colW*0.75;
+    else if(bond==='anglaise')offset=isBoutisseRow?(r%4===1?colW/2:0):(r%4===0?0:colW/2);
+    else if(bond==='empile')offset=0;
+    else if(bond==='americain')offset=(r%3)*colW/3;
+    else if(bond==='boutisse')offset=r%2===0?0:colW/2;
+    const nCols=Math.ceil((W+offset)/colW)+1;
+    for(let c=-1;c<nCols;c++){
+      let bx=c*colW-offset;let brickW=curBW;
+      if(bond==='flamande'&&!isBoutisseRow){if(c%2===1)brickW=boutW;}
+      const cx1=Math.max(0,bx),cy1=by;const cx2=Math.min(W,bx+brickW),cy2=Math.min(H,by+brickH);
+      if(cx2<=cx1||cy2<=cy1)continue;const cw=cx2-cx1,ch=cy2-cy1;
+      if(overlapsOpening(cx1,cy1,cw,ch))continue;
+      const isCut=(Math.abs(cw-brickW)>1)||(Math.abs(ch-brickH)>1);
+      const isBout=brickW<bw*0.7;if(!isCut)fullCount++;else cutCount++;if(isBout)boutCount++;
+      bricks.push({x:cx1,y:cy1,w:cw,h:ch,full:!isCut,isBout:isBout||(bond==='flamande'&&!isBoutisseRow&&(c%2===1)),origW:brickW,origH:bh,col:c,row:r});
+    }
+  }
+  const totalBricks=fullCount+cutCount;const surfM2=(W/1000)*(H/1000);
+  const oSurfM2=openings.reduce((a,o)=>a+(o.w*o.h/1e6),0);
+  return{bricks,fullCount,cutCount,boutCount,totalBricks,surfM2:surfM2-oSurfM2,bricksPerM2:surfM2>0?Math.round(totalBricks/surfM2):0};
+}
+
 function BriqueApp({onBack,user}){
   // ── Multi-facade tabs ──
   const mkFacade=(name='Facade 1')=>({id:Date.now()+Math.random(),name,facW:6000,facH:3000,bkW:210,bkH:50,jointH:10,jointV:10,bond:'panneresse',bkColor:'#b5654a',bkColor2:'#8b4513',jointColor:'#c8bfb0',openings:[],angle:0});
@@ -6211,6 +6447,8 @@ function BriqueApp({onBack,user}){
   const[hoverBk,setHoverBk]=useState(null);
   const[view3D,setView3D]=useState(false);
   const[showPlanMasse,setShowPlanMasse]=useState(false);
+  const[bkBreaks,setBkBreaks]=useState(()=>new Set());
+  const toggleBkBreak=(i)=>setBkBreaks(b=>{const n=new Set(b);n.has(i)?n.delete(i):n.add(i);return n});
   const[selOuv,setSelOuv]=useState(null);// selected opening id
   const[dragState,setDragState]=useState(null);// {type:'move'|'r-*', id, sx, sy, orig}
   const svgRef=useRef(null);
@@ -6373,7 +6611,7 @@ function BriqueApp({onBack,user}){
   // ── Selected opening ──
   const selO=openings.find(o=>o.id===selOuv);
 
-  // ── 3D VIEW ──
+  // ── 3D VIEW (multi-facade) ──
   useEffect(()=>{
     if(!view3D||!mountRef.current)return;
     const el=mountRef.current;
@@ -6396,148 +6634,196 @@ function BriqueApp({onBack,user}){
     const sun=new THREE.DirectionalLight(0xfff5e0,1.1);
     sun.position.set(8,12,8);sun.castShadow=true;
     sun.shadow.camera.near=0.1;sun.shadow.camera.far=80;
-    sun.shadow.camera.left=-15;sun.shadow.camera.right=15;
-    sun.shadow.camera.top=15;sun.shadow.camera.bottom=-15;
-    sun.shadow.mapSize.width=1024;sun.shadow.mapSize.height=1024;
+    sun.shadow.camera.left=-20;sun.shadow.camera.right=20;
+    sun.shadow.camera.top=20;sun.shadow.camera.bottom=-20;
+    sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
     sun.shadow.bias=-0.0005;scene.add(sun);
     const fill=new THREE.DirectionalLight(0x8ab0ff,0.3);fill.position.set(-4,-2,3);scene.add(fill);
     const bounce=new THREE.PointLight(0xffeedd,0.2,30);bounce.position.set(0,-5,4);scene.add(bounce);
 
-    const Wm=facW/1000,Hm=facH/1000;
-    const brickDepth=0.065;
-    const facadeGroup=new THREE.Group();
-
     const groundMat=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(30,30),groundMat);
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(50,50),groundMat);
     ground.rotation.x=-Math.PI/2;ground.position.y=0;ground.receiveShadow=true;scene.add(ground);
 
-    const jcCol=new THREE.Color(jointColor);
-    const wallMat=new THREE.MeshStandardMaterial({color:jcCol,roughness:0.92,metalness:0.02});
-
-    // Build back wall as segments avoiding openings (so openings are truly hollow)
-    // oRects uses screen coords (y=0=top), convert to 3D coords for wall cutting
-    const wallSegs=[];
-    // Full wall rect in 3D space: x in [-Wm/2, Wm/2], y in [0, Hm]
-    // Opening rects in 3D: ox3d = o.x/1000 - Wm/2, oy3d = Hm - o.y/1000 - o.h/1000
-    let wallRects=[{x1:-Wm/2-0.01,x2:Wm/2+0.01,y1:-0.01,y2:Hm+0.01}];
-    openings.forEach(o=>{
-      const ol=o.x/1000-Wm/2, or2=(o.x+o.w)/1000-Wm/2;
-      const ob=Hm-o.y/1000-o.h/1000, ot=Hm-o.y/1000;
-      const next=[];
-      wallRects.forEach(wr=>{
-        if(ol>=wr.x2||or2<=wr.x1||ob>=wr.y2||ot<=wr.y1){next.push(wr);return}
-        if(wr.y1<ob)next.push({x1:wr.x1,x2:wr.x2,y1:wr.y1,y2:ob});// bottom strip
-        if(ot<wr.y2)next.push({x1:wr.x1,x2:wr.x2,y1:ot,y2:wr.y2});// top strip
-        if(wr.x1<ol)next.push({x1:wr.x1,x2:ol,y1:Math.max(wr.y1,ob),y2:Math.min(wr.y2,ot)});// left strip
-        if(or2<wr.x2)next.push({x1:or2,x2:wr.x2,y1:Math.max(wr.y1,ob),y2:Math.min(wr.y2,ot)});// right strip
-      });
-      wallRects=next;
-    });
-    wallRects.forEach(wr=>{
-      const w=wr.x2-wr.x1,h=wr.y2-wr.y1;if(w<0.001||h<0.001)return;
-      const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.012),wallMat);
-      m.position.set(wr.x1+w/2,wr.y1+h/2,-0.006);m.receiveShadow=true;facadeGroup.add(m);
-    });
-    // Pas de cavity noire — on ajoute un plan intérieur clair derrière chaque ouverture
-    openings.forEach(o=>{
-      const ox=o.x/1000-Wm/2,oy=Hm-o.y/1000-o.h/1000;
-      const ow2=o.w/1000,oh2=o.h/1000;
-      const intMat=new THREE.MeshStandardMaterial({color:0x2a2830,roughness:0.95,metalness:0.0});
-      const intPlane=new THREE.Mesh(new THREE.PlaneGeometry(ow2-0.01,oh2-0.01),intMat);
-      intPlane.position.set(ox+ow2/2,oy+oh2/2,-0.15);facadeGroup.add(intPlane);
-    });
-
-    // oy3d = Y position flipped for 3D (0=bottom in 3D, 0=top in 2D screen coords)
-    const oRects=openings.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,b:o.y/1000,t:(o.y+o.h)/1000,w:o.w/1000,h:o.h/1000,ox:o.x/1000,oy:Hm-o.y/1000-o.h/1000,type:o.t}));
-
-    const bricks=computeBricks.bricks;
-    const grp1=[],grp2=[];
-    bricks.forEach(b=>{if(b.isBout)grp2.push(b);else grp1.push(b)});
-
-    // Simple hash for deterministic but random-looking variation per brick
+    const brickDepth=0.065;
     const brickHash=(i)=>{let h=i*2654435761;h=((h>>>16)^h)*0x45d9f3b;h=((h>>>16)^h)*0x45d9f3b;h=(h>>>16)^h;return(h&0xffff)/65535};
 
-    const addBrickGroup=(arr,baseCol)=>{
-      if(!arr.length)return;
-      const geo=new THREE.BoxGeometry(1,1,brickDepth);
-      const mat=new THREE.MeshStandardMaterial({roughness:0.82,metalness:0.02});
-      const mesh=new THREE.InstancedMesh(geo,mat,arr.length);
-      mesh.castShadow=true;mesh.receiveShadow=true;
-      const dummy=new THREE.Object3D();
-      const colorAttr=new Float32Array(arr.length*3);
-      const br=parseInt(baseCol.slice(1,3),16)/255;
-      const bg=parseInt(baseCol.slice(3,5),16)/255;
-      const bb=parseInt(baseCol.slice(5,7),16)/255;
-      arr.forEach((b,i)=>{
-        const sx=b.w/1000,sy=b.h/1000;
-        // Flip Y: 2D origin is top-left (y=0=top), 3D origin is bottom (y=0=bottom)
-        dummy.position.set(b.x/1000+sx/2-Wm/2, Hm-(b.y/1000+sy/2), brickDepth/2);
-        dummy.scale.set(sx,sy,1);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i,dummy.matrix);
-        // Random-looking brick variation using hash (unique seed per brick)
-        const h1=brickHash(i*3+7);const h2=brickHash(i*5+13);const h3=brickHash(i*7+29);
-        const shade=(h1-0.5)*0.022;// ±1.1% variation globale
-        const rVar=(h2-0.5)*0.012;// variation rouge extra
-        const bVar=(h3-0.5)*0.008;// variation bleue extra
-        colorAttr[i*3]=Math.max(0,Math.min(1,br+shade+rVar));
-        colorAttr[i*3+1]=Math.max(0,Math.min(1,bg+shade*0.8));
-        colorAttr[i*3+2]=Math.max(0,Math.min(1,bb+shade*0.5+bVar));
-      });
-      mesh.instanceColor=new THREE.InstancedBufferAttribute(colorAttr,3);
-      mesh.instanceMatrix.needsUpdate=true;
-      facadeGroup.add(mesh);
-    };
-    addBrickGroup(grp1,bkColor);
-    addBrickGroup(grp2,bkColor2);
-
-    // Openings with retours in 3D
-    oRects.forEach((o,oi)=>{
-      const cx=o.ox+o.w/2-Wm/2, cy=o.oy+o.h/2;// oy already flipped in oRects
-      const op=openings[oi];
-      const ret=op?.retours||{tG:150,tD:150,lin:150,app:150};
-      const fv=(op?.faceVis||50)/1000;
-      const rType=op?.retourType||'metal';
-      const retMat=rType==='brique'
-        ?new THREE.MeshStandardMaterial({color:new THREE.Color(bkColor).multiplyScalar(0.92),roughness:0.85,metalness:0.02})
-        :rType==='enduit'
-        ?new THREE.MeshStandardMaterial({color:0xd8d0c4,roughness:0.95,metalness:0.0})
-        :new THREE.MeshStandardMaterial({color:jcCol.clone().multiplyScalar(0.8),roughness:0.85,metalness:0.05});
-      const frameMat=new THREE.MeshStandardMaterial({color:0x444455,roughness:0.25,metalness:0.7});
-      // Retour gauche
-      if(ret.tG>0){const d=ret.tG/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(d,o.h,fv),retMat);
-        m.position.set(cx-o.w/2-d/2,cy,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
-      // Retour droit
-      if(ret.tD>0){const d=ret.tD/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(d,o.h,fv),retMat);
-        m.position.set(cx+o.w/2+d/2,cy,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
-      // Linteau
-      if(ret.lin>0){const d=ret.lin/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.02,d,fv),retMat);
-        m.position.set(cx,cy+o.h/2+d/2,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
-      // Appui
-      if(ret.app>0){const d=ret.app/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.08,d,fv+0.02),retMat);
-        m.position.set(cx,cy-o.h/2-d/2,brickDepth/2+0.01);m.castShadow=true;facadeGroup.add(m)}
-      // Cadre alu + vitrage (sauf Vide)
-      if(o.type!=='Vide'){
-        const ft=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.06,0.04,0.05),frameMat);ft.position.set(cx,cy+o.h/2+0.02,brickDepth/2);facadeGroup.add(ft);
-        const fb=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.06,0.04,0.05),frameMat);fb.position.set(cx,cy-o.h/2-0.02,brickDepth/2);facadeGroup.add(fb);
-        const fl=new THREE.Mesh(new THREE.BoxGeometry(0.04,o.h+0.06,0.05),frameMat);fl.position.set(cx-o.w/2-0.02,cy,brickDepth/2);facadeGroup.add(fl);
-        const fr=new THREE.Mesh(new THREE.BoxGeometry(0.04,o.h+0.06,0.05),frameMat);fr.position.set(cx+o.w/2+0.02,cy,brickDepth/2);facadeGroup.add(fr);
-        if(o.type==='Fenêtre'){
-          const linMat=new THREE.MeshStandardMaterial({color:0x999990,roughness:0.85,metalness:0.05});
-          const linteau=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.12,0.06,brickDepth+0.02),linMat);linteau.position.set(cx,cy+o.h/2+0.05,brickDepth/2);facadeGroup.add(linteau);
-          const appui=new THREE.Mesh(new THREE.BoxGeometry(o.w+0.08,0.04,brickDepth+0.04),linMat);appui.position.set(cx,cy-o.h/2-0.04,brickDepth/2+0.01);facadeGroup.add(appui);
-        }
-        const glassMat=new THREE.MeshStandardMaterial({color:0x88ccee,transparent:true,opacity:0.32,roughness:0.03,metalness:0.15,side:THREE.DoubleSide,envMapIntensity:0.8});
-        const glass=new THREE.Mesh(new THREE.PlaneGeometry(o.w-0.02,o.h-0.02),glassMat);glass.position.set(cx,cy,brickDepth*0.4);facadeGroup.add(glass);
-        if(o.w>0.8){const mull=new THREE.Mesh(new THREE.BoxGeometry(0.02,o.h,0.025),frameMat);mull.position.set(cx,cy,brickDepth/2);facadeGroup.add(mull)}
-      }
+    // ── Compute chain (same logic as plan de masse) ──
+    const chain=[];let cx=0,cy=0;
+    facades.forEach((f,i)=>{
+      if(i>0&&bkBreaks.has(i)){const prev=chain[chain.length-1];cx=prev.x2+prev.nx*2+1.5;cy=prev.y2+prev.ny*2;}
+      const a=(f.angle||0)*Math.PI/180;
+      const nx=Math.sin(a),ny=-Math.cos(a);
+      const dx=-ny,dy=nx;
+      const Lm=f.facW/1000,Hm=f.facH/1000;
+      const x1=cx,y1=cy;
+      const x2=cx+dx*Lm,y2=cy+dy*Lm;
+      chain.push({x1,y1,x2,y2,nx,ny,dx,dy,Lm,Hm,f,i});
+      cx=x2;cy=y2;
     });
 
-    scene.add(facadeGroup);
+    // ── Center of all facades ──
+    let allMnx=Infinity,allMny=Infinity,allMxx=-Infinity,allMxy=-Infinity,maxHm=0;
+    chain.forEach(c=>{
+      [c.x1,c.x2].forEach(x=>{allMnx=Math.min(allMnx,x);allMxx=Math.max(allMxx,x)});
+      [c.y1,c.y2].forEach(y=>{allMny=Math.min(allMny,y);allMxy=Math.max(allMxy,y)});
+      if(c.Hm>maxHm)maxHm=c.Hm;
+    });
+    const centerX=(allMnx+allMxx)/2, centerZ=(allMny+allMxy)/2;
 
-    const dist0=Math.max(Wm,Hm)*1.6;
+    // ── Build each facade ──
+    chain.forEach((ch,fi)=>{
+      const f=ch.f;
+      const Wm=ch.Lm,Hm=ch.Hm;
+      const fOpenings=f.openings||[];
+      const facBricks=computeBricksForFacade(f);
+
+      const facadeGroup=new THREE.Group();
+
+      // Joint color
+      const jcCol=new THREE.Color(f.jointColor||'#c8bfb0');
+      const wallMat=new THREE.MeshStandardMaterial({color:jcCol,roughness:0.92,metalness:0.02});
+
+      // Back wall segments (cut around openings)
+      let wallRects=[{x1:-Wm/2-0.01,x2:Wm/2+0.01,y1:-0.01,y2:Hm+0.01}];
+      fOpenings.forEach(o=>{
+        const ol=o.x/1000-Wm/2,or2=(o.x+o.w)/1000-Wm/2;
+        const ob=Hm-o.y/1000-o.h/1000,ot=Hm-o.y/1000;
+        const next=[];
+        wallRects.forEach(wr=>{
+          if(ol>=wr.x2||or2<=wr.x1||ob>=wr.y2||ot<=wr.y1){next.push(wr);return}
+          if(wr.y1<ob)next.push({x1:wr.x1,x2:wr.x2,y1:wr.y1,y2:ob});
+          if(ot<wr.y2)next.push({x1:wr.x1,x2:wr.x2,y1:ot,y2:wr.y2});
+          if(wr.x1<ol)next.push({x1:wr.x1,x2:ol,y1:Math.max(wr.y1,ob),y2:Math.min(wr.y2,ot)});
+          if(or2<wr.x2)next.push({x1:or2,x2:wr.x2,y1:Math.max(wr.y1,ob),y2:Math.min(wr.y2,ot)});
+        });wallRects=next;
+      });
+      wallRects.forEach(wr=>{
+        const w=wr.x2-wr.x1,h=wr.y2-wr.y1;if(w<0.001||h<0.001)return;
+        const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.012),wallMat);
+        m.position.set(wr.x1+w/2,wr.y1+h/2,-0.006);m.receiveShadow=true;facadeGroup.add(m);
+      });
+
+      // Interior planes behind openings
+      fOpenings.forEach(o=>{
+        const ox=o.x/1000-Wm/2,oy=Hm-o.y/1000-o.h/1000;
+        const ow2=o.w/1000,oh2=o.h/1000;
+        const intMat=new THREE.MeshStandardMaterial({color:0x2a2830,roughness:0.95});
+        const intP=new THREE.Mesh(new THREE.PlaneGeometry(ow2-0.01,oh2-0.01),intMat);
+        intP.position.set(ox+ow2/2,oy+oh2/2,-0.15);facadeGroup.add(intP);
+        // Warm interior glow
+        const glow=new THREE.PointLight(0xffe8cc,0.15,1.5);
+        glow.position.set(ox+ow2/2,oy+oh2/2,-0.2);facadeGroup.add(glow);
+      });
+
+      // Bricks instanced
+      const bricks=facBricks.bricks;
+      const grp1=[],grp2=[];
+      bricks.forEach(b=>{if(b.isBout)grp2.push(b);else grp1.push(b)});
+      const addBrickGroup=(arr,baseCol,seedOff)=>{
+        if(!arr.length)return;
+        const geo=new THREE.BoxGeometry(1,1,brickDepth);
+        const mat=new THREE.MeshStandardMaterial({roughness:0.82,metalness:0.02});
+        const mesh=new THREE.InstancedMesh(geo,mat,arr.length);
+        mesh.castShadow=true;mesh.receiveShadow=true;
+        const dummy=new THREE.Object3D();
+        const colorAttr=new Float32Array(arr.length*3);
+        const br=parseInt(baseCol.slice(1,3),16)/255;
+        const bg=parseInt(baseCol.slice(3,5),16)/255;
+        const bb=parseInt(baseCol.slice(5,7),16)/255;
+        arr.forEach((b,i)=>{
+          const sx=b.w/1000,sy=b.h/1000;
+          dummy.position.set(b.x/1000+sx/2-Wm/2,Hm-(b.y/1000+sy/2),brickDepth/2);
+          dummy.scale.set(sx,sy,1);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
+          const si=i+seedOff;
+          const h1=brickHash(si*3+7),h2=brickHash(si*5+13),h3=brickHash(si*7+29);
+          const shade=(h1-0.5)*0.022,rVar=(h2-0.5)*0.012,bVar=(h3-0.5)*0.008;
+          colorAttr[i*3]=Math.max(0,Math.min(1,br+shade+rVar));
+          colorAttr[i*3+1]=Math.max(0,Math.min(1,bg+shade*0.8));
+          colorAttr[i*3+2]=Math.max(0,Math.min(1,bb+shade*0.5+bVar));
+        });
+        mesh.instanceColor=new THREE.InstancedBufferAttribute(colorAttr,3);
+        mesh.instanceMatrix.needsUpdate=true;facadeGroup.add(mesh);
+      };
+      addBrickGroup(grp1,f.bkColor||'#b5654a',fi*10000);
+      addBrickGroup(grp2,f.bkColor2||'#8b4513',fi*10000+5000);
+
+      // Openings with retours, soldier course, glazing
+      const frameMat=new THREE.MeshStandardMaterial({color:0x3a3a42,metalness:0.82,roughness:0.12});
+      fOpenings.forEach((op,oi)=>{
+        const ow=op.w/1000,oh=op.h/1000;
+        const cx2=op.x/1000+ow/2-Wm/2,cy2=Hm-op.y/1000-oh/2;
+        const ret=op.retours||{tG:150,tD:150,lin:150,app:150};
+        const fv=(op.faceVis||50)/1000;
+        const rType=op.retourType||'metal';
+        const retMat=rType==='brique'
+          ?new THREE.MeshStandardMaterial({color:new THREE.Color(f.bkColor||'#b5654a').multiplyScalar(0.92),roughness:0.85,metalness:0.02})
+          :rType==='enduit'
+          ?new THREE.MeshStandardMaterial({color:0xd8d0c4,roughness:0.95,metalness:0.0})
+          :new THREE.MeshStandardMaterial({color:jcCol.clone().multiplyScalar(0.8),roughness:0.85,metalness:0.05});
+        // Retours
+        if(ret.tG>0){const d=ret.tG/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(d,oh,fv),retMat);m.position.set(cx2-ow/2-d/2,cy2,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
+        if(ret.tD>0){const d=ret.tD/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(d,oh,fv),retMat);m.position.set(cx2+ow/2+d/2,cy2,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
+        if(ret.lin>0){const d=ret.lin/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(ow+0.02,d,fv),retMat);m.position.set(cx2,cy2+oh/2+d/2,brickDepth/2);m.castShadow=true;facadeGroup.add(m)}
+        if(ret.app>0){const d=ret.app/1000;const m=new THREE.Mesh(new THREE.BoxGeometry(ow+0.08,d,fv+0.02),retMat);m.position.set(cx2,cy2-oh/2-d/2,brickDepth/2+0.01);m.castShadow=true;facadeGroup.add(m)}
+        // Soldier course + sill
+        if(op.t!=='Vide'){
+          const solH=f.bkW/1000;
+          const solMat=new THREE.MeshStandardMaterial({color:new THREE.Color(f.bkColor||'#b5654a').multiplyScalar(0.95),roughness:0.8,metalness:0.02});
+          const solStep=(f.bkH+(f.jointV||10))/1000;
+          for(let si=0;si<Math.min(Math.ceil(ow/solStep),60);si++){
+            const sx2=cx2-ow/2+solStep/2+si*solStep;if(sx2>cx2+ow/2)break;
+            const sbr=new THREE.Mesh(new THREE.BoxGeometry(f.bkH/1000*0.95,solH,brickDepth),solMat);
+            sbr.position.set(sx2,cy2+oh/2+solH/2+0.003,brickDepth/2);sbr.castShadow=true;facadeGroup.add(sbr);
+          }
+          const sillMat=new THREE.MeshStandardMaterial({color:0x999990,roughness:0.85,metalness:0.05});
+          const sill=new THREE.Mesh(new THREE.BoxGeometry(ow+0.08,0.035,brickDepth+0.03),sillMat);
+          sill.position.set(cx2,cy2-oh/2-0.018,brickDepth/2+0.01);sill.castShadow=true;facadeGroup.add(sill);
+        }
+        // Frame + glazing (not for Vide)
+        if(op.t!=='Vide'){
+          const ft2=0.028,fd3=0.04;
+          const fTop=new THREE.Mesh(new THREE.BoxGeometry(ow,ft2,fd3),frameMat);fTop.position.set(cx2,cy2+oh/2-ft2/2,brickDepth*0.35);facadeGroup.add(fTop);
+          const fBot=new THREE.Mesh(new THREE.BoxGeometry(ow,ft2,fd3),frameMat);fBot.position.set(cx2,cy2-oh/2+ft2/2,brickDepth*0.35);facadeGroup.add(fBot);
+          const fL=new THREE.Mesh(new THREE.BoxGeometry(ft2,oh,fd3),frameMat);fL.position.set(cx2-ow/2+ft2/2,cy2,brickDepth*0.35);facadeGroup.add(fL);
+          const fR=new THREE.Mesh(new THREE.BoxGeometry(ft2,oh,fd3),frameMat);fR.position.set(cx2+ow/2-ft2/2,cy2,brickDepth*0.35);facadeGroup.add(fR);
+          if(ow>0.7){const mull=new THREE.Mesh(new THREE.BoxGeometry(ft2*0.7,oh-ft2*2,fd3),frameMat);mull.position.set(cx2,cy2,brickDepth*0.35);facadeGroup.add(mull)}
+          if(oh>1.2){const hmull=new THREE.Mesh(new THREE.BoxGeometry(ow-ft2*2,ft2*0.7,fd3),frameMat);hmull.position.set(cx2,cy2,brickDepth*0.35);facadeGroup.add(hmull)}
+          // Double glazing
+          const glBack=new THREE.MeshStandardMaterial({color:0x1a2a3a,roughness:0.95,transparent:true,opacity:0.55,side:THREE.DoubleSide});
+          const glFront=new THREE.MeshStandardMaterial({color:0x9cc8e8,metalness:0.35,roughness:0.02,transparent:true,opacity:0.3,side:THREE.DoubleSide});
+          const gb2=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.01,oh-0.01),glBack);gb2.position.set(cx2,cy2,brickDepth*0.25);facadeGroup.add(gb2);
+          const gf2=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.008,oh-0.008),glFront);gf2.position.set(cx2,cy2,brickDepth*0.38);facadeGroup.add(gf2);
+          if(op.t==='Porte'||op.t==='Porte-fenêtre'){
+            const hMat=new THREE.MeshStandardMaterial({color:0x888888,metalness:0.9,roughness:0.1});
+            const hdl=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.08,0.02),hMat);
+            hdl.position.set(cx2+ow/4,cy2-0.1,brickDepth*0.45);facadeGroup.add(hdl);
+          }
+        }
+      });
+
+      // ── Position facade in 3D world using chain ──
+      // Facade is built centered on X, with Y up. We need to rotate+translate.
+      const midX=(ch.x1+ch.x2)/2-centerX, midZ=(ch.y1+ch.y2)/2-centerZ;
+      const angle=Math.atan2(ch.dx,ch.dy);// rotation around Y axis
+      facadeGroup.rotation.y=-angle;
+      facadeGroup.position.set(midX,0,midZ);
+
+      // Highlight active facade
+      if(fi===activeFacIdx){
+        const edgeMat=new THREE.MeshBasicMaterial({color:0xd97706,transparent:true,opacity:0.08});
+        const edgePlane=new THREE.Mesh(new THREE.PlaneGeometry(Wm+0.1,Hm+0.1),edgeMat);
+        edgePlane.position.set(0,Hm/2,brickDepth+0.005);facadeGroup.add(edgePlane);
+      }
+
+      scene.add(facadeGroup);
+    });
+
+    // Camera
+    const totalSpan=Math.max(allMxx-allMnx,allMxy-allMny,maxHm)*1.6;
+    const dist0=Math.max(totalSpan,3);
     zoomRef.current=dist0;
-    const tgt=new THREE.Vector3(0,Hm/2,0);
+    const tgt=new THREE.Vector3(0,maxHm/2,0);
 
     const onDown=e=>{dragRef.current={x:e.clientX,y:e.clientY,rx:rotRef.current.x,ry:rotRef.current.y,btn:e.button};renderer.domElement.style.cursor='grabbing'};
     const onUp=()=>{dragRef.current=null;renderer.domElement.style.cursor='grab'};
@@ -6551,7 +6837,7 @@ function BriqueApp({onBack,user}){
         rotRef.current.x=Math.max(-1.2,Math.min(0.6,dragRef.current.rx+dy*0.005));
       }
     };
-    const onWheel=e=>{e.preventDefault();zoomRef.current=Math.max(1,Math.min(30,zoomRef.current*(1+e.deltaY*0.001)))};
+    const onWheel=e=>{e.preventDefault();zoomRef.current=Math.max(1,Math.min(50,zoomRef.current*(1+e.deltaY*0.001)))};
     renderer.domElement.addEventListener('mousedown',onDown);
     renderer.domElement.addEventListener('mouseup',onUp);
     renderer.domElement.addEventListener('mouseleave',onUp);
@@ -6572,7 +6858,7 @@ function BriqueApp({onBack,user}){
     const onResize=()=>{const w2=el.clientWidth,h2=el.clientHeight;if(w2>0&&h2>0){camera.aspect=w2/h2;camera.updateProjectionMatrix();renderer.setSize(w2,h2)}};
     window.addEventListener('resize',onResize);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onResize);renderer.dispose();el.innerHTML='';sceneRef.current={}};
-  },[view3D,facW,facH,bkW,bkH,jointH,jointV,bond,bkColor,bkColor2,jointColor,openings,computeBricks.bricks]);
+  },[view3D,facades,activeFacIdx,bkBreaks]);
 
   // ── EXPORT PDF ──
   const exportPDF=async()=>{
@@ -6643,21 +6929,35 @@ function BriqueApp({onBack,user}){
 
   const handleRH=8;// resize handle size in SVG px
 
-  return<div style={{display:'flex',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+    {/* Kalepin header */}
+    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
+      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <svg width="12" height="12" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
+        </div>
+        <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
+      </div>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <span style={{fontSize:12,fontWeight:600,color:'#d97706'}}>🧱 Brique</span>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <span style={{fontSize:11,color:'var(--t2)',fontWeight:500}}>{fac.name}</span>
+      <div style={{flex:1}}/>
+      <span style={{fontSize:9,color:'var(--t3)'}}>{facades.length} facade{facades.length>1?'s':''} — {openings.length} ouv.</span>
+    </div>
+    <div style={{display:'flex',flex:1,minHeight:0}}>
     {/* LEFT */}
     <div style={{width:260,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-      <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10}}>
-        <button onClick={onBack} style={{width:28,height:28,borderRadius:8,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontFamily:'inherit'}}>←</button>
-        <div><div style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>🧱 Brique</div>
-          <div style={{fontSize:9,color:'var(--t3)'}}>Calepinage facade</div></div>
-        <div style={{flex:1}}/>
-        <div style={{display:'flex',gap:3}}>
-          <button onClick={exportBriqueJSON} title="Exporter JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>💾</button>
-          <label title="Importer JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>📥<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])importBriqueJSON(e.target.files[0],false);e.target.value=''}}/></label>
-          <label title="Ajouter façades JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid #0ea5e9',background:'rgba(14,165,233,.08)',color:'#0ea5e9',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>📑<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])importBriqueJSON(e.target.files[0],true);e.target.value=''}}/></label>
-        </div>
+      <div style={{padding:'6px 10px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:4}}>
+        <span style={{fontSize:9,fontWeight:600,color:'var(--t3)',flex:1}}>Configuration</span>
+        <button onClick={async()=>{const n=prompt('Nom du projet brique:',fac.name||'Brique');if(!n)return;const data={projectType:'brique',facades,name:n,total_surface:facades.reduce((a,f)=>(a+(f.width||3000)*(f.height||2700)/1e6),0)};const r=await cloudSaveModuleProject(n,'brique',data);if(r)alert('✅ Projet sauvegardé !');else alert('❌ Erreur de sauvegarde')}}
+            title="Sauvegarder dans mes projets" style={{width:24,height:24,borderRadius:5,border:'1px solid #0ea5e9',background:'rgba(14,165,233,.1)',color:'#0ea5e9',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>☁</button>
+        <button onClick={exportBriqueJSON} title="Exporter JSON" style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>💾</button>
+        <label title="Importer JSON" style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>📥<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])importBriqueJSON(e.target.files[0],false);e.target.value=''}}/></label>
+        <label title="Ajouter façades" style={{width:24,height:24,borderRadius:5,border:'1px solid #0ea5e9',background:'rgba(14,165,233,.08)',color:'#0ea5e9',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>📑<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(e.target.files[0])importBriqueJSON(e.target.files[0],true);e.target.value=''}}/></label>
+        <button onClick={()=>onBack&&onBack()} title="Retour projets" style={{width:24,height:24,borderRadius:5,border:'1px solid rgba(79,110,247,.3)',background:'rgba(79,110,247,.08)',color:'var(--bl,#4f6ef7)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>📂</button>
       </div>
-      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:6,minHeight:0}}>
         {/* Facade */}
         <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
@@ -6868,7 +7168,7 @@ function BriqueApp({onBack,user}){
     {/* RIGHT RESULTS */}
     <div style={{width:260,flexShrink:0,borderLeft:'1px solid var(--bd)',background:'var(--pnl)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
       <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)'}}><div style={{fontSize:12,fontWeight:700,color:'var(--t1)'}}>📊 Résultats</div></div>
-      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:6,minHeight:0}}>
         {/* Surfaces */}
         <div style={{padding:8,borderRadius:8,background:'var(--crd)',border:'1px solid var(--bd)'}}>
           <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>SURFACES</div>
@@ -6943,6 +7243,8 @@ function BriqueApp({onBack,user}){
       </div>
     </div>
 
+    </div>{/* end inner flex */}
+
     {/* ═══ PLAN DE MASSE BRIQUE ═══ */}
     {showPlanMasse&&<div style={{position:'fixed',inset:0,zIndex:200,background:'var(--bg)',display:'flex',flexDirection:'column',fontFamily:'inherit'}}>
       {/* Header */}
@@ -6958,25 +7260,27 @@ function BriqueApp({onBack,user}){
         {/* SVG Plan */}
         <div style={{flex:1,position:'relative'}}>
           {(()=>{
-            // Compute chain of facades
+            // Compute chain of facades with break support
             const chain=[];let cx=0,cy=0;
             facades.forEach((f,i)=>{
+              if(i>0&&bkBreaks.has(i)){
+                const prev=chain[chain.length-1];
+                cx=prev.x2+prev.nx*2+1.5;cy=prev.y2+prev.ny*2;
+              }
               const a=(f.angle||0)*Math.PI/180;
               const nx=Math.sin(a),ny=-Math.cos(a);
-              const dx=-ny,dy=nx;// direction along facade
+              const dx=-ny,dy=nx;
               const Lm=f.facW/1000,Hm=f.facH/1000;
               const x1=cx,y1=cy;
               const x2=cx+dx*Lm,y2=cy+dy*Lm;
-              chain.push({x1,y1,x2,y2,nx,ny,dx,dy,Lm,Hm,f,i});
+              chain.push({x1,y1,x2,y2,nx,ny,dx,dy,Lm,Hm,f,i,broken:i>0&&bkBreaks.has(i)});
               cx=x2;cy=y2;
             });
-            // Bounding box
             let mnx=Infinity,mny=Infinity,mxx=-Infinity,mxy=-Infinity;
             chain.forEach(c=>{
               [c.x1,c.x2].forEach(x=>{mnx=Math.min(mnx,x-1);mxx=Math.max(mxx,x+1)});
               [c.y1,c.y2].forEach(y=>{mny=Math.min(mny,y-1);mxy=Math.max(mxy,y+1)});
-              // Include wall thickness
-              const t=c.Hm*0.12+0.3;
+              const t=0.4;
               mnx=Math.min(mnx,c.x1+c.nx*t,c.x2+c.nx*t);mxx=Math.max(mxx,c.x1+c.nx*t,c.x2+c.nx*t);
               mny=Math.min(mny,c.y1+c.ny*t,c.y2+c.ny*t);mxy=Math.max(mxy,c.y1+c.ny*t,c.y2+c.ny*t);
             });
@@ -6985,36 +7289,32 @@ function BriqueApp({onBack,user}){
             const BK_PLAN_COLORS=['#d97706','#c4324a','#0ea5e9','#10b981','#8b5cf6','#ec4899'];
             return<svg viewBox={`${mnx} ${mny} ${vbW} ${vbH}`} style={{width:'100%',height:'100%'}} xmlns="http://www.w3.org/2000/svg">
               <defs><marker id="bk-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#d97706" opacity="0.5"/></marker></defs>
-              {/* Grid */}
               <pattern id="bk-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.02"/></pattern>
               <rect x={mnx} y={mny} width={vbW} height={vbH} fill="url(#bk-grid)"/>
-              {/* Facades */}
               {chain.map((c,i)=>{
                 const col=BK_PLAN_COLORS[i%BK_PLAN_COLORS.length];
-                const thick=0.25;// wall thickness in meters for display
-                // 4 corners of the wall rectangle
-                const pts=[
-                  [c.x1,c.y1],[c.x2,c.y2],
-                  [c.x2+c.nx*thick,c.y2+c.ny*thick],
-                  [c.x1+c.nx*thick,c.y1+c.ny*thick]
-                ].map(p=>p.join(',')).join(' ');
+                const thick=0.25;
+                const pts=[[c.x1,c.y1],[c.x2,c.y2],[c.x2+c.nx*thick,c.y2+c.ny*thick],[c.x1+c.nx*thick,c.y1+c.ny*thick]].map(p=>p.join(',')).join(' ');
                 const mx=(c.x1+c.x2)/2+c.nx*thick/2,my=(c.y1+c.y2)/2+c.ny*thick/2;
-                // Normal arrow (shows exterior direction)
-                const ax1=(c.x1+c.x2)/2, ay1=(c.y1+c.y2)/2;
-                const ax2=ax1+c.nx*0.8, ay2=ay1+c.ny*0.8;
+                const ax1=(c.x1+c.x2)/2,ay1=(c.y1+c.y2)/2,ax2=ax1+c.nx*0.8,ay2=ay1+c.ny*0.8;
                 return<g key={i}>
                   <polygon points={pts} fill={col} fillOpacity={activeFacIdx===i?0.35:0.15} stroke={col} strokeWidth={activeFacIdx===i?0.06:0.03} style={{cursor:'pointer'}}
                     onClick={()=>{setActiveFacIdx(i);setShowPlanMasse(false)}}/>
                   <line x1={ax1} y1={ay1} x2={ax2} y2={ay2} stroke={col} strokeWidth="0.03" markerEnd="url(#bk-arrow)" opacity="0.5"/>
                   <text x={mx} y={my} textAnchor="middle" dominantBaseline="middle" fill={col} fontSize="0.28" fontWeight="700" style={{pointerEvents:'none'}}>{c.f.name}</text>
-                  <text x={mx} y={my+0.35} textAnchor="middle" fill={col} fontSize="0.18" opacity="0.7" style={{pointerEvents:'none'}}>{c.f.facW}×{c.f.facH}mm</text>
-                  {/* Length dimension */}
-                  <text x={(c.x1+c.x2)/2} y={(c.y1+c.y2)/2-0.25} textAnchor="middle" fill="rgba(255,255,255,0.3)" fontSize="0.16" style={{pointerEvents:'none'}}>{(c.Lm).toFixed(2)}m</text>
+                  <text x={mx} y={my+0.35} textAnchor="middle" fill={col} fontSize="0.18" opacity="0.7" style={{pointerEvents:'none'}}>{c.f.facW}×{c.f.facH}</text>
                 </g>
               })}
-              {/* Junction dots */}
-              {chain.map((c,i)=><circle key={'j'+i} cx={c.x1} cy={c.y1} r="0.08" fill="#fff" fillOpacity="0.3"/>)}
-              {chain.length>0&&<circle cx={chain[chain.length-1].x2} cy={chain[chain.length-1].y2} r="0.08" fill="#fff" fillOpacity="0.3"/>}
+              {/* Junction dots — clickable to break/join */}
+              {chain.map((c,i)=>{
+                if(i===0)return<circle key={'j0'} cx={c.x1} cy={c.y1} r="0.1" fill="#fff" fillOpacity="0.2"/>;
+                const isBroken=bkBreaks.has(i);
+                return<g key={'j'+i} onClick={()=>toggleBkBreak(i)} style={{cursor:'pointer'}}>
+                  <circle cx={c.x1} cy={c.y1} r="0.18" fill={isBroken?'#ef4444':'#34d399'} fillOpacity={0.8}/>
+                  <text x={c.x1} y={c.y1+0.06} textAnchor="middle" fill="#fff" fontSize="0.16" fontWeight="700" style={{pointerEvents:'none'}}>{isBroken?'✕':'⊙'}</text>
+                </g>
+              })}
+              {chain.length>0&&<circle cx={chain[chain.length-1].x2} cy={chain[chain.length-1].y2} r="0.1" fill="#fff" fillOpacity="0.2"/>}
             </svg>
           })()}
         </div>
@@ -7049,7 +7349,9 @@ function BriqueApp({onBack,user}){
           <div style={{marginTop:'auto',paddingTop:12,borderTop:'1px solid var(--bd)'}}>
             <div style={{fontSize:9,color:'var(--t3)',lineHeight:1.6}}>
               Cliquer sur une facade pour l'éditer.<br/>
-              L'angle oriente la normale extérieure.
+              L'angle oriente la normale extérieure.<br/>
+              <span style={{color:'#34d399'}}>⊙</span> Clic sur un point vert = <b>délier</b><br/>
+              <span style={{color:'#ef4444'}}>✕</span> Clic sur un point rouge = <b>relier</b>
             </div>
           </div>
         </div>
@@ -7064,6 +7366,9 @@ function CarrelageApp({onBack,user}){
   const[roomH,setRoomH]=useState(2800);
   const[roomName,setRoomName]=useState('Pièce 1');
   const[roomType,setRoomType]=useState('sol');// sol, mur, piscine
+  const[poolWater,setPoolWater]=useState(true);// water on/off
+  const[poolDepthMm,setPoolDepthMm]=useState(1500);// pool depth mm
+  const[poolWallTiles,setPoolWallTiles]=useState(true);// tile the pool walls
   // ── Tile ──
   const[tileW,setTileW]=useState(600);
   const[tileH,setTileH]=useState(600);
@@ -7221,18 +7526,22 @@ function CarrelageApp({onBack,user}){
     const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
     const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
-    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
+    renderer.outputEncoding=THREE.sRGBEncoding;
     el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0xe8e8f0,0.5));
-    const sun=new THREE.DirectionalLight(0xfff5e0,1.2);sun.position.set(6,12,8);sun.castShadow=true;
-    sun.shadow.camera.near=0.1;sun.shadow.camera.far=40;sun.shadow.camera.left=-10;sun.shadow.camera.right=10;
-    sun.shadow.camera.top=10;sun.shadow.camera.bottom=-10;sun.shadow.mapSize.width=1024;sun.shadow.mapSize.height=1024;sun.shadow.bias=-0.0005;
+    // Lighting — improved
+    scene.add(new THREE.AmbientLight(0xe8e8f0,0.55));
+    const sun=new THREE.DirectionalLight(0xfff5e0,1.3);sun.position.set(6,14,8);sun.castShadow=true;
+    sun.shadow.camera.near=0.1;sun.shadow.camera.far=50;sun.shadow.camera.left=-12;sun.shadow.camera.right=12;
+    sun.shadow.camera.top=12;sun.shadow.camera.bottom=-12;sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
+    sun.shadow.bias=-0.0003;sun.shadow.normalBias=0.015;
     scene.add(sun);
-    const fill=new THREE.DirectionalLight(0x8ab0ff,0.35);fill.position.set(-4,-2,3);scene.add(fill);
+    const fill=new THREE.DirectionalLight(0x8ab0ff,0.3);fill.position.set(-5,-2,4);scene.add(fill);
     const bounce=new THREE.PointLight(0xffeedd,0.15,20);bounce.position.set(0,-3,2);scene.add(bounce);
+    // Rim light from behind
+    const rim=new THREE.DirectionalLight(0xffd4a0,0.2);rim.position.set(0,6,-8);scene.add(rim);
 
     // Ground plane
     const groundMat=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
@@ -7241,7 +7550,7 @@ function CarrelageApp({onBack,user}){
 
     // Grout slab — FLOOR: XZ plane (y=height, very thin)
     const jcC=new THREE.Color(jointColor);
-    const floorMat=new THREE.MeshStandardMaterial({color:jcC,roughness:0.92,metalness:0.02});
+    const floorMat=new THREE.MeshStandardMaterial({color:jcC,roughness:0.88,metalness:0.01});
     const floor=new THREE.Mesh(new THREE.BoxGeometry(RWm+.02,.006,RHm+.02),floorMat);
     floor.position.set(0,.003,0);floor.receiveShadow=true;scene.add(floor);
 
@@ -7250,7 +7559,7 @@ function CarrelageApp({onBack,user}){
     const grp1=[],grp2=[];
     computeTiles.tiles.forEach(t=>{if(!t.diagonal){if(t.isDamier2)grp2.push(t);else grp1.push(t)}});
     const addGroup=(arr,hex)=>{if(!arr.length)return;
-      const c=new THREE.Color(hex);const mat=new THREE.MeshStandardMaterial({roughness:0.25,metalness:0.08});
+      const c=new THREE.Color(hex);const mat=new THREE.MeshStandardMaterial({roughness:0.2,metalness:0.06});
       // BoxGeometry(X-width, Y-thickness, Z-depth) for floor tiles
       const mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,tileDepth,1),mat,arr.length);
       mesh.castShadow=true;mesh.receiveShadow=true;const dummy=new THREE.Object3D();
@@ -7264,11 +7573,12 @@ function CarrelageApp({onBack,user}){
         ic[i*3]=Math.max(0,Math.min(1,c.r+sh));ic[i*3+1]=Math.max(0,Math.min(1,c.g+sh));ic[i*3+2]=Math.max(0,Math.min(1,c.b+sh*.5));
       });
       mesh.instanceColor=new THREE.InstancedBufferAttribute(ic,3);mesh.instanceMatrix.needsUpdate=true;scene.add(mesh);
+      return mesh;
     };
-    addGroup(grp1,tileColor1);addGroup(grp2,tileColor2);
+    const tileMesh1=addGroup(grp1,tileColor1);const tileMesh2=addGroup(grp2,tileColor2);
 
     // Room walls — vertical on the 4 sides of the floor area
-    const wm=new THREE.MeshStandardMaterial({color:0x8a8a9a,roughness:.65,metalness:.05});
+    const wm=new THREE.MeshStandardMaterial({color:0x929298,roughness:.55,metalness:.04});
     const wH=0.5;const wT=0.04;
     // Back wall (z = -RHm/2)
     const bw=new THREE.Mesh(new THREE.BoxGeometry(RWm+wT*2,wH,wT),wm);
@@ -7291,10 +7601,135 @@ function CarrelageApp({onBack,user}){
     const bb2=new THREE.Mesh(new THREE.BoxGeometry(bbT,bbH,RHm),bbMat);bb2.position.set(-RWm/2,bbH/2,0);scene.add(bb2);
     const bb3=new THREE.Mesh(new THREE.BoxGeometry(bbT,bbH,RHm),bbMat);bb3.position.set(RWm/2,bbH/2,0);scene.add(bb3);
 
-    // Camera — top-down angle looking at the floor
-    const tgt=new THREE.Vector3(0,0,0);
-    rotRef3D.current={x:-0.85,y:0.5};// look down from front-right
-    zoomRef3D.current=Math.max(RWm,RHm)*1.8;
+    // ── POOL MODE ──
+    var waterMesh=null;
+    if(roomType==='piscine'){
+      try{
+      var poolRealDepth=poolDepthMm/1000;
+      var poolDepth=Math.min(Math.max(poolRealDepth,0.1),0.6);
+      // CRITICAL: Remove ground plane — it hides pool contents below y=0
+      scene.remove(ground);
+      scene.remove(bw);scene.remove(lw);scene.remove(rw);scene.remove(fw);
+      scene.remove(bb1);scene.remove(bb2);scene.remove(bb3);
+      // Add surrounding ground segments around pool
+      var gndCol=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
+      var gndS=8;// surrounding ground size
+      var gB=new THREE.Mesh(new THREE.PlaneGeometry(RWm+gndS*2,gndS),gndCol);gB.rotation.x=-Math.PI/2;gB.position.set(0,0,-RHm/2-gndS/2);gB.receiveShadow=true;scene.add(gB);
+      var gF=new THREE.Mesh(new THREE.PlaneGeometry(RWm+gndS*2,gndS),gndCol);gF.rotation.x=-Math.PI/2;gF.position.set(0,0,RHm/2+gndS/2);gF.receiveShadow=true;scene.add(gF);
+      var gL=new THREE.Mesh(new THREE.PlaneGeometry(gndS,RHm),gndCol);gL.rotation.x=-Math.PI/2;gL.position.set(-RWm/2-gndS/2,0,0);gL.receiveShadow=true;scene.add(gL);
+      var gR=new THREE.Mesh(new THREE.PlaneGeometry(gndS,RHm),gndCol);gR.rotation.x=-Math.PI/2;gR.position.set(RWm/2+gndS/2,0,0);gR.receiveShadow=true;scene.add(gR);
+      // Move floor and tiles down into pool
+      floor.position.y=-poolDepth+0.003;
+      if(tileMesh1)tileMesh1.position.y=-poolDepth+tileDepth/2+0.006;
+      if(tileMesh2)tileMesh2.position.y=-poolDepth+tileDepth/2+0.006;
+
+      // Pool inner walls — plain or tiled
+      var tcol=new THREE.Color(tileColor1);tcol.multiplyScalar(0.8);
+      var pwMat=new THREE.MeshStandardMaterial({color:tcol,roughness:0.25,metalness:0.05});
+      var pwMatT=pwMat.clone();pwMatT.transparent=true;pwMatT.opacity=0.25;
+
+      if(poolWallTiles){
+        // Instanced wall tiles — back, left, right walls
+        var wTsX=Math.max(tw/1000,0.01),wTsY=Math.max(th/1000,0.01);
+        var wJt=jointW/1000;
+        var wStX=wTsX+wJt,wStY=wTsY+wJt;
+        var wallTiles=[];
+        // Back wall (z=-RHm/2)
+        for(var wy=0;wy<poolDepth;wy+=wStY)for(var wx=0;wx<RWm;wx+=wStX){
+          var cw=Math.min(wTsX,RWm-wx),ch=Math.min(wTsY,poolDepth-wy);
+          wallTiles.push({px:-RWm/2+wx+cw/2,py:-wy-ch/2,pz:-RHm/2+0.005,sx:cw*0.97,sy:ch*0.97,sz:0.006,wall:'b'});
+        }
+        // Left wall (x=-RWm/2)
+        for(var wy2=0;wy2<poolDepth;wy2+=wStY)for(var wz=0;wz<RHm;wz+=wStX){
+          var cw2=Math.min(wTsX,RHm-wz),ch2=Math.min(wTsY,poolDepth-wy2);
+          wallTiles.push({px:-RWm/2+0.005,py:-wy2-ch2/2,pz:-RHm/2+wz+cw2/2,sx:0.006,sy:ch2*0.97,sz:cw2*0.97,wall:'l'});
+        }
+        // Right wall (x=RWm/2)
+        for(var wy3=0;wy3<poolDepth;wy3+=wStY)for(var wz2=0;wz2<RHm;wz2+=wStX){
+          var cw3=Math.min(wTsX,RHm-wz2),ch3=Math.min(wTsY,poolDepth-wy3);
+          wallTiles.push({px:RWm/2-0.005,py:-wy3-ch3/2,pz:-RHm/2+wz2+cw3/2,sx:0.006,sy:ch3*0.97,sz:cw3*0.97,wall:'r'});
+        }
+        // Front wall (z=+RHm/2) — semi-transparent tiled
+        for(var wy4=0;wy4<poolDepth;wy4+=wStY)for(var wx2=0;wx2<RWm;wx2+=wStX){
+          var cw4=Math.min(wTsX,RWm-wx2),ch4=Math.min(wTsY,poolDepth-wy4);
+          wallTiles.push({px:-RWm/2+wx2+cw4/2,py:-wy4-ch4/2,pz:RHm/2-0.005,sx:cw4*0.97,sy:ch4*0.97,sz:0.006,wall:'f'});
+        }
+        // Split: opaque walls (b,l,r) + transparent front (f)
+        var solidTiles=wallTiles.filter(function(t){return t.wall!=='f'});
+        var frontTiles=wallTiles.filter(function(t){return t.wall==='f'});
+        var wTC=new THREE.Color(tileColor1);
+        var _buildWallMesh=function(tiles,transparent){
+          if(!tiles.length)return;
+          var mat=new THREE.MeshStandardMaterial({roughness:0.2,metalness:0.06});
+          if(transparent){mat.transparent=true;mat.opacity=0.25;}
+          var mesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1),mat,tiles.length);
+          mesh.receiveShadow=true;var dummy=new THREE.Object3D();
+          var ic=new Float32Array(tiles.length*3);
+          tiles.forEach(function(wt,wi){
+            dummy.position.set(wt.px,wt.py,wt.pz);dummy.scale.set(wt.sx,wt.sy,wt.sz);
+            dummy.updateMatrix();mesh.setMatrixAt(wi,dummy.matrix);
+            var sh=((wi*7)%12-6)*0.012;
+            ic[wi*3]=Math.max(0,Math.min(1,wTC.r+sh));ic[wi*3+1]=Math.max(0,Math.min(1,wTC.g+sh));ic[wi*3+2]=Math.max(0,Math.min(1,wTC.b+sh*.5));
+          });
+          mesh.instanceColor=new THREE.InstancedBufferAttribute(ic,3);mesh.instanceMatrix.needsUpdate=true;scene.add(mesh);
+        };
+        _buildWallMesh(solidTiles,false);
+        _buildWallMesh(frontTiles,true);
+        // Joint-color backing for all 4 walls
+        var jcBk=new THREE.MeshStandardMaterial({color:new THREE.Color(jointColor),roughness:0.9});
+        var _jb1=new THREE.Mesh(new THREE.BoxGeometry(RWm,poolDepth,0.003),jcBk);_jb1.position.set(0,-poolDepth/2,-RHm/2+0.002);scene.add(_jb1);
+        var _jb2=new THREE.Mesh(new THREE.BoxGeometry(0.003,poolDepth,RHm),jcBk);_jb2.position.set(-RWm/2+0.002,-poolDepth/2,0);scene.add(_jb2);
+        var _jb3=new THREE.Mesh(new THREE.BoxGeometry(0.003,poolDepth,RHm),jcBk);_jb3.position.set(RWm/2-0.002,-poolDepth/2,0);scene.add(_jb3);
+        var jcBkT=jcBk.clone();jcBkT.transparent=true;jcBkT.opacity=0.2;
+        var _jb4=new THREE.Mesh(new THREE.BoxGeometry(RWm,poolDepth,0.003),jcBkT);_jb4.position.set(0,-poolDepth/2,RHm/2-0.002);scene.add(_jb4);
+      }else{
+        // Plain colored walls with slight glossiness
+        var pwMat2=new THREE.MeshStandardMaterial({color:tcol,roughness:0.15,metalness:0.03});
+        var _pw1=new THREE.Mesh(new THREE.BoxGeometry(RWm,poolDepth,0.008),pwMat2);_pw1.position.set(0,-poolDepth/2,-RHm/2+0.004);_pw1.receiveShadow=true;scene.add(_pw1);
+        var _pw2=new THREE.Mesh(new THREE.BoxGeometry(0.008,poolDepth,RHm),pwMat2);_pw2.position.set(-RWm/2+0.004,-poolDepth/2,0);_pw2.receiveShadow=true;scene.add(_pw2);
+        var _pw3=new THREE.Mesh(new THREE.BoxGeometry(0.008,poolDepth,RHm),pwMat2);_pw3.position.set(RWm/2-0.004,-poolDepth/2,0);_pw3.receiveShadow=true;scene.add(_pw3);
+        var _pw4=new THREE.Mesh(new THREE.BoxGeometry(RWm,poolDepth,0.008),pwMatT);_pw4.position.set(0,-poolDepth/2,RHm/2-0.004);scene.add(_pw4);
+      }
+
+      // Margelle (coping)
+      var copMat2=new THREE.MeshStandardMaterial({color:0xddd8ca,roughness:0.4,metalness:0.03});
+      var mW2=0.12,mH2=0.04;
+      var _m1=new THREE.Mesh(new THREE.BoxGeometry(RWm+mW2*2,mH2,mW2),copMat2);_m1.position.set(0,mH2/2,-RHm/2-mW2/2);_m1.castShadow=true;scene.add(_m1);
+      var _m2=new THREE.Mesh(new THREE.BoxGeometry(RWm+mW2*2,mH2,mW2),copMat2);_m2.position.set(0,mH2/2,RHm/2+mW2/2);_m2.castShadow=true;scene.add(_m2);
+      var _m3=new THREE.Mesh(new THREE.BoxGeometry(mW2,mH2,RHm),copMat2);_m3.position.set(-RWm/2-mW2/2,mH2/2,0);_m3.castShadow=true;scene.add(_m3);
+      var _m4=new THREE.Mesh(new THREE.BoxGeometry(mW2,mH2,RHm),copMat2);_m4.position.set(RWm/2+mW2/2,mH2/2,0);_m4.castShadow=true;scene.add(_m4);
+
+      // Deck
+      var dkMat=new THREE.MeshStandardMaterial({color:0xa09080,roughness:0.65,metalness:0.01});
+      var dkW=0.5;
+      var _d1=new THREE.Mesh(new THREE.BoxGeometry(RWm+dkW*2+mW2*2,0.015,dkW),dkMat);_d1.position.set(0,0.003,-RHm/2-mW2-dkW/2);_d1.receiveShadow=true;scene.add(_d1);
+      var _d2=new THREE.Mesh(new THREE.BoxGeometry(RWm+dkW*2+mW2*2,0.015,dkW),dkMat);_d2.position.set(0,0.003,RHm/2+mW2+dkW/2);_d2.receiveShadow=true;scene.add(_d2);
+      var _d3=new THREE.Mesh(new THREE.BoxGeometry(dkW,0.015,RHm+mW2*2),dkMat);_d3.position.set(-RWm/2-mW2-dkW/2,0.003,0);_d3.receiveShadow=true;scene.add(_d3);
+      var _d4=new THREE.Mesh(new THREE.BoxGeometry(dkW,0.015,RHm+mW2*2),dkMat);_d4.position.set(RWm/2+mW2+dkW/2,0.003,0);_d4.receiveShadow=true;scene.add(_d4);
+
+      // Water surface
+      if(poolWater){
+        var wGeo2=new THREE.PlaneGeometry(RWm-0.01,RHm-0.01,32,32);
+        var wMat2=new THREE.MeshStandardMaterial({color:0x1a99bb,transparent:true,opacity:0.42,roughness:0.0,metalness:0.4,side:THREE.DoubleSide});
+        waterMesh=new THREE.Mesh(wGeo2,wMat2);
+        waterMesh.rotation.x=-Math.PI/2;
+        waterMesh.position.y=-0.03;
+        scene.add(waterMesh);
+        waterMesh.userData.origPos=new Float32Array(wGeo2.attributes.position.array);
+        // Bright surface highlight for water
+        var wHL=new THREE.PointLight(0x88ddff,0.3,4);wHL.position.set(0,0.2,0);scene.add(wHL);
+      }
+
+      // Underwater light
+      var uL1=new THREE.PointLight(0x44bbcc,0.5,5);uL1.position.set(0,-poolDepth*0.4,0);scene.add(uL1);
+      var uL2=new THREE.PointLight(0x22aadd,0.25,3);uL2.position.set(RWm*0.3,-poolDepth*0.6,RHm*0.2);scene.add(uL2);
+      }catch(poolErr){console.warn('Pool 3D error:',poolErr)}
+    }
+
+    // Camera — top-down angle looking at the floor (or pool)
+    const tgt=new THREE.Vector3(0,roomType==='piscine'?-poolDepthMm/1000*0.2:0,0);
+    rotRef3D.current={x:roomType==='piscine'?-0.55:-0.85,y:0.4};
+    zoomRef3D.current=Math.max(RWm,RHm)*(roomType==='piscine'?2.5:1.8);
     const onD=e=>{dragRef3D.current={x:e.clientX,y:e.clientY,rx:rotRef3D.current.x,ry:rotRef3D.current.y,btn:e.button};renderer.domElement.style.cursor='grabbing'};
     const onU=()=>{dragRef3D.current=null;renderer.domElement.style.cursor='grab'};
     const onM=e=>{if(!dragRef3D.current)return;const dx=e.clientX-dragRef3D.current.x,dy=e.clientY-dragRef3D.current.y;
@@ -7304,7 +7739,19 @@ function CarrelageApp({onBack,user}){
     renderer.domElement.addEventListener('mousedown',onD);renderer.domElement.addEventListener('mouseup',onU);
     renderer.domElement.addEventListener('mouseleave',onU);renderer.domElement.addEventListener('mousemove',onM);
     renderer.domElement.addEventListener('wheel',onW,{passive:false});
-    let raf;const animate=()=>{raf=requestAnimationFrame(animate);
+    let raf;const startT=performance.now();const animate=()=>{raf=requestAnimationFrame(animate);
+      // Water wave animation
+      if(waterMesh&&waterMesh.userData.origPos){
+        var t2=(performance.now()-startT)*0.001;
+        var pos=waterMesh.geometry.attributes.position;
+        var orig=waterMesh.userData.origPos;
+        for(var wi=0;wi<pos.count;wi++){
+          var ox2=orig[wi*3],oy2=orig[wi*3+1];
+          var wave=Math.sin(ox2*8+t2*1.8)*0.004+Math.sin(oy2*6+t2*1.4)*0.003+Math.sin((ox2+oy2)*5+t2*0.9)*0.002+Math.sin(ox2*12-t2*2.2)*0.001;
+          pos.array[wi*3+2]=wave;
+        }
+        pos.needsUpdate=true;
+      }
       const d=zoomRef3D.current,rx=rotRef3D.current.x,ry=rotRef3D.current.y;
       camera.position.set(tgt.x+d*Math.sin(ry)*Math.cos(rx)+panRef3D.current.x,tgt.y+d*Math.sin(-rx)+panRef3D.current.y,tgt.z+d*Math.cos(ry)*Math.cos(rx));
       camera.lookAt(tgt.x+panRef3D.current.x,tgt.y+panRef3D.current.y,tgt.z);renderer.render(scene,camera);};
@@ -7312,7 +7759,7 @@ function CarrelageApp({onBack,user}){
     const onR=()=>{const w2=el.clientWidth,h2=el.clientHeight;if(w2>0&&h2>0){camera.aspect=w2/h2;camera.updateProjectionMatrix();renderer.setSize(w2,h2)}};
     window.addEventListener('resize',onR);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onR);renderer.dispose();if(el)el.innerHTML='';sceneRef3D.current={}};
-  },[view3D,roomW,roomH,tileW,tileH,jointW,pattern,startCorner,orientation,tileColor1,tileColor2,jointColor,computeTiles.tiles]);
+  },[view3D,roomW,roomH,tileW,tileH,jointW,pattern,startCorner,orientation,tileColor1,tileColor2,jointColor,roomType,poolWater,poolDepthMm,poolWallTiles,computeTiles.tiles]);
 
   // ── EXPORT PDF (Carrelage) ──
   const exportPDF=async()=>{
@@ -7396,32 +7843,45 @@ function CarrelageApp({onBack,user}){
     {id:'center',name:'Centre',icon:'◉'},
   ];
 
-  return<div style={{display:'flex',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+    {/* Kalepin header */}
+    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
+      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
+        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <svg width="12" height="12" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
+        </div>
+        <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
+      </div>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <span style={{fontSize:12,fontWeight:600,color:'#0ea5e9'}}>🔲 Carrelage</span>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <span style={{fontSize:11,color:'var(--t2)',fontWeight:500}}>{roomName}</span>
+      <span style={{fontSize:10,color:'var(--t3)',marginLeft:4}}>{roomType==='piscine'?'🏊 Piscine':roomType==='mur'?'🧱 Mur':'🏠 Sol'}</span>
+      <div style={{flex:1}}/>
+      <span style={{fontSize:9,color:'var(--t3)'}}>{roomW}×{roomH}mm</span>
+    </div>
+    <div style={{display:'flex',flex:1,minHeight:0}}>
     {/* ─── LEFT PANEL ─── */}
     <div style={{width:260,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',display:'flex',flexDirection:'column',overflow:'hidden'}}>
-      {/* Header */}
-      <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10}}>
-        <button onClick={onBack} style={{width:28,height:28,borderRadius:8,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontFamily:'inherit'}}>←</button>
-        <div>
-          <div style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>🔲 Carrelage</div>
-          <div style={{fontSize:9,color:'var(--t3)'}}>Calepinage & coupes</div>
-        </div>
-        <div style={{flex:1}}/>
-        <div style={{display:'flex',gap:3}}>
-          <button onClick={()=>{const data={type:'kalepin-carrelage',version:1,roomName,roomW,roomH,roomType,tileW,tileH,jointW,tileColor1,tileColor2,jointColor,pattern,startCorner,orientation};
+      {/* Export buttons */}
+      <div style={{padding:'6px 10px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:4}}>
+        <span style={{fontSize:9,fontWeight:600,color:'var(--t3)',flex:1}}>Configuration</span>
+        <button onClick={async()=>{const n=prompt('Nom du projet carrelage:',roomName||'Carrelage');if(!n)return;const data={projectType:'carrelage',roomName,roomW,roomH,roomType,tileW,tileH,jointW,tileColor1,tileColor2,jointColor,pattern,startCorner,orientation,poolDepthMm,poolWater,poolWallTiles,total_surface:roomW*roomH/1e6};const r=await cloudSaveModuleProject(n,'carrelage',data);if(r)alert('✅ Projet sauvegardé !');else alert('❌ Erreur de sauvegarde')}}
+            title="Sauvegarder dans mes projets" style={{width:24,height:24,borderRadius:5,border:'1px solid #0ea5e9',background:'rgba(14,165,233,.1)',color:'#0ea5e9',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>☁</button>
+        <button onClick={()=>{const data={type:'kalepin-carrelage',version:1,roomName,roomW,roomH,roomType,tileW,tileH,jointW,tileColor1,tileColor2,jointColor,pattern,startCorner,orientation};
             const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kalepin-carrelage-'+roomName.replace(/\W+/g,'_')+'.json';a.click()}}
-            title="Exporter JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>💾</button>
-          <label title="Importer JSON" style={{width:26,height:26,borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center'}}>📥<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(!e.target.files[0])return;const r=new FileReader();r.onload=ev=>{try{
+            title="Exporter JSON" style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>💾</button>
+        <label title="Importer JSON" style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>📥<input type="file" accept=".json" style={{display:'none'}} onChange={e=>{if(!e.target.files[0])return;const r=new FileReader();r.onload=ev=>{try{
             const d=JSON.parse(ev.target.result);if(d.type!=='kalepin-carrelage'){alert('Fichier carrelage invalide');return}
             if(d.roomName)setRoomName(d.roomName);if(d.roomW)setRoomW(d.roomW);if(d.roomH)setRoomH(d.roomH);if(d.roomType)setRoomType(d.roomType);
             if(d.tileW)setTileW(d.tileW);if(d.tileH)setTileH(d.tileH);if(d.jointW)setJointW(d.jointW);
             if(d.tileColor1)setTileColor1(d.tileColor1);if(d.tileColor2)setTileColor2(d.tileColor2);if(d.jointColor)setJointColor(d.jointColor);
             if(d.pattern)setPattern(d.pattern);if(d.startCorner)setStartCorner(d.startCorner);if(d.orientation)setOrientation(d.orientation);
             }catch(err){alert('Erreur: '+err.message)}};r.readAsText(e.target.files[0]);e.target.value=''}}/></label>
-        </div>
+        <button onClick={()=>onBack&&onBack()} title="Retour projets" style={{width:24,height:24,borderRadius:5,border:'1px solid rgba(79,110,247,.3)',background:'rgba(79,110,247,.08)',color:'var(--bl,#4f6ef7)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>📂</button>
       </div>
 
-      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:6,minHeight:0}}>
         {/* Room */}
         <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:8}}>
@@ -7444,6 +7904,33 @@ function CarrelageApp({onBack,user}){
           <div style={{marginTop:6,fontSize:10,color:'var(--t3)',textAlign:'right'}}>
             {(roomW*roomH/1e6).toFixed(2)} m²
           </div>
+          {roomType==='piscine'&&<div style={{marginTop:8,padding:8,borderRadius:8,background:'rgba(14,165,233,.06)',border:'1px solid rgba(14,165,233,.15)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:6}}>
+              <span style={{fontSize:10,fontWeight:700,color:'#0ea5e9'}}>🏊 Piscine</span>
+              <div style={{flex:1}}/>
+              <span style={{fontSize:9,color:'#0ea5e9',fontFamily:'monospace',fontWeight:700}}>{(poolDepthMm/1000).toFixed(2)}m</span>
+            </div>
+            <NI label="Profondeur" value={poolDepthMm} onChange={setPoolDepthMm} unit="mm" step={50}/>
+            <input type="range" min={300} max={3000} step={100} value={poolDepthMm}
+              onChange={e=>setPoolDepthMm(Number(e.target.value))}
+              style={{width:'100%',marginTop:4,accentColor:'#0ea5e9',height:4}}/>
+            <div style={{display:'flex',gap:4,marginTop:8}}>
+              <button onClick={()=>setPoolWallTiles(!poolWallTiles)}
+                style={{flex:1,padding:'5px 6px',borderRadius:6,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit',
+                  border:`1px solid ${poolWallTiles?'#0ea5e9':'var(--bd)'}`,
+                  background:poolWallTiles?'rgba(14,165,233,.15)':'var(--inp)',
+                  color:poolWallTiles?'#0ea5e9':'var(--t3)'}}>
+                {poolWallTiles?'🔲 Parois carrelées':'🔲 Carreler parois'}
+              </button>
+              <button onClick={()=>setPoolWater(!poolWater)}
+                style={{flex:1,padding:'5px 6px',borderRadius:6,fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit',
+                  border:`1px solid ${poolWater?'#0ea5e9':'var(--bd)'}`,
+                  background:poolWater?'rgba(14,165,233,.15)':'var(--inp)',
+                  color:poolWater?'#0ea5e9':'var(--t3)'}}>
+                {poolWater?'💧 Eau':'💧 Remplir'}
+              </button>
+            </div>
+          </div>}
         </div>
 
         {/* Tile */}
@@ -7638,7 +8125,7 @@ function CarrelageApp({onBack,user}){
       <div style={{padding:'12px 14px',borderBottom:'1px solid var(--bd)'}}>
         <div style={{fontSize:12,fontWeight:700,color:'var(--t1)'}}>📊 Résultats</div>
       </div>
-      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:8}}>
+      <div style={{flex:1,overflowY:'auto',padding:10,display:'flex',flexDirection:'column',gap:6,minHeight:0}}>
 
         {/* Surface */}
         <div style={{padding:10,borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)'}}>
@@ -7741,6 +8228,7 @@ function CarrelageApp({onBack,user}){
 
       </div>
     </div>
+  </div>{/* end carrelage inner flex */}
   </div>;
 }
 
@@ -8312,76 +8800,266 @@ function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ra
 function ProjectsModal({onClose,onOpen,currentProjectId}){
   const[projects,setProjects]=useState([]);const[loading,setLoading]=useState(true);
   const[deleting,setDeleting]=useState(null);const[search,setSearch]=useState('');
+  const[folders,setFolders]=useState(()=>{try{return JSON.parse(localStorage.getItem('kalepin_folders')||'[]')}catch(e){return[]}});
+  const[currentFolder,setCurrentFolder]=useState(null);// null = root
+  const[newFolderName,setNewFolderName]=useState('');const[showNewFolder,setShowNewFolder]=useState(false);
+  const[viewMode,setViewMode]=useState('list');// list, grid
+  const[renamingFolder,setRenamingFolder]=useState(null);const[renameVal,setRenameVal]=useState('');
+  const[renamingProject,setRenamingProject]=useState(null);const[renameProjVal,setRenameProjVal]=useState('');
+  const[dragOverFolder,setDragOverFolder]=useState(null);
+  const[sortBy,setSortBy]=useState('date');// date, name, size
 
+  const saveFolders=(f)=>{setFolders(f);try{localStorage.setItem('kalepin_folders',JSON.stringify(f))}catch(e){}};
   const refresh=()=>{setLoading(true);cloudProjectsList().then(p=>{setProjects(p||[]);setLoading(false)})};
   useEffect(()=>{refresh()},[]);
 
-  const filtered=projects.filter(p=>!search||p.name.toLowerCase().includes(search.toLowerCase()));
+  // Folders are {id, name, parentId (null=root)}
+  const createFolder=()=>{
+    if(!newFolderName.trim())return;
+    const nf={id:Date.now(),name:newFolderName.trim(),parentId:currentFolder};
+    saveFolders([...folders,nf]);setNewFolderName('');setShowNewFolder(false);
+  };
+  const deleteFolder=(fid)=>{
+    // Move projects out and remove subfolder assignments
+    const pf=projects.map(p=>p.folder===fid?{...p,folder:null}:p);
+    setProjects(pf);
+    saveFolders(folders.filter(f=>f.id!==fid));
+  };
+  // Project folder assignment stored in localStorage mapping
+  const[projFolders,setProjFolders]=useState(()=>{try{return JSON.parse(localStorage.getItem('kalepin_proj_folders')||'{}')}catch(e){return{}}});
+  const saveProjFolders=(pf)=>{setProjFolders(pf);try{localStorage.setItem('kalepin_proj_folders',JSON.stringify(pf))}catch(e){}};
+  const moveToFolder=(projId,folderId)=>{const nf={...projFolders,[projId]:folderId};saveProjFolders(nf);setDragOverFolder(null)};
+
+  // Get subfolders of current folder
+  const subFolders=(currentFolder===null||currentFolder==='unassigned')?[]:folders.filter(f=>f.parentId===currentFolder);
+  // Get projects: root (null) = ALL projects, folder = only that folder's projects
+  const projsInFolder=currentFolder===null
+    ? projects
+    : currentFolder==='unassigned'
+      ? projects.filter(p=>!(projFolders[p.id]))
+      : projects.filter(p=>{
+          const pFolder=projFolders[p.id]||null;
+          return pFolder===currentFolder;
+        });
+  // Apply search and sort
+  const filtered=(search?projsInFolder.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())):projsInFolder)
+    .sort((a,b)=>sortBy==='name'?a.name.localeCompare(b.name):sortBy==='size'?(b.total_surface||0)-(a.total_surface||0):new Date(b.updated_at)-new Date(a.updated_at));
+
+  // Breadcrumb path
+  const getBreadcrumb=()=>{
+    const path=[];let cur=currentFolder;
+    while(cur){const f=folders.find(fo=>fo.id===cur);if(f){path.unshift(f);cur=f.parentId}else break}
+    return path;
+  };
+  const breadcrumb=getBreadcrumb();
 
   const handleDelete=async(id)=>{
-    if(!confirm('Supprimer ce projet definitivement ?'))return;
+    if(!confirm('Supprimer ce projet définitivement ?'))return;
     setDeleting(id);const ok=await cloudProjectDelete(id);
     if(ok)setProjects(prev=>prev.filter(p=>p.id!==id));
     setDeleting(null);
   };
-  const handleDuplicate=async(id)=>{
-    const dup=await cloudProjectDuplicate(id);if(dup)refresh();
+  const handleDuplicate=async(id)=>{const dup=await cloudProjectDuplicate(id);if(dup)refresh()};
+  const handleRename=async(id)=>{
+    if(!renameProjVal.trim())return;
+    const ok=await cloudProjectRename(id,renameProjVal.trim());
+    if(ok)setProjects(prev=>prev.map(p=>p.id===id?{...p,name:renameProjVal.trim()}:p));
+    setRenamingProject(null);
   };
-
   const fmtDate=(d)=>{try{const dt=new Date(d);return dt.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}catch(e){return'-'}};
 
+  // Sidebar folder tree (recursive)
+  const FolderTree=({parentId,depth})=>{
+    const kids=folders.filter(f=>f.parentId===parentId);
+    return kids.map(f=><div key={f.id}>
+      <div style={{display:'flex',alignItems:'center',gap:4,padding:'5px 8px',paddingLeft:12+depth*14,borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:currentFolder===f.id?600:400,
+        background:currentFolder===f.id?'rgba(14,165,233,.1)':dragOverFolder===f.id?'rgba(14,165,233,.06)':'transparent',
+        color:currentFolder===f.id?'#0ea5e9':'var(--t2)',transition:'all .1s'}}
+        onClick={()=>setCurrentFolder(f.id)}
+        onDragOver={e=>{e.preventDefault();setDragOverFolder(f.id)}}
+        onDragLeave={()=>setDragOverFolder(null)}
+        onDrop={e=>{e.preventDefault();const pid=e.dataTransfer.getData('projectId');if(pid)moveToFolder(pid,f.id)}}>
+        <span>📁</span>
+        {renamingFolder===f.id?<input value={renameVal} onChange={e=>setRenameVal(e.target.value)} autoFocus
+          onBlur={()=>{if(renameVal.trim()){saveFolders(folders.map(fo=>fo.id===f.id?{...fo,name:renameVal.trim()}:fo))}setRenamingFolder(null)}}
+          onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')e.target.blur();if(e.key==='Escape')setRenamingFolder(null)}}
+          style={{background:'var(--inp)',border:'1px solid var(--bdf)',borderRadius:4,padding:'1px 4px',fontSize:11,color:'var(--t1)',width:90,outline:'none'}}/>
+        :<span style={{flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</span>}
+        <span style={{fontSize:9,color:'var(--t3)'}}>{projects.filter(p=>(projFolders[p.id]||null)===f.id).length}</span>
+        {currentFolder===f.id&&<div style={{display:'flex',gap:2,marginLeft:4}} onClick={e=>e.stopPropagation()}>
+          <button onClick={()=>{setRenamingFolder(f.id);setRenameVal(f.name)}} style={{width:16,height:16,borderRadius:3,border:'none',background:'transparent',color:'var(--t3)',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✏</button>
+          <button onClick={()=>{if(confirm('Supprimer le dossier "'+f.name+'" ?'))deleteFolder(f.id)}} style={{width:16,height:16,borderRadius:3,border:'none',background:'transparent',color:'#ef4444',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>🗑</button>
+        </div>}
+      </div>
+      <FolderTree parentId={f.id} depth={depth+1}/>
+    </div>);
+  };
+
   return<div className="ov" onClick={onClose}>
-    <div onClick={e=>e.stopPropagation()} style={{background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:20,width:560,maxWidth:'95vw',maxHeight:'85vh',display:'flex',flexDirection:'column',boxShadow:'0 25px 60px rgba(0,0,0,.5)'}}>
-      {/* Header */}
-      <div style={{padding:'20px 24px 16px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}>
-          <div style={{fontSize:17,fontWeight:700,color:'var(--t1)'}}>☁ Mes projets</div>
-          <button onClick={onClose} style={{background:'var(--crd)',border:'1px solid var(--bd)',borderRadius:8,width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'var(--t3)',fontSize:14}}>×</button>
+    <div onClick={e=>e.stopPropagation()} style={{background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:16,width:780,maxWidth:'95vw',height:'80vh',maxHeight:700,display:'flex',flexDirection:'column',boxShadow:'0 25px 60px rgba(0,0,0,.5)',overflow:'hidden'}}>
+      {/* ── Toolbar (Finder-like) ── */}
+      <div style={{padding:'10px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:10,background:'var(--pnl)',flexShrink:0}}>
+        <button onClick={onClose} style={{width:12,height:12,borderRadius:6,border:'none',background:'#ff5f57',cursor:'pointer'}} title="Fermer"/>
+        <div style={{flex:1}}/>
+        <div style={{display:'flex',alignItems:'center',gap:4}}>
+          <button onClick={()=>setViewMode('list')} style={{padding:'3px 8px',borderRadius:5,border:'1px solid '+(viewMode==='list'?'#0ea5e9':'var(--bd)'),background:viewMode==='list'?'rgba(14,165,233,.1)':'transparent',color:viewMode==='list'?'#0ea5e9':'var(--t3)',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>☰</button>
+          <button onClick={()=>setViewMode('grid')} style={{padding:'3px 8px',borderRadius:5,border:'1px solid '+(viewMode==='grid'?'#0ea5e9':'var(--bd)'),background:viewMode==='grid'?'rgba(14,165,233,.1)':'transparent',color:viewMode==='grid'?'#0ea5e9':'var(--t3)',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>⊞</button>
         </div>
-        <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher un projet..."
-          style={{width:'100%',padding:'10px 14px',background:'var(--inp)',border:'1px solid var(--bd)',borderRadius:10,color:'var(--t1)',fontSize:13,fontFamily:'inherit',outline:'none',boxSizing:'border-box'}}
-          onFocus={e=>e.target.style.borderColor='var(--bdf)'} onBlur={e=>e.target.style.borderColor='var(--bd)'} onKeyDown={e=>e.stopPropagation()}/>
+        <select value={sortBy} onChange={e=>setSortBy(e.target.value)} style={{padding:'3px 8px',borderRadius:5,border:'1px solid var(--bd)',background:'var(--inp)',color:'var(--t2)',fontSize:10,fontFamily:'inherit',cursor:'pointer'}}>
+          <option value="date">Date ↓</option><option value="name">Nom A-Z</option><option value="size">Surface ↓</option>
+        </select>
+        <input type="text" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher..."
+          style={{width:160,padding:'5px 10px',background:'var(--inp)',border:'1px solid var(--bd)',borderRadius:8,color:'var(--t1)',fontSize:11,fontFamily:'inherit',outline:'none'}}
+          onKeyDown={e=>e.stopPropagation()}/>
       </div>
 
-      {/* List */}
-      <div style={{flex:1,overflowY:'auto',padding:'8px 12px'}}>
-        {loading?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>Chargement...</div>
-        :filtered.length===0?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>
-          {projects.length===0?'Aucun projet sauvegarde. Creez votre premier projet !':'Aucun resultat pour "'+search+'"'}
-        </div>
-        :filtered.map(p=><div key={p.id} className="group" style={{
-          display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,cursor:'pointer',
-          transition:'all .15s',border:'1px solid transparent',marginBottom:4,
-          background:p.id===currentProjectId?'rgba(196,50,74,.08)':'transparent',
-          borderColor:p.id===currentProjectId?'rgba(196,50,74,.2)':'transparent'
-        }}
-          onMouseOver={e=>{if(p.id!==currentProjectId)e.currentTarget.style.background='var(--crd)'}}
-          onMouseOut={e=>{if(p.id!==currentProjectId)e.currentTarget.style.background='transparent'}}
-          onClick={()=>onOpen(p.id)}>
-          {/* Icon */}
-          <div style={{width:40,height:40,borderRadius:10,background:'linear-gradient(135deg,var(--crd),var(--crd2))',border:'1px solid var(--bd)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>🏗</div>
-          {/* Info */}
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-              {p.name}{p.id===currentProjectId&&<span style={{fontSize:9,color:'var(--gn)',marginLeft:8,fontWeight:700}}>● OUVERT</span>}
-            </div>
-            <div style={{fontSize:10,color:'var(--t3)',marginTop:2,display:'flex',gap:12}}>
-              <span>{fmtDate(p.updated_at)}</span>
-              <span>{p.zones_count||0} zone{(p.zones_count||0)>1?'s':''}</span>
-              <span>{(p.total_surface||0).toFixed(1)} m²</span>
-            </div>
-          </div>
-          {/* Actions */}
-          <div style={{display:'flex',gap:4,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-            <button onClick={()=>handleDuplicate(p.id)} title="Dupliquer" className="ba" style={{width:28,height:28,borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center'}}>📋</button>
-            <button onClick={()=>handleDelete(p.id)} title="Supprimer" className="ba" style={{width:28,height:28,borderRadius:7,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'var(--rs)',cursor:'pointer',fontSize:12,display:'flex',alignItems:'center',justifyContent:'center',opacity:deleting===p.id?.5:1}}>🗑</button>
-          </div>
-        </div>)}
+      {/* ── Breadcrumb ── */}
+      <div style={{padding:'6px 16px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:4,fontSize:11,flexShrink:0,background:'var(--crd)'}}>
+        <span onClick={()=>setCurrentFolder(null)} style={{cursor:'pointer',color:currentFolder?'#0ea5e9':'var(--t1)',fontWeight:currentFolder?400:600}}>🏠 Tous</span>
+        {currentFolder==='unassigned'&&<><span style={{color:'var(--t3)'}}>/</span><span style={{fontWeight:600,color:'var(--t1)'}}>Non classés</span></>}
+        {breadcrumb.map(f=><React.Fragment key={f.id}>
+          <span style={{color:'var(--t3)'}}>/</span>
+          <span onClick={()=>setCurrentFolder(f.id)} style={{cursor:'pointer',color:f.id===currentFolder?'var(--t1)':'#0ea5e9',fontWeight:f.id===currentFolder?600:400}}>{f.name}</span>
+        </React.Fragment>)}
+        <div style={{flex:1}}/>
+        <span style={{fontSize:9,color:'var(--t3)'}}>{subFolders.length} dossier{subFolders.length>1?'s':''} · {filtered.length} projet{filtered.length>1?'s':''}</span>
       </div>
 
-      {/* Footer */}
-      <div style={{padding:'12px 16px',borderTop:'1px solid var(--bd)',display:'flex',gap:8,flexShrink:0}}>
-        <button onClick={onClose} className="ba" style={{flex:1,padding:'10px',borderRadius:10,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Fermer</button>
+      <div style={{display:'flex',flex:1,minHeight:0}}>
+        {/* ── Sidebar (folder tree) ── */}
+        <div style={{width:180,flexShrink:0,borderRight:'1px solid var(--bd)',overflowY:'auto',padding:'8px 4px',background:'var(--bg)'}}>
+          <div style={{display:'flex',alignItems:'center',padding:'5px 8px',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:currentFolder===null?600:400,
+            background:currentFolder===null?'rgba(14,165,233,.1)':'transparent',color:currentFolder===null?'#0ea5e9':'var(--t2)',marginBottom:2}}
+            onClick={()=>setCurrentFolder(null)}
+            onDragOver={e=>{e.preventDefault();setDragOverFolder('root')}}
+            onDragLeave={()=>setDragOverFolder(null)}
+            onDrop={e=>{e.preventDefault();const pid=e.dataTransfer.getData('projectId');if(pid)moveToFolder(pid,null)}}>
+            <span style={{marginRight:4}}>🏠</span> Tous
+            <span style={{marginLeft:'auto',fontSize:9,color:'var(--t3)'}}>{projects.length}</span>
+          </div>
+          <div style={{display:'flex',alignItems:'center',padding:'5px 8px',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:currentFolder==='unassigned'?600:400,
+            background:currentFolder==='unassigned'?'rgba(245,158,11,.1)':'transparent',color:currentFolder==='unassigned'?'#f59e0b':'var(--t2)',marginBottom:2}}
+            onClick={()=>setCurrentFolder('unassigned')}
+            onDragOver={e=>{e.preventDefault();setDragOverFolder('unassigned')}}
+            onDragLeave={()=>setDragOverFolder(null)}
+            onDrop={e=>{e.preventDefault();const pid=e.dataTransfer.getData('projectId');if(pid)moveToFolder(pid,null)}}>
+            <span style={{marginRight:4}}>📄</span> Non classés
+            <span style={{marginLeft:'auto',fontSize:9,color:'var(--t3)'}}>{projects.filter(p=>!(projFolders[p.id])).length}</span>
+          </div>
+          <div style={{height:1,background:'var(--bd)',margin:'4px 8px',opacity:.4}}/>
+          <FolderTree parentId={null} depth={0}/>
+          {/* New folder button */}
+          <div style={{marginTop:8,padding:'0 8px'}}>
+            {showNewFolder?<div style={{display:'flex',gap:4}}>
+              <input value={newFolderName} onChange={e=>setNewFolderName(e.target.value)} placeholder="Nom..." autoFocus
+                onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')createFolder();if(e.key==='Escape')setShowNewFolder(false)}}
+                style={{flex:1,padding:'3px 6px',borderRadius:4,border:'1px solid var(--bdf)',background:'var(--inp)',color:'var(--t1)',fontSize:10,outline:'none'}}/>
+              <button onClick={createFolder} style={{padding:'3px 6px',borderRadius:4,border:'none',background:'#0ea5e9',color:'#fff',fontSize:10,cursor:'pointer'}}>✓</button>
+            </div>
+            :<button onClick={()=>setShowNewFolder(true)} style={{width:'100%',padding:'4px',borderRadius:6,border:'1px dashed var(--bd)',background:'transparent',color:'var(--t3)',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>+ Dossier</button>}
+          </div>
+        </div>
+
+        {/* ── Main content ── */}
+        <div style={{flex:1,overflowY:'auto',padding:12}}>
+          {loading?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>Chargement...</div>
+          :<>
+            {/* Subfolders */}
+            {subFolders.length>0&&<div style={{marginBottom:12}}>
+              <div style={{display:viewMode==='grid'?'grid':'flex',gridTemplateColumns:'repeat(auto-fill,minmax(120,1fr))',gap:8,flexDirection:'column'}}>
+                {subFolders.map(f=><div key={f.id} style={{display:'flex',alignItems:viewMode==='grid'?'center':'center',gap:8,
+                  padding:viewMode==='grid'?'14px 10px':'8px 12px',borderRadius:10,cursor:'pointer',border:'1px solid var(--bd)',
+                  background:dragOverFolder===f.id?'rgba(14,165,233,.08)':'var(--crd)',flexDirection:viewMode==='grid'?'column':'row',transition:'all .1s'}}
+                  onClick={()=>setCurrentFolder(f.id)}
+                  onDragOver={e=>{e.preventDefault();setDragOverFolder(f.id)}}
+                  onDragLeave={()=>setDragOverFolder(null)}
+                  onDrop={e=>{e.preventDefault();const pid=e.dataTransfer.getData('projectId');if(pid)moveToFolder(pid,f.id)}}
+                  onContextMenu={e=>{e.preventDefault();setRenamingFolder(f.id);setRenameVal(f.name)}}>
+                  <span style={{fontSize:viewMode==='grid'?28:18}}>📁</span>
+                  <div style={{textAlign:viewMode==='grid'?'center':'left'}}>
+                    <div style={{fontSize:11,fontWeight:600,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:viewMode==='grid'?100:200}}>{f.name}</div>
+                    <div style={{fontSize:9,color:'var(--t3)'}}>{projects.filter(p=>(projFolders[p.id]||null)===f.id).length} éléments</div>
+                  </div>
+                  {viewMode==='list'&&<div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
+                    <button onClick={()=>{setRenamingFolder(f.id);setRenameVal(f.name)}} style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>✏</button>
+                    <button onClick={()=>deleteFolder(f.id)} style={{width:24,height:24,borderRadius:5,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'#ef4444',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>🗑</button>
+                  </div>}
+                </div>)}
+              </div>
+            </div>}
+
+            {/* Projects */}
+            {filtered.length===0&&subFolders.length===0?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:12}}>
+              {projects.length===0?'Aucun projet. Créez votre premier projet !':search?'Aucun résultat pour "'+search+'"':'Dossier vide'}
+            </div>
+            :viewMode==='grid'?<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140,1fr))',gap:10}}>
+              {filtered.map(p=><div key={p.id} draggable onDragStart={e=>e.dataTransfer.setData('projectId',p.id)}
+                style={{padding:14,borderRadius:12,cursor:'pointer',border:'1px solid '+(p.id===currentProjectId?'rgba(196,50,74,.3)':'var(--bd)'),
+                  background:p.id===currentProjectId?'rgba(196,50,74,.06)':'var(--crd)',textAlign:'center',transition:'all .15s'}}
+                onClick={()=>onOpen(p.id)} onMouseOver={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseOut={e=>e.currentTarget.style.transform=''}>
+                <div style={{position:'absolute',top:6,right:6,display:'flex',gap:3,opacity:0,transition:'opacity .15s'}} className="proj-actions" onClick={e=>e.stopPropagation()}>
+                  <button onClick={()=>{setRenamingProject(p.id);setRenameProjVal(p.name)}} title="Renommer" style={{width:20,height:20,borderRadius:4,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✏</button>
+                  <button onClick={()=>handleDuplicate(p.id)} title="Dupliquer" style={{width:20,height:20,borderRadius:4,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>📋</button>
+                  <button onClick={()=>handleDelete(p.id)} title="Supprimer" style={{width:20,height:20,borderRadius:4,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'#ef4444',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center',opacity:deleting===p.id?.5:1}}>🗑</button>
+                </div>
+                <div style={{fontSize:32,marginBottom:6}}>🏗</div>
+                {renamingProject===p.id
+                  ?<input value={renameProjVal} onChange={e=>setRenameProjVal(e.target.value)} autoFocus
+                    onClick={e=>e.stopPropagation()}
+                    onBlur={()=>handleRename(p.id)}
+                    onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')handleRename(p.id);if(e.key==='Escape')setRenamingProject(null)}}
+                    style={{width:'90%',padding:'2px 4px',borderRadius:4,border:'1px solid #0ea5e9',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontWeight:600,outline:'none',textAlign:'center',fontFamily:'inherit'}}/>
+                  :<div style={{fontSize:11,fontWeight:600,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>}
+                <div style={{fontSize:9,color:'var(--t3)',marginTop:3}}>{fmtDate(p.updated_at)}</div>
+                <div style={{fontSize:9,color:'var(--t3)'}}>{(p.total_surface||0).toFixed(1)} m²</div>
+                {p.id===currentProjectId&&<div style={{fontSize:8,color:'var(--gn)',fontWeight:700,marginTop:3}}>● OUVERT</div>}
+              </div>)}
+            </div>
+            :<div style={{display:'flex',flexDirection:'column',gap:2}}>
+              {/* List header */}
+              <div style={{display:'grid',gridTemplateColumns:'1fr 120px 70px 80px',gap:8,padding:'4px 12px',fontSize:9,fontWeight:600,color:'var(--t3)',borderBottom:'1px solid var(--bd)'}}>
+                <span>Nom</span><span>Modifié</span><span>Surface</span><span>Actions</span>
+              </div>
+              {filtered.map(p=><div key={p.id} draggable onDragStart={e=>e.dataTransfer.setData('projectId',p.id)}
+                style={{display:'grid',gridTemplateColumns:'1fr 120px 70px 80px',gap:8,alignItems:'center',padding:'8px 12px',borderRadius:8,cursor:'pointer',
+                  border:'1px solid transparent',transition:'all .1s',
+                  background:p.id===currentProjectId?'rgba(196,50,74,.06)':'transparent'}}
+                onClick={()=>onOpen(p.id)} onMouseOver={e=>e.currentTarget.style.background=p.id===currentProjectId?'rgba(196,50,74,.08)':'var(--crd)'} onMouseOut={e=>e.currentTarget.style.background=p.id===currentProjectId?'rgba(196,50,74,.06)':'transparent'}>
+                <div style={{display:'flex',alignItems:'center',gap:8,minWidth:0}}>
+                  <span style={{fontSize:16}}>🏗</span>
+                  <div style={{minWidth:0,flex:1}}>
+                    {renamingProject===p.id
+                      ?<input value={renameProjVal} onChange={e=>setRenameProjVal(e.target.value)} autoFocus
+                        onClick={e=>e.stopPropagation()}
+                        onBlur={()=>handleRename(p.id)}
+                        onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')handleRename(p.id);if(e.key==='Escape')setRenamingProject(null)}}
+                        style={{width:'100%',padding:'2px 6px',borderRadius:4,border:'1px solid #0ea5e9',background:'var(--inp)',color:'var(--t1)',fontSize:12,fontWeight:600,outline:'none',fontFamily:'inherit'}}/>
+                      :<div style={{fontSize:12,fontWeight:600,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                        {p.name}{p.id===currentProjectId&&<span style={{fontSize:8,color:'var(--gn)',marginLeft:6,fontWeight:700}}>● OUVERT</span>}
+                      </div>}
+                    <div style={{fontSize:9,color:'var(--t3)'}}>{p.zones_count||0} zone{(p.zones_count||0)>1?'s':''}{projFolders[p.id]&&<span> · 📁 {(folders.find(f=>f.id===projFolders[p.id])||{}).name||''}</span>}</div>
+                  </div>
+                </div>
+                <span style={{fontSize:10,color:'var(--t3)'}}>{fmtDate(p.updated_at)}</span>
+                <span style={{fontSize:10,color:'var(--t2)'}}>{(p.total_surface||0).toFixed(1)} m²</span>
+                <div style={{display:'flex',gap:3}} onClick={e=>e.stopPropagation()}>
+                  <button onClick={()=>{setRenamingProject(p.id);setRenameProjVal(p.name)}} title="Renommer" style={{width:22,height:22,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:9,display:'flex',alignItems:'center',justifyContent:'center'}}>✏</button>
+                  <button onClick={()=>handleDuplicate(p.id)} title="Dupliquer" style={{width:22,height:22,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:9,display:'flex',alignItems:'center',justifyContent:'center'}}>📋</button>
+                  <button onClick={()=>handleDelete(p.id)} title="Supprimer" style={{width:22,height:22,borderRadius:5,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'#ef4444',cursor:'pointer',fontSize:9,display:'flex',alignItems:'center',justifyContent:'center',opacity:deleting===p.id?.5:1}}>🗑</button>
+                </div>
+              </div>)}
+            </div>}
+          </>}
+        </div>
+      </div>
+
+      {/* ── Status bar ── */}
+      <div style={{padding:'6px 16px',borderTop:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:12,fontSize:9,color:'var(--t3)',flexShrink:0}}>
+        <span>{projects.length} projet{projects.length>1?'s':''} au total</span>
+        <span>·</span>
+        <span>{folders.length} dossier{folders.length>1?'s':''}</span>
+        <div style={{flex:1}}/>
+        <span style={{fontSize:8}}>Glisser-déposer pour organiser</span>
       </div>
     </div>
   </div>;
