@@ -9690,8 +9690,9 @@ function ProjectsModal({onClose,onOpen,currentProjectId}){
   // Folders are {id, name, parentId (null=root)}
   const createFolder=()=>{
     if(!newFolderName.trim())return;
-    const nf={id:Date.now(),name:newFolderName.trim(),parentId:currentFolder};
-    saveFolders([...folders,nf]);setNewFolderName('');setShowNewFolder(false);
+    const nf={id:Date.now(),name:newFolderName.trim(),parentId:currentFolder===null?null:currentFolder};
+    const next=[...folders,nf];
+    saveFolders(next);setNewFolderName('');setShowNewFolder(false);
   };
   const deleteFolder=(fid)=>{
     // Move projects out and remove subfolder assignments
@@ -9704,8 +9705,8 @@ function ProjectsModal({onClose,onOpen,currentProjectId}){
   const saveProjFolders=(pf)=>{setProjFolders(pf);try{localStorage.setItem('kalepin_proj_folders',JSON.stringify(pf))}catch(e){}};
   const moveToFolder=(projId,folderId)=>{const nf={...projFolders,[projId]:folderId};saveProjFolders(nf);setDragOverFolder(null)};
 
-  // Get subfolders of current folder
-  const subFolders=(currentFolder===null||currentFolder==='unassigned')?[]:folders.filter(f=>f.parentId===currentFolder);
+  // Get subfolders of current folder (root null = show all root-level folders)
+  const subFolders=currentFolder==='unassigned'?[]:folders.filter(f=>f.parentId===(currentFolder||null));
   // Get projects: root (null) = ALL projects, folder = only that folder's projects
   const projsInFolder=currentFolder===null
     ? projects
@@ -9840,7 +9841,7 @@ function ProjectsModal({onClose,onOpen,currentProjectId}){
           :<>
             {/* Subfolders */}
             {subFolders.length>0&&<div style={{marginBottom:12}}>
-              <div style={{display:viewMode==='grid'?'grid':'flex',gridTemplateColumns:'repeat(auto-fill,minmax(120,1fr))',gap:8,flexDirection:'column'}}>
+              <div style={{display:viewMode==='grid'?'grid':'flex',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:8,flexDirection:'column'}}>
                 {subFolders.map(f=><div key={f.id} style={{display:'flex',alignItems:viewMode==='grid'?'center':'center',gap:8,
                   padding:viewMode==='grid'?'14px 10px':'8px 12px',borderRadius:10,cursor:'pointer',border:'1px solid var(--bd)',
                   background:dragOverFolder===f.id?'rgba(14,165,233,.08)':'var(--crd)',flexDirection:viewMode==='grid'?'column':'row',transition:'all .1s'}}
@@ -9856,7 +9857,7 @@ function ProjectsModal({onClose,onOpen,currentProjectId}){
                   </div>
                   {viewMode==='list'&&<div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
                     <button onClick={()=>{setRenamingFolder(f.id);setRenameVal(f.name)}} style={{width:24,height:24,borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>✏</button>
-                    <button onClick={()=>deleteFolder(f.id)} style={{width:24,height:24,borderRadius:5,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'#ef4444',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>🗑</button>
+                    <button onClick={()=>{if(confirm('Supprimer le dossier "'+f.name+'" ?'))deleteFolder(f.id)}} style={{width:24,height:24,borderRadius:5,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.06)',color:'#ef4444',cursor:'pointer',fontSize:10,display:'flex',alignItems:'center',justifyContent:'center'}}>🗑</button>
                   </div>}
                 </div>)}
               </div>
@@ -9866,10 +9867,10 @@ function ProjectsModal({onClose,onOpen,currentProjectId}){
             {filtered.length===0&&subFolders.length===0?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:12}}>
               {projects.length===0?'Aucun projet. Créez votre premier projet !':search?'Aucun résultat pour "'+search+'"':'Dossier vide'}
             </div>
-            :viewMode==='grid'?<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140,1fr))',gap:10}}>
+            :viewMode==='grid'?<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))',gap:10}}>
               {filtered.map(p=><div key={p.id} draggable onDragStart={e=>e.dataTransfer.setData('projectId',p.id)}
                 style={{padding:14,borderRadius:12,cursor:'pointer',border:'1px solid '+(p.id===currentProjectId?'rgba(196,50,74,.3)':'var(--bd)'),
-                  background:p.id===currentProjectId?'rgba(196,50,74,.06)':'var(--crd)',textAlign:'center',transition:'all .15s'}}
+                  background:p.id===currentProjectId?'rgba(196,50,74,.06)':'var(--crd)',textAlign:'center',transition:'all .15s',position:'relative'}}
                 onClick={()=>onOpen(p.id)} onMouseOver={e=>e.currentTarget.style.transform='translateY(-2px)'} onMouseOut={e=>e.currentTarget.style.transform=''}>
                 <div style={{position:'absolute',top:6,right:6,display:'flex',gap:3,opacity:0,transition:'opacity .15s'}} className="proj-actions" onClick={e=>e.stopPropagation()}>
                   <button onClick={()=>{setRenamingProject(p.id);setRenameProjVal(p.name)}} title="Renommer" style={{width:20,height:20,borderRadius:4,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontSize:8,display:'flex',alignItems:'center',justifyContent:'center'}}>✏</button>
