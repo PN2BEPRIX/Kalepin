@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no">
   <title>Kalepin — Calepinage Bardage Pro</title>
   <!-- PWA -->
   <link rel="manifest" href="manifest.json">
@@ -59,6 +59,27 @@
     .ztab .ztab-close{opacity:0;width:14px;height:14px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;flex-shrink:0;transition:.1s}
     .ztab:hover .ztab-close,.ztab.on .ztab-close{opacity:.5}.ztab .ztab-close:hover{opacity:1!important;background:var(--rsd);color:var(--rs)}
     .ztab-bar{display:flex;align-items:flex-end;gap:2px;overflow-x:auto;scrollbar-width:none;padding:0 4px;flex:1;min-width:0}
+    /* ── MOBILE RESPONSIVE ── */
+    @media(max-width:768px){
+      .mbx{min-width:0!important;width:95vw!important;max-width:95vw!important;padding:16px!important;border-radius:14px!important}
+      .dash-grid-3{grid-template-columns:1fr!important}
+      .dash-grid-4{grid-template-columns:1fr 1fr!important}
+      .dash-grid-modules{grid-template-columns:1fr!important}
+      .dash-grid-projects{grid-template-columns:1fr!important}
+      .land-hero-grid{grid-template-columns:1fr!important;gap:20px!important}
+      .land-features-grid{grid-template-columns:1fr!important;gap:12px!important}
+      .land-stats-grid{grid-template-columns:repeat(2,1fr)!important}
+      .land-plans-grid{grid-template-columns:1fr!important;gap:12px!important}
+      .land-faq-grid{grid-template-columns:1fr!important}
+      .login-2col{flex-direction:column!important;padding:20px 16px!important;gap:20px!important}
+      .login-left{display:block!important}
+      .login-features{grid-template-columns:1fr!important}
+      .login-form-wrap{width:100%!important;min-width:0!important}
+    }
+    @media(max-width:480px){
+      .dash-grid-4{grid-template-columns:1fr 1fr!important}
+    }
+
     .ztab-bar::-webkit-scrollbar{display:none}
     .ztab-add{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;font-size:14px;cursor:pointer;flex-shrink:0;opacity:.6;transition:.15s}
     .ztab-add:hover{opacity:1;background:var(--blg);color:var(--bl)}
@@ -531,346 +552,183 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
   useEffect(()=>{
     if(!zone||!calc||!mountRef.current)return;
     const W=mountRef.current.clientWidth,H=mountRef.current.clientHeight;
-    const scene=new THREE.Scene();
-    scene.background=new THREE.Color(0x1a1e2e);
-
-    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,300);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
-    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
-    renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.15;
-    renderer.outputEncoding=THREE.sRGBEncoding;
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
+    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,200);
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
     renderer.domElement.style.pointerEvents='auto';
     renderer.domElement.style.cursor='grab';
 
-    // ── Lumières ──
-    // Lumière ambiante douce (ciel couvert)
-    const amb=new THREE.AmbientLight(0xe8e8f0,0.6);scene.add(amb);
-    // Soleil (angle ~45° depuis la droite-haut)
-    const sun=new THREE.DirectionalLight(0xfff5e0,1.1);
-    sun.position.set(8,12,8);sun.castShadow=true;
-    sun.shadow.camera.near=0.1;sun.shadow.camera.far=80;
-    sun.shadow.camera.left=-15;sun.shadow.camera.right=15;
-    sun.shadow.camera.top=15;sun.shadow.camera.bottom=-15;
-    sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
-    sun.shadow.bias=-0.0003;
-    sun.shadow.normalBias=0.02;
-    scene.add(sun);
-    // Contre-jour bleuté depuis le bas-gauche
-    const fill=new THREE.DirectionalLight(0x8ab0ff,0.35);fill.position.set(-4,-2,3);scene.add(fill);
-    // Lumière de rebond du sol
-    const bounce=new THREE.PointLight(0xffeedd,0.2,30);bounce.position.set(0,-5,4);scene.add(bounce);
+    // Lights
+    const amb=new THREE.AmbientLight(0xffffff,0.5);scene.add(amb);
+    const dir=new THREE.DirectionalLight(0xffffff,0.8);dir.position.set(3,4,5);scene.add(dir);
+    const dir2=new THREE.DirectionalLight(0x8888ff,0.3);dir2.position.set(-2,2,-3);scene.add(dir2);
 
-    const Lm=zone.L/1000,Hm=zone.H/1000,depth=0.008;
+
+
+    const Lm=zone.L/1000,Hm=zone.H/1000,depth=0.008;// 8mm panel depth
     const zoneOuvs=zone.ouvs||[];
     const facadeGroup=new THREE.Group();
     facadeGroup.position.set(-Lm/2,-Hm/2,0);
 
-    // ── Matériaux ──
+    // Panel material with RAL color — adapt to finish
     const baseColor=new THREE.Color(ralColor||'#383E42');
     const fin=ralFinish||'mat';
     const isBrillant=fin==='brillant',isSatine=fin==='satiné',isMiroir=fin==='miroir',isBrosse=fin==='brossé';
-    const panMetal=isBrillant?0.75:isSatine?0.55:isMiroir?0.9:isBrosse?0.5:0.38;
-    const panRough=isBrillant?0.06:isSatine?0.2:isMiroir?0.02:isBrosse?0.38:0.52;
-    // Env map pour les reflets — scène riche pour beaux reflets vitrage
-    const cubeRT=new THREE.WebGLCubeRenderTarget(256);
-    const cubeCamera=new THREE.CubeCamera(0.1,50,cubeRT);
+    const panMetal=isBrillant?0.7:isSatine?0.5:isMiroir?0.85:isBrosse?0.45:0.35;
+    const panRough=isBrillant?0.08:isSatine?0.25:isMiroir?0.03:isBrosse?0.4:0.55;
+    // Procedural env map for reflections (cube render target)
+    const cubeRT=new THREE.WebGLCubeRenderTarget(64);
+    const cubeCamera=new THREE.CubeCamera(0.1,10,cubeRT);
+    // Simple fake environment: sky gradient
     const envScene=new THREE.Scene();
-    // Ciel dégradé
-    const envSky=new THREE.Mesh(new THREE.SphereGeometry(20,32,16),new THREE.MeshBasicMaterial({color:0x87CEEB,side:THREE.BackSide}));
+    envScene.background=new THREE.Color(0x4488cc);
+    const envFloor=new THREE.Mesh(new THREE.PlaneGeometry(20,20),new THREE.MeshBasicMaterial({color:0x334455}));
+    envFloor.rotation.x=-Math.PI/2;envFloor.position.y=-2;envScene.add(envFloor);
+    const envSky=new THREE.Mesh(new THREE.SphereGeometry(8,16,8),new THREE.MeshBasicMaterial({color:0x88bbee,side:THREE.BackSide}));
     envScene.add(envSky);
-    // Nuages blancs (sphères aplaties)
-    for(let ci=0;ci<8;ci++){
-      const cloud=new THREE.Mesh(new THREE.SphereGeometry(2+Math.random()*3,8,6),
-        new THREE.MeshBasicMaterial({color:0xffffff}));
-      cloud.position.set(-10+Math.random()*20,6+Math.random()*6,-8+Math.random()*16);
-      cloud.scale.set(1,.3,.6);envScene.add(cloud);
-    }
-    // Sol vert
-    const envFloor2=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshBasicMaterial({color:0x4a6a3a}));
-    envFloor2.rotation.x=-Math.PI/2;envFloor2.position.y=-5;envScene.add(envFloor2);
-    // Bâtiments en arrière-plan (reflets urbains)
-    for(let bi=0;bi<6;bi++){
-      const bh=3+Math.random()*8,bw=1.5+Math.random()*2;
-      const bldg=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bw),
-        new THREE.MeshBasicMaterial({color:new THREE.Color().setHSL(0,0,0.35+Math.random()*0.25)}));
-      bldg.position.set(-12+bi*5,bh/2-5,-15+Math.random()*4);envScene.add(bldg);
-    }
     cubeCamera.update(renderer,envScene);
-
     const panMat=new THREE.MeshStandardMaterial({color:baseColor.clone(),metalness:panMetal,roughness:panRough,
-      envMap:cubeRT.texture,envMapIntensity:isBrillant?1.4:isSatine?0.7:isMiroir?2.0:0.25});
-    panMat.needsUpdate=true;
-    const ossMat=new THREE.MeshStandardMaterial({color:0x909090,metalness:0.65,roughness:0.25});
-    const concreteMat=new THREE.MeshStandardMaterial({color:0xb0b0a8,metalness:0.04,roughness:0.92});
+      envMap:cubeRT.texture,envMapIntensity:isBrillant?1.2:isSatine?0.6:isMiroir?1.5:0.2});
+    const ossMat=new THREE.MeshStandardMaterial({color:0x888888,metalness:0.6,roughness:0.3});
+    const concreteMat=new THREE.MeshStandardMaterial({color:0xb0b0a8,metalness:0.05,roughness:0.95});// Concrete color
 
-    // ── Panels — positions corrigées avec joints réels ──
-    // Dans baseXBounds : pLeft du col bc>0 commence AU DÉBUT du joint précédent,
-    // donc pWa inclut ce joint. Il faut soustraire jGapsH[bc-1] pour le vrai panneau.
-    const jGapsH3=calc.jGapsH||[];// joint widths per gap (mm)
-    const jGapsV3=calc.jGapsV||[];
-    const minJointVis=0.002;// 2mm min visual joint in 3D
-
-    const getPanelRect=(pm)=>{
-      const bx1=calc.baseXBounds[pm.parentCol];
-      const by1=calc.baseYBounds[pm.parentRow];
-      const jPH=pm.parentCol>0?(jGapsH3[pm.parentCol-1]||0)/1000:0;
-      const jPV=pm.parentRow>0?(jGapsV3[pm.parentRow-1]||0)/1000:0;
-      const atLeft=Math.abs(pm.pLeft-bx1)<0.0005;
-      const atTop=Math.abs(pm.pTop-by1)<0.0005;
-      const l=pm.pLeft+(atLeft?jPH:0);
-      const t=pm.pTop+(atTop?jPV:0);
-      const w=pm.pWa-(atLeft?jPH:0);
-      const h=pm.pHa-(atTop?jPV:0);
-      return{l,t,w,h};
-    };
-
-    // Panneau normaux
-    const activePanels=calc.panelMap.filter(p=>!p.isVoid&&!p.isExcluded);
-    activePanels.forEach(pm=>{
-      const{l,t,w,h}=getPanelRect(pm);
-      if(w<0.001||h<0.001)return;
+    // Panels with joint-aware gaps
+    const jH=(zone.jointH||0)/1000,jV=(zone.jointV||0)/1000;// meters
+    const minGap=0.001;// 1mm min visual separation
+    const gapX=Math.max(minGap,jH/2),gapY=Math.max(minGap,jV/2);
+    const activePanels=calc.panelMap.filter(p=>!p.isVoid&&!p.isExcluded);// Exclude excluded panels
+    activePanels.forEach((pm,i)=>{
+      const w=pm.pWa-gapX*2,h=pm.pHa-gapY*2;if(w<0.001||h<0.001)return;
       const geo=new THREE.BoxGeometry(w,h,depth);
       const mesh=new THREE.Mesh(geo,panMat);
-      mesh.position.set(l+w/2,Hm-(t+h/2),depth/2);
+      mesh.position.set(pm.pLeft+pm.pWa/2,Hm-(pm.pTop+pm.pHa/2),depth/2);
       facadeGroup.add(mesh);
     });
-
-    // Panneaux exclus (balcons) — béton extrudé
+    // Excluded panels (balconies) - concrete extrusion
     const excludedPanels=calc.panelMap.filter(p=>p.isExcluded);
     excludedPanels.forEach(pm=>{
-      const{l,t,w,h}=getPanelRect(pm);
-      if(w<0.001||h<0.001)return;
-      const extDepth=(pm.exclusionDepth||1500)/1000;
+      const w=pm.pWa-gapX*2,h=pm.pHa-gapY*2;if(w<0.001||h<0.001)return;
+      const extDepth=(pm.exclusionDepth||1500)/1000;// Convert mm to meters
       const geo=new THREE.BoxGeometry(w,h,extDepth);
       const mesh=new THREE.Mesh(geo,concreteMat);
-      mesh.position.set(l+w/2,Hm-(t+h/2),depth+extDepth/2);
+      mesh.position.set(pm.pLeft+pm.pWa/2,Hm-(pm.pTop+pm.pHa/2),depth+extDepth/2);// Extrude forward
+      mesh.castShadow=true;
       facadeGroup.add(mesh);
     });
+    // Draw joint lines (visible dark lines between panels)
+    if(jH>0.001||jV>0.001){
+      const jMat=new THREE.MeshBasicMaterial({color:0x222222});
+      const merges=zone.merges||[];
+      // Horizontal joints (between rows)
+      calc.baseYBounds.forEach((yb,i)=>{if(i===0||i===calc.baseNr)return;
+        // Check if this joint is inside a merged panel
+        const isInsideMerge=merges.some(m=>i-1>=m.r1 && i-1<m.r2);
+        if(isInsideMerge)return;  // Skip this joint
+        const g=new THREE.BoxGeometry(Lm,Math.max(jV,0.001),0.001);
+        const m=new THREE.Mesh(g,jMat);m.position.set(Lm/2,Hm-yb,depth+0.001);facadeGroup.add(m)});
+      // Vertical joints (between cols)
+      calc.baseXBounds.forEach((xb,i)=>{if(i===0||i===calc.baseNc)return;
+        // Check if this joint is inside a merged panel
+        const isInsideMerge=merges.some(m=>i-1>=m.c1 && i-1<m.c2);
+        if(isInsideMerge)return;  // Skip this joint
+        const g=new THREE.BoxGeometry(Math.max(jH,0.001),Hm,0.001);
+        const m=new THREE.Mesh(g,jMat);m.position.set(xb,Hm/2,depth+0.001);facadeGroup.add(m)});
+    }
 
-    // ── Joints 3D : rainures visibles entre panneaux ──
-    // Matériau joint : aluminium sombre, légèrement métallique (EPDM / silicone noir)
-    const jointMat=new THREE.MeshStandardMaterial({color:0x111418,metalness:0.15,roughness:0.9});
-    const jointDepth=depth*1.5;// joints légèrement plus profonds que les panneaux
-    const merges=zone.merges||[];
-    // Ouvertures en mètres pour découper les joints
-    const ouvsMm=zoneOuvs.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,t:o.y/1000,b:(o.y+o.h)/1000}));
-
-    // ── Joints verticaux (entre colonnes) — découpés autour des ouvertures ──
-    calc.baseXBounds.slice(1,-1).forEach((xb,i)=>{
-      const isInsideMerge=merges.some(m=>i>=m.c1&&i<m.c2);
-      if(isInsideMerge)return;
-      const jw=Math.max(minJointVis,(jGapsH3[i]||0)/1000);
-      const jCx=xb+jw/2;
-      // Découper ce joint vertical en segments qui évitent les ouvertures
-      let segs=[{y1:0,y2:Hm}];
-      ouvsMm.forEach(o=>{
-        // Le joint passe dans l'ouverture si son x est entre oL et oR
-        if(jCx<o.l-jw/2||jCx>o.r+jw/2)return;
-        const ns=[];segs.forEach(s=>{
-          const oT=o.t,oB=o.b;
-          if(oT>=s.y2||oB<=s.y1){ns.push(s);return;}
-          if(s.y1<oT)ns.push({y1:s.y1,y2:oT});
-          if(oB<s.y2)ns.push({y1:oB,y2:s.y2});
-        });segs=ns;
-      });
-      segs.forEach(s=>{
-        const sh=s.y2-s.y1;if(sh<0.005)return;
-        const geo=new THREE.BoxGeometry(jw,sh,jointDepth);
-        const m=new THREE.Mesh(geo,jointMat);
-        m.position.set(jCx,Hm-s.y1-sh/2,jointDepth/2);
-        facadeGroup.add(m);
-      });
+    // Retours (cassettes around openings) — même couleur RAL que les panneaux
+    const retMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.9),metalness:panMetal,roughness:panRough+0.05});
+    const lintMat=retMat;
+    const appMat=retMat;
+    const fz=depth+0.002;// face z offset (in front of panels to avoid z-fighting)
+    zone.ouvs.forEach(o=>{
+      const ox=o.x/1000,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
+      const r=o.retours||{tG:150,tD:150,lin:150,app:150};
+      const fv=(o.faceVis||50)/1000;
+      const retD_default=0.15;// fallback retour depth
+      // Tableau G (left)
+      if(r.tG>0){
+        const gFace=new THREE.BoxGeometry(fv,oh,0.004);const mFace=new THREE.Mesh(gFace,retMat);
+        mFace.position.set(ox-fv/2,Hm-(oy+oh/2),fz);facadeGroup.add(mFace);
+        const rdG=r.tG/1000||retD_default;const gRet=new THREE.BoxGeometry(0.005,oh,rdG);const mRet=new THREE.Mesh(gRet,retMat);
+        mRet.position.set(ox,Hm-(oy+oh/2),-rdG/2);facadeGroup.add(mRet)}
+      // Tableau D (right)
+      if(r.tD>0){
+        const gFace=new THREE.BoxGeometry(fv,oh,0.004);const mFace=new THREE.Mesh(gFace,retMat);
+        mFace.position.set(ox+ow+fv/2,Hm-(oy+oh/2),fz);facadeGroup.add(mFace);
+        const rdD=r.tD/1000||retD_default;const gRet2=new THREE.BoxGeometry(0.005,oh,rdD);const mRet2=new THREE.Mesh(gRet2,retMat);
+        mRet2.position.set(ox+ow,Hm-(oy+oh/2),-rdD/2);facadeGroup.add(mRet2)}
+      // Linteau (top)
+      if(r.lin>0){
+        const gFace=new THREE.BoxGeometry(ow+fv*2,fv,0.004);const mFace=new THREE.Mesh(gFace,lintMat);
+        mFace.position.set(ox+ow/2,Hm-(oy-fv/2),fz);facadeGroup.add(mFace);
+        const rdL=r.lin/1000||retD_default;const gRetL=new THREE.BoxGeometry(ow,0.005,rdL);const mRetL=new THREE.Mesh(gRetL,lintMat);
+        mRetL.position.set(ox+ow/2,Hm-oy,-rdL/2);facadeGroup.add(mRetL)}
+      // Appui (bottom)
+      if(r.app>0){
+        const gFace=new THREE.BoxGeometry(ow+fv*2,fv,0.004);const mFace=new THREE.Mesh(gFace,appMat);
+        mFace.position.set(ox+ow/2,Hm-(oy+oh+fv/2),fz);facadeGroup.add(mFace);
+        const rdA=r.app/1000||retD_default;const gRetA=new THREE.BoxGeometry(ow,0.005,rdA);const mRetA=new THREE.Mesh(gRetA,appMat);
+        mRetA.position.set(ox+ow/2,Hm-(oy+oh),-rdA/2);facadeGroup.add(mRetA)}
+      // Window glass
+      const glassMat=new THREE.MeshStandardMaterial({color:0x1a3a5f,metalness:0.1,roughness:0.05,transparent:true,opacity:0.5,side:THREE.DoubleSide});
+      const glassGeo=new THREE.PlaneGeometry(ow,oh);const glassMesh=new THREE.Mesh(glassGeo,glassMat);
+      glassMesh.position.set(ox+ow/2,Hm-(oy+oh/2),-(r.tG/1000||retD_default)*0.5);facadeGroup.add(glassMesh);
     });
 
-    // ── Joints horizontaux (entre rangées) — découpés autour des ouvertures ──
-    calc.baseYBounds.slice(1,-1).forEach((yb,i)=>{
-      const isInsideMerge=merges.some(m=>i>=m.r1&&i<m.r2);
-      if(isInsideMerge)return;
-      const jv=Math.max(minJointVis,(jGapsV3[i]||0)/1000);
-      const jCy=Hm-yb-jv/2;
-      const jYworld=yb+jv/2;// position Y en coords façade
+    // Chassis frames — même couleur RAL que les cassettes
+    const chassisMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.85),metalness:panMetal,roughness:panRough+0.1});
+    zone.ouvs.forEach(o=>{
+      const ox=o.x/1000,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
+      const ct=0.04;
+      const mt=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,ct),chassisMat);
+      mt.position.set(ox+ow/2,Hm-(oy-ct/2),-ct/2);facadeGroup.add(mt);
+      const mb=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,ct),chassisMat);
+      mb.position.set(ox+ow/2,Hm-(oy+oh+ct/2),-ct/2);facadeGroup.add(mb);
+      const ml=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,ct),chassisMat);
+      ml.position.set(ox-ct/2,Hm-(oy+oh/2),-ct/2);facadeGroup.add(ml);
+      const mr=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,ct),chassisMat);
+      mr.position.set(ox+ow+ct/2,Hm-(oy+oh/2),-ct/2);facadeGroup.add(mr);
+    });
+
+    // Ossature (montants as vertical bars behind panels) - toggleable
+    const ossGroup=new THREE.Group();
+    const eM=zone.oss.eM/1000,eLi=zone.oss.eL/1000;
+    for(let i=0;i<Math.floor(Lm/eM)+1;i++){
+      const mx=i*eM;if(mx>Lm)break;
+      // Split montant around openings (interrupted, not removed)
+      let segments=[{y1:0,y2:Hm}];
+      zone.ouvs.forEach(o=>{const oT=o.y/1000,oB=(o.y+o.h)/1000,oL=o.x/1000,oR=(o.x+o.w)/1000;
+        if(mx<oL+0.01||mx>oR-0.01)return;// montant not inside this opening
+        const ns=[];segments.forEach(s=>{
+          if(oT>=s.y2||oB<=s.y1){ns.push(s);return}
+          if(s.y1<oT)ns.push({y1:s.y1,y2:oT});
+          if(oB<s.y2)ns.push({y1:oB,y2:s.y2});
+        });segments=ns;
+      });
+      segments.forEach(s=>{
+        const sh=s.y2-s.y1;if(sh<0.02)return;
+        const g=new THREE.BoxGeometry(0.05,sh,0.05);const m=new THREE.Mesh(g,ossMat);
+        m.position.set(mx,Hm-s.y1-sh/2,-0.04);ossGroup.add(m);
+      });
+    }
+    // Lisses
+    for(let i=0;i<Math.floor(Hm/eLi)+1;i++){
+      const ly=i*eLi;if(ly>Hm)break;
       let segs=[{x1:0,x2:Lm}];
-      ouvsMm.forEach(o=>{
-        if(jYworld<o.t-jv/2||jYworld>o.b+jv/2)return;
+      zone.ouvs.forEach(o=>{const oT=o.y/1000,oB=(o.y+o.h)/1000,oL=o.x/1000,oR=(o.x+o.w)/1000;
+        if(ly<oT+0.01||ly>oB-0.01)return;
         const ns=[];segs.forEach(s=>{
-          const oL=o.l,oR=o.r;
-          if(oL>=s.x2||oR<=s.x1){ns.push(s);return;}
+          if(oL>=s.x2||oR<=s.x1){ns.push(s);return}
           if(s.x1<oL)ns.push({x1:s.x1,x2:oL});
           if(oR<s.x2)ns.push({x1:oR,x2:s.x2});
         });segs=ns;
       });
       segs.forEach(s=>{
-        const sw=s.x2-s.x1;if(sw<0.005)return;
-        const geo=new THREE.BoxGeometry(sw,jv,jointDepth);
-        const m=new THREE.Mesh(geo,jointMat);
-        m.position.set(s.x1+sw/2,jCy,jointDepth/2);
-        facadeGroup.add(m);
-      });
-    });
-
-    // ── Matériaux retours : même finition RAL que les cassettes ──
-    const retMat=new THREE.MeshStandardMaterial({color:baseColor.clone(),metalness:panMetal,roughness:panRough+0.05,
-      envMap:cubeRT.texture,envMapIntensity:isBrillant?0.9:0.2,
-      polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
-    // ── Vitrage double couche (fond sombre + reflet) ──
-    const glassBackMat=new THREE.MeshStandardMaterial({
-      color:0x0f1a2a,metalness:0.0,roughness:0.98,transparent:true,opacity:0.7,side:THREE.DoubleSide});
-    const glassMat=new THREE.MeshStandardMaterial({
-      color:0xa8d4ef,metalness:0.45,roughness:0.01,transparent:true,opacity:0.3,
-      envMap:cubeRT.texture,envMapIntensity:2.2,side:THREE.DoubleSide});
-    // Cadre menuiserie alu
-    const frameMat=new THREE.MeshStandardMaterial({color:0x3a3a42,metalness:0.8,roughness:0.15,
-      envMap:cubeRT.texture,envMapIntensity:0.6});
-
-    // ── Retours + Vitrages pour chaque ouverture ──
-    const sheetT=0.003;// épaisseur tôle 3mm
-    zoneOuvs.forEach(o=>{
-      const ox=o.x/1000,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
-      const r=o.retours||{tG:150,tD:150,lin:150,app:150};
-      const fv=(o.faceVis||50)/1000;
-      const panZ=depth+0.001;// juste devant les panneaux
-
-      // ── RETOURS en profondeur (perpendiculaires à la facade, dans l'épaisseur du mur) ──
-      const rTG=r.tG/1000,rTD=r.tD/1000,rLin=r.lin/1000,rApp=r.app/1000;
-      // Tableau Gauche — retour en profondeur
-      if(rTG>0){
-        const rg=new THREE.Mesh(new THREE.BoxGeometry(sheetT,oh,rTG),retMat);
-        rg.position.set(ox-sheetT/2,Hm-(oy+oh/2),-rTG/2);facadeGroup.add(rg);
-      }
-      // Tableau Droit — retour en profondeur
-      if(rTD>0){
-        const rd2=new THREE.Mesh(new THREE.BoxGeometry(sheetT,oh,rTD),retMat);
-        rd2.position.set(ox+ow+sheetT/2,Hm-(oy+oh/2),-rTD/2);facadeGroup.add(rd2);
-      }
-      // Linteau — retour en profondeur
-      if(rLin>0){
-        const rl=new THREE.Mesh(new THREE.BoxGeometry(ow,sheetT,rLin),retMat);
-        rl.position.set(ox+ow/2,Hm-oy+sheetT/2,-rLin/2);facadeGroup.add(rl);
-      }
-      // Appui — retour en profondeur
-      if(rApp>0){
-        const ra=new THREE.Mesh(new THREE.BoxGeometry(ow,sheetT,rApp),retMat);
-        ra.position.set(ox+ow/2,Hm-(oy+oh)-sheetT/2,-rApp/2);facadeGroup.add(ra);
-      }
-
-      // ── FACES VISIBLES sur facade (recouvrement de la découpe) ──
-      if(fv>0.001){
-        // Tab G face visible
-        if(rTG>0){const fg=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,sheetT),retMat);
-          fg.position.set(ox-fv/2,Hm-(oy+oh/2),panZ);facadeGroup.add(fg);}
-        // Tab D face visible
-        if(rTD>0){const fd=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,sheetT),retMat);
-          fd.position.set(ox+ow+fv/2,Hm-(oy+oh/2),panZ);facadeGroup.add(fd);}
-        // Linteau face visible
-        if(rLin>0){const fl=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,sheetT),retMat);
-          fl.position.set(ox+ow/2,Hm-(oy-fv/2),panZ);facadeGroup.add(fl);}
-        // Appui face visible
-        if(rApp>0){const fa=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,sheetT),retMat);
-          fa.position.set(ox+ow/2,Hm-(oy+oh+fv/2),panZ);facadeGroup.add(fa);}
-      }
-
-      // ── VITRAGE double couche + éclairage intérieur ──
-      const maxRet=Math.max(rTG,rTD,rLin,rApp);
-      const glassZ=-maxRet*0.65;
-      // Warm interior glow (point light behind glass)
-      const intLight=new THREE.PointLight(0xffe4c4,0.12,2.5);
-      intLight.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ-0.3);facadeGroup.add(intLight);
-      // Interior wall (visible through glass)
-      const intWall=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.01,oh-0.01),
-        new THREE.MeshStandardMaterial({color:0xf5efe6,roughness:0.95,metalness:0}));
-      intWall.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ-0.25);facadeGroup.add(intWall);
-      // Couche arrière sombre (simule intérieur)
-      const gb=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.008,oh-0.008),glassBackMat);
-      gb.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ-0.003);facadeGroup.add(gb);
-      // Couche avant réfléchissante
-      const gm=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.006,oh-0.006),glassMat);
-      gm.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(gm);
-
-      // ── CADRE MENUISERIE ALU ──
-      const ft=0.030,fd2=0.042;
-      const fTop=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd2),frameMat);
-      fTop.position.set(ox+ow/2,Hm-(oy-ft/2),glassZ);facadeGroup.add(fTop);
-      const fBot=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd2),frameMat);
-      fBot.position.set(ox+ow/2,Hm-(oy+oh+ft/2),glassZ);facadeGroup.add(fBot);
-      const fL=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd2),frameMat);
-      fL.position.set(ox-ft/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(fL);
-      const fR=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd2),frameMat);
-      fR.position.set(ox+ow+ft/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(fR);
-      // Traverses pour grandes fenêtres
-      if(ow>0.7){const mull=new THREE.Mesh(new THREE.BoxGeometry(ft*0.65,oh,fd2),frameMat);mull.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(mull)}
-      if(oh>1.2){const hmull=new THREE.Mesh(new THREE.BoxGeometry(ow,ft*0.65,fd2),frameMat);hmull.position.set(ox+ow/2,Hm-(oy+oh/2),glassZ);facadeGroup.add(hmull)}
-      // Poignée pour portes
-      if(o.t==='Porte'||o.t==='Porte-fenêtre'||oh>1.8){
-        const hMat=new THREE.MeshStandardMaterial({color:0x888888,metalness:0.9,roughness:0.08,envMap:cubeRT.texture,envMapIntensity:0.5});
-        const hdl=new THREE.Mesh(new THREE.BoxGeometry(0.01,0.07,0.018),hMat);
-        hdl.position.set(ox+ow*0.7,Hm-(oy+oh*0.55),glassZ+fd2/2+0.005);facadeGroup.add(hdl);
-      }
-    });
-
-    // ── Ossature ──
-    const ossGroup=new THREE.Group();
-    const zOss=zone.oss||{eM:600,eL:1350};const eM=zOss.eM/1000,eLi=zOss.eL/1000;
-    const mW=0.06,mD=0.04;// montant section (60x40mm omega)
-    const lW=0.04,lD=0.04;// lisse section (40x40mm)
-    const ossZ=-mD/2-0.002;// z de l'ossature (derrière les panneaux)
-
-    // Exclusion ossature = rectangle de l'ouverture élargi de la demi-largeur des montants
-    // pour que rien de visible ne dépasse dans le cadre
-    const halfM=mW/2+0.005;// demi-largeur montant + 5mm
-    const halfL=lW/2+0.005;// demi-largeur lisse + 5mm
-    const ossExclusions=zoneOuvs.map(o=>({
-      l:o.x/1000-halfM, r:(o.x+o.w)/1000+halfM,
-      t:o.y/1000-halfL, b:(o.y+o.h)/1000+halfL
-    }));
-
-    // Montants verticaux — profil oméga (3 faces)
-    const montantsX=[];
-    for(let i=0;i<=Math.floor(Lm/eM);i++){
-      const mx=i*eM;if(mx>Lm+0.001)break;
-      montantsX.push(mx);
-      let segs=[{y1:0,y2:Hm}];
-      ossExclusions.forEach(ex=>{
-        if(mx<ex.l||mx>ex.r)return;
-        const ns=[];segs.forEach(s=>{
-          if(ex.t>=s.y2||ex.b<=s.y1){ns.push(s);return}
-          if(s.y1<ex.t)ns.push({y1:s.y1,y2:ex.t});
-          if(ex.b<s.y2)ns.push({y1:ex.b,y2:s.y2});
-        });segs=ns;
-      });
-      segs.forEach(s=>{
-        const sh=s.y2-s.y1;if(sh<0.02)return;
-        // Corps montant
-        const g=new THREE.BoxGeometry(mW,sh,mD);const m=new THREE.Mesh(g,ossMat);
-        m.position.set(mx,Hm-s.y1-sh/2,ossZ);ossGroup.add(m);
-        // Ailette gauche et droite (profil U)
-        const aw=0.01,ah=sh;
-        const al=new THREE.Mesh(new THREE.BoxGeometry(aw,ah,0.012),ossMat);
-        al.position.set(mx-mW/2-aw/2,Hm-s.y1-sh/2,ossZ+mD/2-0.005);ossGroup.add(al);
-        const ar=new THREE.Mesh(new THREE.BoxGeometry(aw,ah,0.012),ossMat);
-        ar.position.set(mx+mW/2+aw/2,Hm-s.y1-sh/2,ossZ+mD/2-0.005);ossGroup.add(ar);
-      });
-    }
-    // Lisses horizontales
-    const lissesY=[];
-    for(let i=0;i<=Math.floor(Hm/eLi);i++){
-      const ly=i*eLi;if(ly>Hm+0.001)break;
-      lissesY.push(ly);
-      let segs=[{x1:0,x2:Lm}];
-      ossExclusions.forEach(ex=>{
-        if(ly<ex.t||ly>ex.b)return;
-        const ns=[];segs.forEach(s=>{
-          if(ex.l>=s.x2||ex.r<=s.x1){ns.push(s);return}
-          if(s.x1<ex.l)ns.push({x1:s.x1,x2:ex.l});
-          if(ex.r<s.x2)ns.push({x1:ex.r,x2:s.x2});
-        });segs=ns;
-      });
-      segs.forEach(s=>{
         const sw=s.x2-s.x1;if(sw<0.02)return;
-        const g=new THREE.BoxGeometry(sw,lW,lD);const m=new THREE.Mesh(g,ossMat);
-        m.position.set(s.x1+sw/2,Hm-ly,ossZ-mD/2-lD/2+0.002);ossGroup.add(m);
+        const g=new THREE.BoxGeometry(sw,0.04,0.04);const m=new THREE.Mesh(g,ossMat);
+        m.position.set(s.x1+sw/2,Hm-ly,-0.04);ossGroup.add(m);
       });
     }
     facadeGroup.add(ossGroup);
@@ -878,6 +736,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     // ── Isolant (entre ossature et mur béton) ──
     const insulGroup=new THREE.Group();
     const insulD=insulThick/1000;// épaisseur en mètres
+    const mD=0.05;// V18 montant depth
     const insulZ=-mD-0.005;// juste derrière l'ossature
     const insulMat=new THREE.MeshStandardMaterial({
       color:0xe8c840,metalness:0.0,roughness:0.95,
@@ -1061,20 +920,54 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
 
     scene.add(facadeGroup);
 
-    // ── Concrete wall (toggleable) ──
+    // ── Concrete wall (toggleable, découpé autour des ouvertures) ──
     if(showWall){
       const wallThick=0.18;
-      const wallZ=insulZ-insulD-wallThick/2+0.005;// juste derrière l'isolant
-      const wallGeo=new THREE.BoxGeometry(Lm+0.1,Hm+0.1,wallThick);
+      const wallZ=-mD-insulD-0.005-wallThick/2;
       const wallMat=new THREE.MeshStandardMaterial({color:0x787878,roughness:0.95,metalness:0.02});
-      const wall=new THREE.Mesh(wallGeo,wallMat);
-      wall.position.set(0,0,wallZ);scene.add(wall);
+      // Découper le mur autour des ouvertures
+      const wallOuvs=zoneOuvs.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,t:o.y/1000,b:(o.y+o.h)/1000}));
+      let wallRects=[{l:0,r:Lm,t:0,b:Hm}];
+      wallOuvs.forEach(ouv=>{
+        const next=[];
+        wallRects.forEach(wr=>{
+          if(ouv.l>=wr.r||ouv.r<=wr.l||ouv.t>=wr.b||ouv.b<=wr.t){next.push(wr);return}
+          if(wr.t<ouv.t)next.push({l:wr.l,r:wr.r,t:wr.t,b:ouv.t});
+          if(ouv.b<wr.b)next.push({l:wr.l,r:wr.r,t:ouv.b,b:wr.b});
+          if(wr.l<ouv.l)next.push({l:wr.l,r:ouv.l,t:Math.max(wr.t,ouv.t),b:Math.min(wr.b,ouv.b)});
+          if(ouv.r<wr.r)next.push({l:ouv.r,r:wr.r,t:Math.max(wr.t,ouv.t),b:Math.min(wr.b,ouv.b)});
+        });wallRects=next;
+      });
+      wallRects.forEach(wr=>{
+        const w=wr.r-wr.l,h=wr.b-wr.t;if(w<0.01||h<0.01)return;
+        const wm=new THREE.Mesh(new THREE.BoxGeometry(w+0.005,h+0.005,wallThick),wallMat);
+        wm.position.set(wr.l+w/2-Lm/2,Hm/2-(wr.t+h/2),wallZ);
+        scene.add(wm);
+      });
     }
 
+    // ── Bavette (drip edge at bottom) ──
+    const bavH=0.04,bavD=0.06;
+    const bavGeo=new THREE.BoxGeometry(Lm+0.02,bavH,bavD);
+    const bavMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.85),metalness:0.5,roughness:0.4});
+    const bav=new THREE.Mesh(bavGeo,bavMat);
+    bav.position.set(0,-Hm/2-bavH/2,bavD/2-0.01);scene.add(bav);
+    const lipGeo=new THREE.BoxGeometry(Lm+0.02,0.012,0.025);
+    const lip=new THREE.Mesh(lipGeo,bavMat);
+    lip.position.set(0,-Hm/2-bavH-0.005,bavD/2+0.005);lip.rotation.x=0.3;scene.add(lip);
 
+    // ── Couvertine (coping at top) ──
+    const covH=0.035,covD=0.08;
+    const covGeo=new THREE.BoxGeometry(Lm+0.04,covH,covD);
+    const covMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.9),metalness:0.5,roughness:0.35});
+    const cov=new THREE.Mesh(covGeo,covMat);
+    cov.position.set(0,Hm/2+covH/2,covD/2-0.02);scene.add(cov);
+    const covLipGeo=new THREE.BoxGeometry(Lm+0.04,0.008,covD+0.02);
+    const covLip=new THREE.Mesh(covLipGeo,covMat);
+    covLip.position.set(0,Hm/2+covH+0.003,covD/2-0.02);scene.add(covLip);
 
     // Refs pour toggle visibilité sans recréer la scène
-    sceneRef.current={scene,camera,renderer,ossGroup,insulGroup,scaffGroup};
+    sceneRef.current={scene,camera,renderer,ossGroup,insulGroup,scaffGroup,facadeGroup};
 
     // Render loop
     const animate=()=>{
@@ -1182,7 +1075,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
 
 
   return<div style={{position:'absolute',inset:0,zIndex:10,background:'#13151f'}}>
-    <div ref={mountRef} style={{position:'absolute',inset:0,touchAction:'none',pointerEvents:'none'}}/>
+    <div ref={mountRef} style={{position:'absolute',inset:0,touchAction:'none'}}/>
     <div style={{position:'absolute',top:10,left:10,right:10,zIndex:50,display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}
       onMouseDown={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()}>
       <div style={{display:'flex',gap:5,padding:5,background:'rgba(12,14,28,.88)',borderRadius:10,backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)'}}>
@@ -1693,7 +1586,7 @@ function Paywall({user,onClose,currentPlan,subStatus}){
 
   return<div className="ov" onClick={onClose}>
     <div onClick={e=>e.stopPropagation()} style={{background:'#ede4db',border:'1px solid var(--bd)',borderRadius:24,
-      width:'min(960px,97vw)',maxHeight:'94vh',overflowY:'auto',
+      width:'min(960px,97vw)',maxWidth:'97vw',maxHeight:'94vh',overflowY:'auto',
       boxShadow:'0 40px 100px rgba(0,0,0,.7)',animation:'fu .25s ease-out'}}>
 
       {/* Header */}
@@ -1721,7 +1614,7 @@ function Paywall({user,onClose,currentPlan,subStatus}){
       </div>
 
       {/* Plans */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,padding:'0 24px 28px'}}>
+      <div className="dash-grid-modules" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,padding:'0 16px 28px'}}>
         {plans.map(plan=>{
           const isSel=selected===plan.id;
           const isCur=isCurPlan(plan.id);
@@ -3040,7 +2933,7 @@ function AuthGate({children}){
     </div>
 
     {/* ── NAV ── */}
-    <nav style={{position:'sticky',top:0,zIndex:50,background:'rgba(10,10,15,.88)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(42,14,20,.05)'}}>
+    <nav style={{position:'sticky',top:0,zIndex:50,background:'rgba(250,245,240,.95)',backdropFilter:'blur(16px)',borderBottom:'1px solid rgba(196,50,74,.08)',boxShadow:'0 1px 6px rgba(0,0,0,.03)'}}>
       <div style={{maxWidth:1200,margin:'0 auto',padding:'0 32px',height:68,display:'flex',alignItems:'center',justifyContent:'space-between'}}>
         {/* Logo */}
         <div style={{display:'flex',alignItems:'center',gap:10}}>
@@ -3056,8 +2949,8 @@ function AuthGate({children}){
         </div>
         {/* CTAs */}
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <button onClick={()=>setMode('login')} style={{padding:'8px 18px',borderRadius:8,border:'1px solid rgba(255,255,255,.1)',background:'transparent',color:'#7a3848',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .2s'}}
-            onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.2)';e.currentTarget.style.color='#2a0e14'}} onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.1)';e.currentTarget.style.color='#7a3848'}}>
+          <button onClick={()=>setMode('login')} style={{padding:'8px 18px',borderRadius:8,border:'1px solid rgba(42,14,20,.15)',background:'transparent',color:'#7a3848',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .2s'}}
+            onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(42,14,20,.3)';e.currentTarget.style.color='#2a0e14'}} onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(42,14,20,.15)';e.currentTarget.style.color='#7a3848'}}>
             Se connecter
           </button>
           <button onClick={()=>setMode('signup')} style={{padding:'8px 20px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:12,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 4px 14px rgba(196,50,74,.4)',transition:'all .2s'}}
@@ -3089,7 +2982,7 @@ function AuthGate({children}){
           Créer un compte gratuit
         </button>
         <button onClick={()=>setMode('login')} style={{padding:'16px 28px',borderRadius:12,border:'1px solid rgba(255,255,255,.1)',background:'rgba(42,14,20,.04)',color:'#7a3848',fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .2s'}}
-          onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.2)';e.currentTarget.style.color='#2a0e14'}} onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(255,255,255,.1)';e.currentTarget.style.color='#7a3848'}}>
+          onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(42,14,20,.3)';e.currentTarget.style.color='#2a0e14'}} onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(42,14,20,.15)';e.currentTarget.style.color='#7a3848'}}>
           J'ai déjà un compte
         </button>
       </div>
@@ -3110,7 +3003,7 @@ function AuthGate({children}){
               ))}
             </div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'200px 1fr 185px',height:300}}>
+          <div className="land-hero-grid" style={{display:'grid',gridTemplateColumns:'200px 1fr 185px',height:300}}>
             <div style={{borderRight:'1px solid rgba(42,14,20,.06)',padding:12,display:'flex',flexDirection:'column',gap:7}}>
               {[{l:'Zone',v:'Façade Nord',c:'#c4324a'},{l:'Longueur',v:'18 400 mm',c:'#2a0e14'},{l:'Hauteur',v:'7 200 mm',c:'#2a0e14'},{l:'Panneau',v:'2000×600',c:'#0ea5e9'},{l:'Pose',v:'Vertical',c:'#10b981'},{l:'Joint H/V',v:'8 mm',c:'#7a3848'}].map((r,i)=>(
                 <div key={i} style={{background:'rgba(42,14,20,.03)',borderRadius:7,padding:'7px 9px',border:'1px solid rgba(42,14,20,.04)'}}>
@@ -3155,7 +3048,7 @@ function AuthGate({children}){
 
     {/* ══ CHIFFRES CLÉS ══ */}
     <section style={{position:'relative',zIndex:1,borderTop:'1px solid rgba(42,14,20,.05)',borderBottom:'1px solid rgba(42,14,20,.05)',background:'rgba(255,255,255,.015)'}}>
-      <div style={{maxWidth:1200,margin:'0 auto',padding:'36px 32px',display:'grid',gridTemplateColumns:'repeat(4,1fr)'}}>
+      <div className="land-stats-grid" style={{maxWidth:1200,margin:'0 auto',padding:'24px 16px',display:'grid',gridTemplateColumns:'repeat(4,1fr)'}}>
         {[
           {n:'3',u:'modules',d:'Cassettes · Brique · Carrelage',c:'#c4324a'},
           {n:'-80%',u:"d'erreurs",d:"Métrés et coupes calculés automatiquement, plus de ressaisie manuelle",c:'#0ea5e9'},
@@ -3177,7 +3070,7 @@ function AuthGate({children}){
         <h2 style={{fontSize:'clamp(30px,4.5vw,52px)',fontWeight:900,letterSpacing:'-.03em',marginBottom:14}}>Tout ce qu’il faut pour<br/><span style={{color:'#c4324a'}}>chaque corps de métier</span></h2>
         <p style={{fontSize:15,color:'#a86878',maxWidth:480,margin:'0 auto'}}>Trois modules spécialisés, construits pour les contraintes réelles du terrain.</p>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:18}}>
+      <div className="land-features-grid" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:18}}>
         {[
           {emoji:'🏢',title:'Façade Cassettes',sub:'Bardage métallique · Composite · Trespa · Alucobond',color:'#c4324a',bg:'rgba(196,50,74,.06)',border:'rgba(196,50,74,.2)',badge:'Gratuit',features:['Calepinage multi-zones sur photo ou PDF',"Gestion de l'ossature (montants, lisses, renforts)","Placement d'ouvertures (fenêtres, portes, allèges)",'Palette RAL complète, finitions mat/brillant/satiné','Vue 3D interactive avec rotation et ombres','Export PDF plan numéroté + fiche de débit Excel','QR Code chantier scannable par zone']},
           {emoji:'🧱',title:'Façade Brique',sub:'Parement · Plaquettes · Clinker · Béton',color:'#d97706',bg:'rgba(217,119,6,.07)',border:'rgba(217,119,6,.22)',badge:'Pro',features:['Appareillages classiques (Panneresse, Flamande, Anglaise)','Joints horizontaux et verticaux au mm près','Coupes et retours calculés automatiquement','Multi-façades dans un même projet','Personnalisation couleur brique et joint','Métrés détaillés par façade et par type','Export PDF + tableau quantitatif Excel']},
@@ -3214,7 +3107,7 @@ function AuthGate({children}){
           <h2 style={{fontSize:'clamp(30px,4.5vw,50px)',fontWeight:900,letterSpacing:'-.03em',marginBottom:10}}>De l’image au dossier d’exécution</h2>
           <p style={{fontSize:15,color:'#a86878'}}>Un processus guidé, pensé pour aller vite sans sacrifier la précision.</p>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:0,position:'relative'}}>
+        <div className="land-plans-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:0,position:'relative'}}>
           <div style={{position:'absolute',top:42,left:'12.5%',right:'12.5%',height:1,background:'linear-gradient(90deg,transparent,rgba(196,50,74,.5),rgba(196,50,74,.2),rgba(42,14,20,.04),transparent)',zIndex:0}}/>
           {[
             {n:'01',ic:'📐',title:'Importer le plan',desc:"Chargez une photo, un PDF ou un DXF. Kalepin vous guide pour calibrer l'échelle en 2 clics via deux points de référence."},
@@ -3237,7 +3130,7 @@ function AuthGate({children}){
 
     {/* ══ AVANTAGES ══ */}
     <section id="avantages" style={{position:'relative',zIndex:1,padding:'96px 32px',maxWidth:1200,margin:'0 auto'}}>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:80,alignItems:'center'}}>
+      <div className="land-faq-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:80,alignItems:'center'}}>
         <div>
           <div style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:14}}>Pourquoi Kalepin ?</div>
           <h2 style={{fontSize:'clamp(26px,3.5vw,44px)',fontWeight:900,letterSpacing:'-.03em',marginBottom:18,lineHeight:1.1}}>Tout ce que vous faisiez<br/>à la main, <span style={{color:'#c4324a'}}>automatisé.</span></h2>
@@ -3286,7 +3179,7 @@ function AuthGate({children}){
           <div style={{fontSize:11,fontWeight:700,color:'#c4324a',letterSpacing:'.15em',textTransform:'uppercase',marginBottom:10}}>Fait pour vous</div>
           <h2 style={{fontSize:'clamp(28px,4vw,46px)',fontWeight:900,letterSpacing:'-.03em'}}>Qui utilise Kalepin ?</h2>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
+        <div className="land-stats-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14}}>
           {[
             {ic:'🏗️',t:'Façadiers & bardeurs',d:"Calepins cassettes et brique sur le terrain ou au bureau. Gagnez vos AO avec des dossiers techniques impeccables."},
             {ic:'🔲',t:'Carreleurs & poseurs',d:'Optimisez vos poses et réduisez les chutes. Générez vos commandes exactes dès la visite de site.'},
@@ -3321,7 +3214,7 @@ function AuthGate({children}){
             Créer mon compte gratuit
           </button>
           <button onClick={()=>setMode('login')} style={{padding:'16px 26px',borderRadius:12,border:'1px solid rgba(255,255,255,.1)',background:'rgba(42,14,20,.04)',color:'#7a7a8e',fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .2s'}}
-            onMouseOver={e=>{e.currentTarget.style.color='#2a0e14';e.currentTarget.style.borderColor='rgba(255,255,255,.2)'}} onMouseOut={e=>{e.currentTarget.style.color='#7a7a8e';e.currentTarget.style.borderColor='rgba(255,255,255,.1)'}}>
+            onMouseOver={e=>{e.currentTarget.style.color='#2a0e14';e.currentTarget.style.borderColor='rgba(42,14,20,.3)'}} onMouseOut={e=>{e.currentTarget.style.color='#7a7a8e';e.currentTarget.style.borderColor='rgba(42,14,20,.15)'}}>
             Se connecter
           </button>
         </div>
@@ -3338,9 +3231,9 @@ function AuthGate({children}){
         <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:900,color:'#fff',fontStyle:'italic'}}>K</div>
         <span style={{fontSize:13,fontWeight:700,color:'#2a0e14'}}>Kalepin</span>
       </div>
-      <p style={{fontSize:10,color:'#deccbf',textAlign:'center'}}>© 2025 Kalepin · Calepinage technique automatisé pour les professionnels du bâtiment</p>
+      <p style={{fontSize:10,color:'#8a7a7e',textAlign:'center'}}>© 2025 Kalepin · Calepinage technique automatisé pour les professionnels du bâtiment</p>
       <div style={{display:'flex',gap:18}}>
-        {['Façadiers','Carreleurs','Architectes'].map(t=><span key={t} style={{fontSize:10,color:'#deccbf',fontWeight:600}}>{t}</span>)}
+        {['Façadiers','Carreleurs','Architectes'].map(t=><span key={t} style={{fontSize:10,color:'#8a7a7e',fontWeight:600}}>{t}</span>)}
       </div>
     </footer>
 
@@ -3365,32 +3258,32 @@ function AuthGate({children}){
       </div>
     </div>
     {/* ── Main: 2-col layout ── */}
-    <div style={{maxWidth:1060,margin:'0 auto',padding:'48px 28px 40px',display:'flex',gap:48,alignItems:'flex-start',position:'relative',zIndex:1}}>
+    <div className="login-2col" style={{maxWidth:1060,margin:'0 auto',padding:'48px 28px 40px',display:'flex',gap:48,alignItems:'flex-start',position:'relative',zIndex:1}}>
       {/* ── Left: Presentation ── */}
-      <div style={{flex:1,minWidth:0,display:window.innerWidth<768?'none':'block'}}>
+      <div className="login-left" style={{flex:1,minWidth:0}}>
         <div style={{marginBottom:36}}>
           <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'4px 14px',borderRadius:20,background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.12)',marginBottom:20}}>
             <span style={{width:6,height:6,borderRadius:3,background:'#34d399'}}/><span style={{fontSize:10,fontWeight:600,color:'#34d399'}}>Bêta ouverte — Accès gratuit</span>
           </div>
-          <h1 style={{fontSize:28,fontWeight:800,lineHeight:1.15,color:'#2a0e14',marginBottom:14,letterSpacing:'-.02em'}}>
+          <h1 style={{fontSize:'clamp(20px,5vw,28px)',fontWeight:800,lineHeight:1.15,color:'#2a0e14',marginBottom:14,letterSpacing:'-.02em'}}>
             L'outil de calepinage<br/><span style={{background:'linear-gradient(135deg,#c4324a,#e8697f)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>pour les pros du bâtiment</span>
           </h1>
-          <p style={{fontSize:13,color:'rgba(255,255,255,.4)',lineHeight:1.7,marginBottom:0}}>
+          <p style={{fontSize:13,color:'#6a5a5e',lineHeight:1.7,marginBottom:0}}>
             Du plan à la commande en quelques minutes. Cassettes, briques, carrelage.
           </p>
         </div>
         {/* ── 4 features ── */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:28}}>
+        <div className="login-features" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:28}}>
           {[{icon:'🎯',title:'Zéro erreur de commande',desc:'Calcul auto des surfaces, chutes et nombre exact de panneaux.',color:'#c4324a'},
             {icon:'🧊',title:'Rendu 3D interactif',desc:'Visualisation réaliste avec finitions RAL, ombres et matériaux.',color:'#0ea5e9'},
             {icon:'📊',title:'Métrés instantanés',desc:'Export Excel/PDF avec métrés par zone et ossature en 1 clic.',color:'#34d399'},
             {icon:'📐',title:'Import DXF / PDF',desc:'Importez vos plans architecte, calibrez et tracez vos zones.',color:'#f59e0b'}
-          ].map((f,i)=><div key={i} style={{padding:'14px 16px',borderRadius:14,background:'rgba(0,0,0,.25)',border:'1px solid rgba(42,14,20,.04)'}}>
+          ].map((f,i)=><div key={i} style={{padding:'14px 16px',borderRadius:14,background:'rgba(42,14,20,.04)',border:'1px solid rgba(42,14,20,.08)'}}>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
               <span style={{fontSize:18}}>{f.icon}</span>
               <span style={{fontSize:11,fontWeight:700,color:f.color}}>{f.title}</span>
             </div>
-            <div style={{fontSize:10,color:'rgba(255,255,255,.35)',lineHeight:1.6}}>{f.desc}</div>
+            <div style={{fontSize:10,color:'#8a7a7e',lineHeight:1.6}}>{f.desc}</div>
           </div>)}
         </div>
         {/* ── QR Code spotlight ── */}
@@ -3398,7 +3291,7 @@ function AuthGate({children}){
           <div style={{width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,rgba(42,14,20,.09),rgba(42,14,20,.03))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>📱</div>
           <div>
             <div style={{fontSize:12,fontWeight:700,color:'#2a0e14',marginBottom:3}}>QR Code Chantier</div>
-            <div style={{fontSize:10,color:'rgba(255,255,255,.35)',lineHeight:1.6}}>Vue 3D sur téléphone via QR code sur le plan papier.</div>
+            <div style={{fontSize:10,color:'#8a7a7e',lineHeight:1.6}}>Vue 3D sur téléphone via QR code sur le plan papier.</div>
           </div>
         </div>
         {/* ── 3 modules ── */}
@@ -3412,12 +3305,12 @@ function AuthGate({children}){
         </div>
       </div>
       {/* ── Right: Login form ── */}
-      <div style={{width:380,flexShrink:0}}>
+      <div className="login-form-wrap" style={{width:380,maxWidth:'100%',flexShrink:0}}>
         <div style={{textAlign:'center',marginBottom:24}}>
           <div style={{fontSize:18,fontWeight:700,color:'#2a0e14',marginBottom:4}}>{isForgot?'Réinitialiser le mot de passe':isSignup?'Créer votre compte':'Bon retour 👋'}</div>
           <div style={{fontSize:12,color:'#a86878'}}>{isForgot?'On vous envoie un lien par email':isSignup?'Accès bêta gratuit':'Connectez-vous pour retrouver vos projets'}</div>
         </div>
-      <div style={{background:'rgba(22,22,31,.6)',border:'1px solid rgba(42,14,20,.06)',borderRadius:20,padding:'28px 24px',backdropFilter:'blur(12px)'}}>
+      <div style={{background:'rgba(255,255,255,.7)',border:'1px solid rgba(42,14,20,.1)',borderRadius:20,padding:'28px 24px',backdropFilter:'blur(12px)',boxShadow:'0 8px 32px rgba(42,14,20,.06)'}}>
         {!isForgot&&<div style={{display:'flex',background:'rgba(42,14,20,.03)',borderRadius:10,padding:3,marginBottom:24,gap:2}}>
           {[['login','Connexion'],['signup','Inscription']].map(([m,l])=><button key={m} onClick={()=>switchMode(m)} style={{
             flex:1,padding:'8px',borderRadius:8,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',
@@ -5977,7 +5870,7 @@ function App({user,profile,signOut,subStatus}){
 
           {/* ─── STICKY NAV ─── */}
           <div style={{position:'sticky',top:0,zIndex:20,background:'rgba(10,10,15,.88)',backdropFilter:'blur(14px)',borderBottom:'1px solid rgba(42,14,20,.05)'}}>
-            <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 24px',display:'flex',alignItems:'center',gap:12}}>
+            <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 16px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
               <div style={{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(196,50,74,.3)'}}>
                 <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".95"/><rect x="23" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="3" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="23" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".55"/></svg>
               </div>
@@ -5990,23 +5883,116 @@ function App({user,profile,signOut,subStatus}){
           </div>
 
           {/* ─── DASHBOARD HEADER ─── */}
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'36px 24px 10px'}}>
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'24px 16px 10px'}}>
             <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:6}}>
               <div style={{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,color:'#fff',fontWeight:900,boxShadow:'0 6px 20px rgba(196,50,74,.25)'}}>K</div>
               <div>
-                <div style={{fontSize:20,fontWeight:800,color:'#2a0e14',letterSpacing:'-.02em'}}>Bonjour{user?.email?' '+user.email.split('@')[0]:''}  👋</div>
-                <div style={{fontSize:11,color:'rgba(255,255,255,.3)',marginTop:2}}>Que souhaitez-vous calepiner aujourd'hui ?</div>
+                <div style={{fontSize:20,fontWeight:800,color:'#2a0e14',letterSpacing:'-.02em'}}>Bonjour{user?.user_metadata?.full_name?' '+user.user_metadata.full_name:user?.email?' '+user.email.split('@')[0]:''}  👋</div>
+                <div style={{fontSize:11,color:'#a89898',marginTop:2}}>Que souhaitez-vous calepiner aujourd'hui ?</div>
               </div>
               <div style={{flex:1}}/>
               {isAdmin&&<button onClick={()=>setStep('admin')} style={{padding:'7px 16px',borderRadius:8,border:'1px solid rgba(196,50,74,.25)',background:'rgba(42,14,20,.07)',color:'#c4324a',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>⚡ Admin</button>}
             </div>
           </div>
 
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 24px 44px'}}>
+          {/* ─── PROFILE & STATS ─── */}
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 20px'}}>
+            <div className="dash-grid-3" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14}}>
+              
+              {/* Profile Card */}
+              <div style={{gridColumn:'1/2',padding:20,borderRadius:18,background:'linear-gradient(135deg,rgba(196,50,74,.06),rgba(196,50,74,.01))',border:'1px solid rgba(196,50,74,.1)',position:'relative',overflow:'hidden'}}>
+                <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#c4324a,#a0243a)',opacity:.5}}/>
+                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
+                  <div style={{width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff',fontWeight:800,boxShadow:'0 4px 16px rgba(196,50,74,.25)'}}>
+                    {(user?.user_metadata?.full_name||user?.email||'U').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
+                  </div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:14,fontWeight:700,color:'#2a0e14',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.user_metadata?.full_name||user?.email?.split('@')[0]||'Utilisateur'}</div>
+                    <div style={{fontSize:10,color:'#a89898',marginTop:2}}>{user?.email}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
+                  <span style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:planLimits.color+'18',color:planLimits.color}}>{planLimits.name}</span>
+                  {subStatus?.status==='trialing'&&<span style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(245,158,11,.12)',color:'#f59e0b'}}>⏳ Essai {subStatus.daysLeft}j</span>}
+                  {profile?.role==='superadmin'&&<span style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(139,92,246,.12)',color:'#8b5cf6'}}>Admin</span>}
+                </div>
+                <div style={{display:'flex',gap:8}}>
+                  <button onClick={()=>setShowAccount(true)} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid rgba(42,14,20,.08)',background:'rgba(42,14,20,.03)',color:'#6a5a5e',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>⚙ Mon profil</button>
+                  {planLimits.id==='free'&&<button onClick={()=>setShowPaywall(true)} style={{flex:1,padding:'7px 0',borderRadius:8,border:'none',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 3px 12px rgba(196,50,74,.2)'}}>⚡ Passer Pro</button>}
+                </div>
+              </div>
+
+              {/* Stats Card */}
+              <div style={{padding:20,borderRadius:18,background:'rgba(42,14,20,.025)',border:'1px solid rgba(42,14,20,.06)'}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#6a5a5e',marginBottom:14,display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:14}}>📊</span> Statistiques
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(196,50,74,.04)'}}>
+                    <div style={{fontSize:22,fontWeight:800,color:'#c4324a',fontFamily:'monospace'}}>{dashProjects.length}</div>
+                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>Projets</div>
+                  </div>
+                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(14,165,233,.04)'}}>
+                    <div style={{fontSize:22,fontWeight:800,color:'#0ea5e9',fontFamily:'monospace'}}>{dashProjects.reduce((s,p)=>s+(p.zones_count||0),0)}</div>
+                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>Zones</div>
+                  </div>
+                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(34,197,94,.04)'}}>
+                    <div style={{fontSize:22,fontWeight:800,color:'#22c55e',fontFamily:'monospace'}}>{dashProjects.reduce((s,p)=>s+(p.total_surface||0),0).toFixed(1)}</div>
+                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>m² total</div>
+                  </div>
+                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(168,104,120,.04)'}}>
+                    <div style={{fontSize:22,fontWeight:800,color:'#a86878',fontFamily:'monospace'}}>{(()=>{try{return getPdfExportCount().count}catch(e){return 0}})()}</div>
+                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>PDF ce mois</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Plan & Limits Card */}
+              <div style={{padding:20,borderRadius:18,background:'rgba(42,14,20,.025)',border:'1px solid rgba(42,14,20,.06)'}}>
+                <div style={{fontSize:11,fontWeight:700,color:'#6a5a5e',marginBottom:14,display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:14}}>🎯</span> Mon plan
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,padding:'10px 14px',borderRadius:12,background:planLimits.color+'0a',border:'1px solid '+planLimits.color+'20'}}>
+                  <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,'+planLimits.color+','+planLimits.color+'aa)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:'#fff',fontWeight:800}}>{planLimits.name[0]}</div>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:planLimits.color}}>{planLimits.name}</div>
+                    <div style={{fontSize:9,color:'#a89898'}}>{planLimits.price===0?'Gratuit':planLimits.price+'€/mois'}</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:6}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10}}>
+                    <span style={{color:'#6a5a5e'}}>Projets</span>
+                    <span style={{fontWeight:700,color:'var(--t1)',fontFamily:'monospace'}}>{dashProjects.length}{planLimits.maxProjects>0?' / '+planLimits.maxProjects:' / ∞'}</span>
+                  </div>
+                  {planLimits.maxProjects>0&&<div style={{height:4,borderRadius:2,background:'rgba(42,14,20,.06)',overflow:'hidden'}}>
+                    <div style={{height:'100%',borderRadius:2,background:dashProjects.length>=planLimits.maxProjects?'#ef4444':'#c4324a',width:Math.min(100,dashProjects.length/planLimits.maxProjects*100)+'%',transition:'width .3s'}}/>
+                  </div>}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10}}>
+                    <span style={{color:'#6a5a5e'}}>Exports PDF</span>
+                    <span style={{fontWeight:700,color:'var(--t1)',fontFamily:'monospace'}}>{(()=>{try{return getPdfExportCount().count}catch(e){return 0}})()}{planLimits.pdfPerMonth>0?' / '+planLimits.pdfPerMonth:' / ∞'}</span>
+                  </div>
+                  {planLimits.pdfPerMonth>0&&<div style={{height:4,borderRadius:2,background:'rgba(42,14,20,.06)',overflow:'hidden'}}>
+                    <div style={{height:'100%',borderRadius:2,background:(()=>{try{return getPdfExportCount().count>=planLimits.pdfPerMonth?'#ef4444':'#0ea5e9'}catch(e){return'#0ea5e9'}})(),width:(()=>{try{return Math.min(100,getPdfExportCount().count/planLimits.pdfPerMonth*100)}catch(e){return 0}})()+'%',transition:'width .3s'}}/>
+                  </div>}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10,marginTop:2}}>
+                    <span style={{color:'#6a5a5e'}}>Vue 3D</span>
+                    <span style={{fontWeight:700,color:planLimits.has3D?'#22c55e':'#a89898'}}>{planLimits.has3D?'✓ Activée':'✗ Désactivée'}</span>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10}}>
+                    <span style={{color:'#6a5a5e'}}>Modules</span>
+                    <span style={{fontWeight:700,color:'var(--t1)'}}>{planLimits.modules?.length||1}/{3}</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 16px 44px'}}>
             <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
               <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Modules
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
+            <div className="dash-grid-modules" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
               {/* Facade cassettes */}
               <div onClick={()=>{setProjectType('facade');setStep('welcome')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(42,14,20,.04),rgba(196,50,74,.01))',border:'1.5px solid rgba(196,50,74,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
                 onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(42,14,20,.09)'}}
@@ -6049,7 +6035,7 @@ function App({user,profile,signOut,subStatus}){
           </div>
 
           {/* ─── MES PROJETS ─── */}
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 24px 56px'}}>
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 56px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
               <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',display:'flex',alignItems:'center',gap:8}}>
                 <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Mes projets ({dashProjects.length})
@@ -6094,7 +6080,7 @@ function App({user,profile,signOut,subStatus}){
               <div style={{fontSize:16,fontWeight:700,color:'var(--t2)',marginBottom:8}}>Aucun projet pour l'instant</div>
               <div style={{fontSize:12,color:'var(--t3)',lineHeight:1.6}}>Choisissez un module ci-dessus pour créer<br/>votre premier calepinage</div>
             </div>
-            :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
+            :<div className="dash-grid-projects" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
               {dashProjects.map(p=>{
                 const pType=(()=>{try{const d=typeof p.data==='string'?JSON.parse(p.data):p.data;if(!d)return'cassette';if(d.projectType==='brique'||d.brickBond)return'brique';if(d.projectType==='carrelage'||d.tileW)return'carrelage';return'cassette'}catch(e){return'cassette'}})();
                 const typeConf={cassette:{icon:'🏢',label:'Cassettes',color:'196,50,74',gradient:'#c4324a,#a0243a'},brique:{icon:'🧱',label:'Brique',color:'217,119,6',gradient:'#d97706,#b45309'},carrelage:{icon:'🔲',label:'Carrelage',color:'14,165,233',gradient:'#0ea5e9,#0284c7'}}[pType];
@@ -6119,7 +6105,7 @@ function App({user,profile,signOut,subStatus}){
                       </div>
                     </div>
                     {/* Stats row */}
-                    <div style={{display:'flex',gap:0,borderRadius:10,overflow:'hidden',background:'rgba(0,0,0,.15)'}}>
+                    <div style={{display:'flex',gap:0,borderRadius:10,overflow:'hidden',background:'rgba(0,0,0,.15)',flexWrap:'nowrap',minWidth:0}}>
                       <div style={{flex:1,padding:'8px 12px',borderRight:'1px solid rgba(42,14,20,.04)'}}>
                         <div style={{fontSize:15,fontWeight:800,color:'rgb('+typeConf.color+')',fontFamily:'monospace'}}>{p.zones_count||0}</div>
                         <div style={{fontSize:8,color:'var(--t3)',marginTop:1,fontWeight:600}}>ZONE{(p.zones_count||0)>1?'S':''}</div>
@@ -6142,7 +6128,47 @@ function App({user,profile,signOut,subStatus}){
             </div>}
           </div>
 
-          
+          {/* ─── ACTIVITE RECENTE ─── */}
+          {dashProjects.length>0&&<div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 20px'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Activité récente
+            </div>
+            <div className="dash-grid-projects" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))',gap:10}}>
+              {[...dashProjects].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,6).map(p=>{
+                const ago=(()=>{try{const d=Date.now()-new Date(p.updated_at);if(d<3600000)return'Il y a '+Math.max(1,Math.floor(d/60000))+' min';if(d<86400000)return'Il y a '+Math.floor(d/3600000)+'h';if(d<604800000)return'Il y a '+Math.floor(d/86400000)+' jour'+(Math.floor(d/86400000)>1?'s':'');return new Date(p.updated_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}catch(e){return'-'}})();
+                return<div key={'act-'+p.id} onClick={()=>openCloudProject(p.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,background:'rgba(42,14,20,.02)',border:'1px solid rgba(42,14,20,.04)',cursor:'pointer',transition:'all .2s'}}
+                  onMouseOver={e=>{e.currentTarget.style.background='rgba(42,14,20,.05)';e.currentTarget.style.borderColor='rgba(196,50,74,.15)'}}
+                  onMouseOut={e=>{e.currentTarget.style.background='rgba(42,14,20,.02)';e.currentTarget.style.borderColor='rgba(42,14,20,.04)'}}>
+                  <div style={{width:8,height:8,borderRadius:4,background:'#c4324a',flexShrink:0,opacity:.5}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontSize:11,fontWeight:600,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
+                    <div style={{fontSize:9,color:'#a89898'}}>{ago}</div>
+                  </div>
+                  <span style={{fontSize:9,color:'#c4324a',fontWeight:600}}>Ouvrir →</span>
+                </div>})}
+            </div>
+          </div>}
+
+          {/* ─── RACCOURCIS ─── */}
+          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 56px'}}>
+            <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
+              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Raccourcis
+            </div>
+            <div className="dash-grid-4" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+              {[
+                {icon:'⚙',label:'Mon profil',desc:'Nom, email, mot de passe',fn:()=>setShowAccount(true)},
+                {icon:'📂',label:'Mes dossiers',desc:'Gérer les projets',fn:()=>setShowProjects(true)},
+                {icon:'💳',label:'Abonnement',desc:planLimits.name+' — '+(planLimits.price===0?'Gratuit':planLimits.price+'€/mois'),fn:()=>setShowPaywall(true)},
+                {icon:'🚀',label:'Nouveau projet',desc:'Créer un calepinage',fn:()=>{if(planLimits.maxProjects>0&&dashProjects.length>=planLimits.maxProjects){setShowPaywall(true);return;}setShowQuickCreate(true)}},
+              ].map((s,i)=><div key={i} onClick={s.fn} style={{padding:'14px 16px',borderRadius:14,background:'rgba(42,14,20,.02)',border:'1px solid rgba(42,14,20,.05)',cursor:'pointer',transition:'all .2s'}}
+                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.2)';e.currentTarget.style.transform='translateY(-2px)'}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(42,14,20,.05)';e.currentTarget.style.transform='none'}}>
+                <div style={{fontSize:22,marginBottom:6}}>{s.icon}</div>
+                <div style={{fontSize:11,fontWeight:700,color:'var(--t1)',marginBottom:2}}>{s.label}</div>
+                <div style={{fontSize:9,color:'#a89898',lineHeight:1.4}}>{s.desc}</div>
+              </div>)}
+            </div>
+          </div>
 
         </div>}
 
@@ -7321,6 +7347,9 @@ function BriqueApp({onBack,user}){
   const[hoverBk,setHoverBk]=useState(null);
   const[view3D,setView3D]=useState(false);
   const[showPlanMasse,setShowPlanMasse]=useState(false);
+  const[bkMasse3D,setBkMasse3D]=useState(false);
+  const bkMasseRef=useRef(null);
+  const bkMasseSceneRef=useRef({});
   const[bkBreaks,setBkBreaks]=useState(()=>new Set());
   const toggleBkBreak=(i)=>setBkBreaks(b=>{const n=new Set(b);n.has(i)?n.delete(i):n.add(i);return n});
   const[selOuv,setSelOuv]=useState(null);// selected opening id
@@ -7495,60 +7524,26 @@ function BriqueApp({onBack,user}){
     el.innerHTML='';
 
     const scene=new THREE.Scene();
-    scene.background=new THREE.Color(0x1a1e2e);
-    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
-    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
-    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+    scene.background=new THREE.Color(0x1a1a2a);
+    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,200);
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     el.appendChild(renderer.domElement);
     renderer.domElement.style.cursor='grab';
+    renderer.domElement.style.pointerEvents='auto';
 
-    const amb=new THREE.AmbientLight(0xe8e8f0,0.6);scene.add(amb);
-    const sun=new THREE.DirectionalLight(0xfff5e0,1.1);
-    sun.position.set(8,12,8);sun.castShadow=true;
-    sun.shadow.camera.near=0.1;sun.shadow.camera.far=80;
-    sun.shadow.camera.left=-20;sun.shadow.camera.right=20;
-    sun.shadow.camera.top=20;sun.shadow.camera.bottom=-20;
-    sun.shadow.mapSize.width=2048;sun.shadow.mapSize.height=2048;
-    sun.shadow.bias=-0.0005;scene.add(sun);
-    const fill=new THREE.DirectionalLight(0x8ab0ff,0.3);fill.position.set(-4,-2,3);scene.add(fill);
-    const bounce=new THREE.PointLight(0xffeedd,0.2,30);bounce.position.set(0,-5,4);scene.add(bounce);
-
-    const groundMat=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(50,50),groundMat);
-    ground.rotation.x=-Math.PI/2;ground.position.y=0;ground.receiveShadow=true;scene.add(ground);
+    scene.add(new THREE.AmbientLight(0xffffff,0.5));
+    const sun=new THREE.DirectionalLight(0xffffff,0.8);sun.position.set(3,4,5);scene.add(sun);
+    const fill=new THREE.DirectionalLight(0x8888ff,0.3);fill.position.set(-2,2,-3);scene.add(fill);
 
     const brickDepth=0.065;
     const brickHash=(i)=>{let h=i*2654435761;h=((h>>>16)^h)*0x45d9f3b;h=((h>>>16)^h)*0x45d9f3b;h=(h>>>16)^h;return(h&0xffff)/65535};
 
-    // ── Compute chain (same logic as plan de masse) ──
-    const chain=[];let cx=0,cy=0;
-    facades.forEach((f,i)=>{
-      if(i>0&&bkBreaks.has(i)){const prev=chain[chain.length-1];cx=prev.x2+prev.nx*2+1.5;cy=prev.y2+prev.ny*2;}
-      const a=(f.angle||0)*Math.PI/180;
-      const nx=Math.sin(a),ny=-Math.cos(a);
-      const dx=-ny,dy=nx;
-      const Lm=f.facW/1000,Hm=f.facH/1000;
-      const x1=cx,y1=cy;
-      const x2=cx+dx*Lm,y2=cy+dy*Lm;
-      chain.push({x1,y1,x2,y2,nx,ny,dx,dy,Lm,Hm,f,i});
-      cx=x2;cy=y2;
-    });
-
-    // ── Center of all facades ──
-    let allMnx=Infinity,allMny=Infinity,allMxx=-Infinity,allMxy=-Infinity,maxHm=0;
-    chain.forEach(c=>{
-      [c.x1,c.x2].forEach(x=>{allMnx=Math.min(allMnx,x);allMxx=Math.max(allMxx,x)});
-      [c.y1,c.y2].forEach(y=>{allMny=Math.min(allMny,y);allMxy=Math.max(allMxy,y)});
-      if(c.Hm>maxHm)maxHm=c.Hm;
-    });
-    const centerX=(allMnx+allMxx)/2, centerZ=(allMny+allMxy)/2;
-
-    // ── Build each facade ──
-    chain.forEach((ch,fi)=>{
-      const f=ch.f;
-      const Wm=ch.Lm,Hm=ch.Hm;
+    // ── Single active facade 3D ──
+    const f=facades[activeFacIdx]||facades[0];
+    const Wm=f.facW/1000,Hm=f.facH/1000;
+    const fi=activeFacIdx;
+    {
       const fOpenings=f.openings||[];
       const facBricks=computeBricksForFacade(f);
 
@@ -7676,28 +7671,14 @@ function BriqueApp({onBack,user}){
         }
       });
 
-      // ── Position facade in 3D world using chain ──
-      // Facade is built centered on X, with Y up. We need to rotate+translate.
-      const midX=(ch.x1+ch.x2)/2-centerX, midZ=(ch.y1+ch.y2)/2-centerZ;
-      const angle=Math.atan2(ch.dx,ch.dy);// rotation around Y axis
-      facadeGroup.rotation.y=-angle;
-      facadeGroup.position.set(midX,0,midZ);
-
-      // Highlight active facade
-      if(fi===activeFacIdx){
-        const edgeMat=new THREE.MeshBasicMaterial({color:0xd97706,transparent:true,opacity:0.08});
-        const edgePlane=new THREE.Mesh(new THREE.PlaneGeometry(Wm+0.1,Hm+0.1),edgeMat);
-        edgePlane.position.set(0,Hm/2,brickDepth+0.005);facadeGroup.add(edgePlane);
-      }
-
+      // Center facade at origin
       scene.add(facadeGroup);
-    });
+    }
 
-    // Camera
-    const totalSpan=Math.max(allMxx-allMnx,allMxy-allMny,maxHm)*1.6;
-    const dist0=Math.max(totalSpan,3);
+    // Camera for single facade
+    const dist0=Math.max(Wm,Hm)*1.8;
     zoomRef.current=dist0;
-    const tgt=new THREE.Vector3(0,maxHm/2,0);
+    const tgt=new THREE.Vector3(0,Hm/2,0);
 
     const onDown=e=>{dragRef.current={x:e.clientX,y:e.clientY,rx:rotRef.current.x,ry:rotRef.current.y,btn:e.button};renderer.domElement.style.cursor='grabbing'};
     const onUp=()=>{dragRef.current=null;renderer.domElement.style.cursor='grab'};
@@ -7733,6 +7714,106 @@ function BriqueApp({onBack,user}){
     window.addEventListener('resize',onResize);
     return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onResize);renderer.dispose();el.innerHTML='';sceneRef.current={}};
   },[view3D,facades,activeFacIdx,bkBreaks]);
+
+  // ── PLAN DE MASSE 3D (brique) ──
+  useEffect(()=>{
+    if(!bkMasse3D||!showPlanMasse||!bkMasseRef.current)return;
+    const el=bkMasseRef.current;
+    const W=el.clientWidth,H=el.clientHeight;if(W<10||H<10)return;
+    if(bkMasseSceneRef.current.renderer){bkMasseSceneRef.current.renderer.dispose()}
+    el.innerHTML='';
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
+    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.style.pointerEvents='auto';
+    scene.add(new THREE.AmbientLight(0xffffff,0.5));
+    const sun2=new THREE.DirectionalLight(0xffffff,0.8);sun2.position.set(3,4,5);scene.add(sun2);
+    const fill2b=new THREE.DirectionalLight(0x8888ff,0.3);fill2b.position.set(-2,2,-3);scene.add(fill2b);
+    const ground2=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x222233,roughness:.95}));
+    ground2.rotation.x=-Math.PI/2;ground2.position.y=-.01;scene.add(ground2);
+    const brickDepth2=0.065;
+    const brickHash2=(i)=>{let h=i*2654435761;h=((h>>>16)^h)*0x45d9f3b;h=((h>>>16)^h)*0x45d9f3b;h=(h>>>16)^h;return(h&0xffff)/65535};
+    // Chain
+    const chain2=[];let cx2=0,cy2=0;
+    facades.forEach((f,i)=>{
+      if(i>0&&bkBreaks.has(i)){const prev=chain2[chain2.length-1];cx2=prev.x2+prev.nx*2+1.5;cy2=prev.y2+prev.ny*2;}
+      const a=(f.angle||0)*Math.PI/180;const nx=Math.sin(a),ny=-Math.cos(a),dx=-ny,dy=nx;
+      const Lm=f.facW/1000,Hm=f.facH/1000;
+      const x1=cx2,y1=cy2,x2b=cx2+dx*Lm,y2b=cy2+dy*Lm;
+      chain2.push({x1,y1,x2:x2b,y2:y2b,nx,ny,dx,dy,Lm,Hm,f,i});cx2=x2b;cy2=y2b;
+    });
+    let mnx2=Infinity,mny2=Infinity,mxx2=-Infinity,mxy2=-Infinity,maxH2=0;
+    chain2.forEach(ch=>{[ch.x1,ch.x2].forEach(x=>{mnx2=Math.min(mnx2,x);mxx2=Math.max(mxx2,x)});[ch.y1,ch.y2].forEach(y=>{mny2=Math.min(mny2,y);mxy2=Math.max(mxy2,y)});if(ch.Hm>maxH2)maxH2=ch.Hm});
+    const cx0=(mnx2+mxx2)/2,cz0=(mny2+mxy2)/2;
+    chain2.forEach((ch,fi)=>{
+      const f=ch.f,Wm=ch.Lm,Hm2=ch.Hm;
+      const facadeGroup=new THREE.Group();
+      const jcCol2=new THREE.Color(f.jointColor||'#c8bfb0');
+      const wallMat2=new THREE.MeshStandardMaterial({color:jcCol2,roughness:0.92});
+      // Wall
+      const wm2=new THREE.Mesh(new THREE.BoxGeometry(Wm,Hm2,0.012),wallMat2);wm2.position.set(0,Hm2/2,-0.006);facadeGroup.add(wm2);
+      // Bricks (simplified instanced)
+      const facBricks2=computeBricksForFacade(f);
+      const bricks2=facBricks2.bricks;
+      if(bricks2.length>0){
+        const geo=new THREE.BoxGeometry(1,1,brickDepth2);
+        const col1=new THREE.Color(f.bkColor||'#b5654a');
+        const mat2=new THREE.MeshStandardMaterial({color:col1,roughness:0.82});
+        const mesh2=new THREE.InstancedMesh(geo,mat2,bricks2.length);
+        const dummy=new THREE.Object3D();
+        const colorAttr=new Float32Array(bricks2.length*3);
+        const br=col1.r,bg=col1.g,bb=col1.b;
+        bricks2.forEach((b,i)=>{
+          const sx=b.w/1000,sy=b.h/1000;
+          dummy.position.set(b.x/1000+sx/2-Wm/2,Hm2-(b.y/1000+sy/2),brickDepth2/2);
+          dummy.scale.set(sx,sy,1);dummy.updateMatrix();mesh2.setMatrixAt(i,dummy.matrix);
+          const shade=(brickHash2(i*3+7)-0.5)*0.022;
+          colorAttr[i*3]=Math.max(0,Math.min(1,br+shade));
+          colorAttr[i*3+1]=Math.max(0,Math.min(1,bg+shade*0.8));
+          colorAttr[i*3+2]=Math.max(0,Math.min(1,bb+shade*0.5));
+        });
+        mesh2.instanceColor=new THREE.InstancedBufferAttribute(colorAttr,3);
+        mesh2.instanceMatrix.needsUpdate=true;facadeGroup.add(mesh2);
+      }
+      // Openings glass
+      (f.openings||[]).forEach(op=>{
+        const ow=op.w/1000,oh=op.h/1000;
+        const ocx=op.x/1000+ow/2-Wm/2,ocy=Hm2-op.y/1000-oh/2;
+        const glm=new THREE.Mesh(new THREE.PlaneGeometry(ow,oh),new THREE.MeshStandardMaterial({color:0x1a3a5f,transparent:true,opacity:0.5,side:2}));
+        glm.position.set(ocx,ocy,-0.08);facadeGroup.add(glm);
+        const fmat=new THREE.MeshStandardMaterial({color:jcCol2.clone().multiplyScalar(0.7),roughness:0.85});
+        const ct=0.04;
+        const t=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,ct),fmat);t.position.set(ocx,ocy+oh/2+ct/2,-ct/2);facadeGroup.add(t);
+        const bt=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,ct),fmat);bt.position.set(ocx,ocy-oh/2-ct/2,-ct/2);facadeGroup.add(bt);
+        const lt=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,ct),fmat);lt.position.set(ocx-ow/2-ct/2,ocy,-ct/2);facadeGroup.add(lt);
+        const rt=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,ct),fmat);rt.position.set(ocx+ow/2+ct/2,ocy,-ct/2);facadeGroup.add(rt);
+      });
+      // Position
+      facadeGroup.position.set((ch.x1+ch.x2)/2-cx0,0,(ch.y1+ch.y2)/2-cz0);
+      facadeGroup.rotation.y=Math.PI-Math.atan2(ch.dx,ch.dy);
+      scene.add(facadeGroup);
+    });
+    // Camera
+    const span2=Math.max(mxx2-mnx2,mxy2-mny2,maxH2)*2;
+    const rot2={x:-.3,y:.4};const zm2={v:Math.max(span2,4)};const pan2={x:0,y:0};
+    const tgt2=new THREE.Vector3(0,maxH2/2,0);
+    let dr2=null;
+    const onD2=e=>{dr2={x:e.clientX,y:e.clientY,rx:rot2.x,ry:rot2.y,btn:e.button}};
+    const onU2=()=>{dr2=null};
+    const onM2=e=>{if(!dr2)return;if(dr2.btn===2||dr2.btn===1){pan2.x+=(e.clientX-dr2.x)*0.003;pan2.y-=(e.clientY-dr2.y)*0.003;dr2.x=e.clientX;dr2.y=e.clientY}else{rot2.y=dr2.ry+(e.clientX-dr2.x)*0.005;rot2.x=Math.max(-1.2,Math.min(0.6,dr2.rx+(e.clientY-dr2.y)*0.005))}};
+    const onW2=e=>{e.preventDefault();zm2.v=Math.max(1,Math.min(80,zm2.v*(1+e.deltaY*0.001)))};
+    renderer.domElement.addEventListener('mousedown',onD2);renderer.domElement.addEventListener('mouseup',onU2);
+    renderer.domElement.addEventListener('mouseleave',onU2);renderer.domElement.addEventListener('mousemove',onM2);
+    renderer.domElement.addEventListener('wheel',onW2,{passive:false});renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+    let raf2;const anim2=()=>{raf2=requestAnimationFrame(anim2);
+      camera.position.set(tgt2.x+zm2.v*Math.sin(rot2.y)*Math.cos(rot2.x)+pan2.x,tgt2.y+zm2.v*Math.sin(-rot2.x)+pan2.y,tgt2.z+zm2.v*Math.cos(rot2.y)*Math.cos(rot2.x));
+      camera.lookAt(tgt2.x+pan2.x,tgt2.y+pan2.y,tgt2.z);renderer.render(scene,camera)};anim2();
+    bkMasseSceneRef.current={renderer,raf:raf2};
+    const onR2=()=>{const w=el.clientWidth,h=el.clientHeight;if(w>0&&h>0){camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}};
+    window.addEventListener('resize',onR2);
+    return()=>{cancelAnimationFrame(raf2);window.removeEventListener('resize',onR2);renderer.dispose();el.innerHTML='';bkMasseSceneRef.current={}};
+  },[bkMasse3D,showPlanMasse,facades,bkBreaks]);
 
   // ── EXPORT PDF ──
   const exportPDF=async()=>{
@@ -8127,12 +8208,15 @@ function BriqueApp({onBack,user}){
         <span style={{fontSize:14,fontWeight:700,color:'var(--t1)'}}>Plan de masse — Brique</span>
         <span style={{fontSize:10,color:'var(--t3)'}}>{facades.length} facade{facades.length>1?'s':''}</span>
         <div style={{flex:1}}/>
+        <button onClick={()=>setBkMasse3D(v=>!v)} style={{padding:'5px 14px',borderRadius:7,border:'1px solid '+(bkMasse3D?'rgba(139,92,246,.4)':'rgba(139,92,246,.2)'),background:bkMasse3D?'rgba(139,92,246,.15)':'rgba(139,92,246,.05)',color:'#8b5cf6',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{bkMasse3D?'↩ Plan 2D':'🧊 Vue 3D'}</button>
         <button onClick={()=>{const nf=mkFacade('Facade '+(facades.length+1));setFacades(fs=>[...fs,nf])}} style={{padding:'5px 14px',borderRadius:7,border:'1px solid rgba(217,119,6,.2)',background:'rgba(217,119,6,.06)',color:'#d97706',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Facade</button>
       </div>
       {/* Content */}
       <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+        {/* 3D View */}
+        {bkMasse3D&&<div ref={bkMasseRef} style={{flex:1,background:'#1a1a2a',cursor:'grab'}}/>}
         {/* SVG Plan */}
-        <div style={{flex:1,position:'relative'}}>
+        {!bkMasse3D&&<div style={{flex:1,position:'relative'}}>
           {(()=>{
             // Compute chain of facades with break support
             const chain=[];let cx=0,cy=0;
@@ -8191,7 +8275,7 @@ function BriqueApp({onBack,user}){
               {chain.length>0&&<circle cx={chain[chain.length-1].x2} cy={chain[chain.length-1].y2} r="0.1" fill="#fff" fillOpacity="0.2"/>}
             </svg>
           })()}
-        </div>
+        </div>}
         {/* Side panel */}
         <div style={{width:260,borderLeft:'1px solid var(--bd)',background:'var(--pnl)',padding:12,overflowY:'auto',display:'flex',flexDirection:'column',gap:8}}>
           <div style={{fontSize:10,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Facades</div>
@@ -8235,25 +8319,43 @@ function BriqueApp({onBack,user}){
 }
 // ══════════════════════════════════════════════════════════════
 function CarrelageApp({onBack,user}){
-  // ── Room ──
-  const[roomW,setRoomW]=useState(3500);// mm
-  const[roomH,setRoomH]=useState(2800);
-  const[roomName,setRoomName]=useState('Pièce 1');
-  const[roomType,setRoomType]=useState('sol');// sol, mur, piscine
-  const[poolWater,setPoolWater]=useState(true);// water on/off
-  const[poolDepthMm,setPoolDepthMm]=useState(1500);// pool depth mm
-  const[poolWallTiles,setPoolWallTiles]=useState(true);// tile the pool walls
-  // ── Tile ──
-  const[tileW,setTileW]=useState(600);
-  const[tileH,setTileH]=useState(600);
-  const[jointW,setJointW]=useState(3);
-  const[tileColor1,setTileColor1]=useState('#d4c5a9');
-  const[tileColor2,setTileColor2]=useState('#8b7355');
-  const[jointColor,setJointColor]=useState('#c8c0b0');
-  // ── Layout ──
-  const[pattern,setPattern]=useState('droit');// droit, decale12, decale13, diagonal, chevron, damier
-  const[startCorner,setStartCorner]=useState('bl');// bl, br, tl, tr, center
-  const[orientation,setOrientation]=useState('h');// h=horizontal, v=vertical
+  // ── Multi-room support ──
+  const mkRoom=(name='Pièce 1')=>({id:Date.now()+Math.random(),name,roomW:3500,roomH:2800,roomType:'sol',
+    poolWater:true,poolDepthMm:1500,poolWallTiles:true,
+    tileW:600,tileH:600,jointW:3,tileColor1:'#d4c5a9',tileColor2:'#8b7355',jointColor:'#c8c0b0',
+    pattern:'droit',startCorner:'bl',orientation:'h'});
+  const[cRooms,setCRooms]=useState([mkRoom()]);
+  const[activeCRoomIdx,setActiveCRoomIdx]=useState(0);
+  const[showCPlanMasse,setShowCPlanMasse]=useState(false);
+  const[cMasse3D,setCMasse3D]=useState(false);
+  const cMasseRef=useRef(null);
+  const cMasseSceneRef=useRef({});
+  const cr=cRooms[activeCRoomIdx]||cRooms[0];
+  const setCR=(fn)=>setCRooms(rs=>rs.map((r,i)=>i===activeCRoomIdx?(typeof fn==='function'?fn(r):{...r,...fn}):r));
+  // ── Room (derived from active room) ──
+  const roomW=cr.roomW,roomH=cr.roomH,roomName=cr.name,roomType=cr.roomType;
+  const poolWater=cr.poolWater,poolDepthMm=cr.poolDepthMm,poolWallTiles=cr.poolWallTiles;
+  const setRoomW=v=>setCR(r=>({...r,roomW:typeof v==='function'?v(r.roomW):v}));
+  const setRoomH=v=>setCR(r=>({...r,roomH:typeof v==='function'?v(r.roomH):v}));
+  const setRoomName=v=>setCR(r=>({...r,name:typeof v==='function'?v(r.name):v}));
+  const setRoomType=v=>setCR(r=>({...r,roomType:typeof v==='function'?v(r.roomType):v}));
+  const setPoolWater=v=>setCR(r=>({...r,poolWater:typeof v==='function'?v(r.poolWater):v}));
+  const setPoolDepthMm=v=>setCR(r=>({...r,poolDepthMm:typeof v==='function'?v(r.poolDepthMm):v}));
+  const setPoolWallTiles=v=>setCR(r=>({...r,poolWallTiles:typeof v==='function'?v(r.poolWallTiles):v}));
+  // ── Tile (derived) ──
+  const tileW=cr.tileW,tileH=cr.tileH,jointW=cr.jointW;
+  const tileColor1=cr.tileColor1,tileColor2=cr.tileColor2,jointColor=cr.jointColor;
+  const setTileW=v=>setCR(r=>({...r,tileW:typeof v==='function'?v(r.tileW):v}));
+  const setTileH=v=>setCR(r=>({...r,tileH:typeof v==='function'?v(r.tileH):v}));
+  const setJointW=v=>setCR(r=>({...r,jointW:typeof v==='function'?v(r.jointW):v}));
+  const setTileColor1=v=>setCR(r=>({...r,tileColor1:typeof v==='function'?v(r.tileColor1):v}));
+  const setTileColor2=v=>setCR(r=>({...r,tileColor2:typeof v==='function'?v(r.tileColor2):v}));
+  const setJointColor=v=>setCR(r=>({...r,jointColor:typeof v==='function'?v(r.jointColor):v}));
+  // ── Layout (derived) ──
+  const pattern=cr.pattern,startCorner=cr.startCorner,orientation=cr.orientation;
+  const setPattern=v=>setCR(r=>({...r,pattern:typeof v==='function'?v(r.pattern):v}));
+  const setStartCorner=v=>setCR(r=>({...r,startCorner:typeof v==='function'?v(r.startCorner):v}));
+  const setOrientation=v=>setCR(r=>({...r,orientation:typeof v==='function'?v(r.orientation):v}));
   // ── View ──
   const[zoom,setZoom]=useState(1);
   const[showDims,setShowDims]=useState(true);
@@ -8287,6 +8389,86 @@ function CarrelageApp({onBack,user}){
     '#8b4513','#e6ccb3','#f5deb3','#daa520','#1a3a4a','#2c5f7c','#4a8c6f',
     '#2d5a27','#8b0000','#cc3333','#f4a460','#ffe4c4'];
   const JOINT_COLORS=['#c8c0b0','#ffffff','#e0dcd4','#999999','#666666','#333333','#2a2a2a'];
+
+
+  // ── PLAN DE MASSE 3D (carrelage) ──
+  useEffect(()=>{
+    if(!cMasse3D||!showCPlanMasse||!cMasseRef.current)return;
+    const el=cMasseRef.current;
+    const W=el.clientWidth,H=el.clientHeight;if(W<10||H<10)return;
+    if(cMasseSceneRef.current.renderer){cMasseSceneRef.current.renderer.dispose()}
+    el.innerHTML='';
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
+    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.style.pointerEvents='auto';
+    scene.add(new THREE.AmbientLight(0xffffff,0.6));
+    const s3d=new THREE.DirectionalLight(0xffffff,0.7);s3d.position.set(5,8,5);scene.add(s3d);
+    const f3d=new THREE.DirectionalLight(0x8888ff,0.25);f3d.position.set(-3,3,-3);scene.add(f3d);
+    // Ground
+    const gnd=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x222233,roughness:.95}));
+    gnd.rotation.x=-Math.PI/2;gnd.position.y=-.01;scene.add(gnd);
+    // Layout rooms in grid
+    const cols=Math.ceil(Math.sqrt(cRooms.length));const gap=1;
+    let maxRw=0,maxRh=0;
+    cRooms.forEach(r=>{maxRw=Math.max(maxRw,r.roomW/1000);maxRh=Math.max(maxRh,r.roomH/1000)});
+    const cellW=maxRw+gap,cellH=maxRh+gap;
+    const totalW=cols*cellW,totalH=Math.ceil(cRooms.length/cols)*cellH;
+    const CCOLORS=['#0ea5e9','#c4324a','#d97706','#10b981','#8b5cf6','#ec4899'];
+    cRooms.forEach((rm,i)=>{
+      const col=i%cols,row=Math.floor(i/cols);
+      const cx3=(col+.5)*cellW-totalW/2,cz3=(row+.5)*cellH-totalH/2;
+      const rw=rm.roomW/1000,rh=rm.roomH/1000;
+      const grp=new THREE.Group();
+      // Floor
+      const floorMat=new THREE.MeshStandardMaterial({color:new THREE.Color(rm.tileColor1),roughness:.7});
+      const floor=new THREE.Mesh(new THREE.PlaneGeometry(rw,rh),floorMat);
+      floor.rotation.x=-Math.PI/2;floor.position.y=0;grp.add(floor);
+      // Joint grid on floor
+      const jCol=new THREE.Color(rm.jointColor||'#c8c0b0');
+      const jMat=new THREE.MeshBasicMaterial({color:jCol});
+      const tw=(rm.orientation==='v'?rm.tileH:rm.tileW)/1000+rm.jointW/1000;
+      const th=(rm.orientation==='v'?rm.tileW:rm.tileH)/1000+rm.jointW/1000;
+      for(let x=-rw/2;x<=rw/2;x+=tw){
+        const j=new THREE.Mesh(new THREE.PlaneGeometry(.002,rh),jMat);j.rotation.x=-Math.PI/2;j.position.set(x,.001,0);grp.add(j)}
+      for(let z=-rh/2;z<=rh/2;z+=th){
+        const j=new THREE.Mesh(new THREE.PlaneGeometry(rw,.002),jMat);j.rotation.x=-Math.PI/2;j.position.set(0,.001,z);grp.add(j)}
+      // Walls
+      const wH=.4,wT=.03;
+      const wMat=new THREE.MeshStandardMaterial({color:0x555566,roughness:.6});
+      const w1=new THREE.Mesh(new THREE.BoxGeometry(rw+wT*2,wH,wT),wMat);w1.position.set(0,wH/2,-rh/2-wT/2);grp.add(w1);
+      const w2=new THREE.Mesh(new THREE.BoxGeometry(rw+wT*2,wH,wT),wMat);w2.position.set(0,wH/2,rh/2+wT/2);grp.add(w2);
+      const w3=new THREE.Mesh(new THREE.BoxGeometry(wT,wH,rh),wMat);w3.position.set(-rw/2-wT/2,wH/2,0);grp.add(w3);
+      const w4=new THREE.Mesh(new THREE.BoxGeometry(wT,wH,rh),wMat);w4.position.set(rw/2+wT/2,wH/2,0);grp.add(w4);
+      // Label (highlight active)
+      if(i===activeCRoomIdx){
+        const edge=new THREE.Mesh(new THREE.PlaneGeometry(rw+.1,rh+.1),new THREE.MeshBasicMaterial({color:new THREE.Color(CCOLORS[i%6]),transparent:true,opacity:.15}));
+        edge.rotation.x=-Math.PI/2;edge.position.y=.002;grp.add(edge);
+      }
+      grp.position.set(cx3,0,cz3);
+      scene.add(grp);
+    });
+    // Camera
+    const span=Math.max(totalW,totalH)*1.5;
+    const rot={x:-.6,y:.3};const zm={v:Math.max(span,4)};const pan={x:0,y:0};
+    const tgt=new THREE.Vector3(0,.2,0);
+    let dr=null;
+    const onD=e=>{dr={x:e.clientX,y:e.clientY,rx:rot.x,ry:rot.y,btn:e.button}};
+    const onU=()=>{dr=null};
+    const onM=e=>{if(!dr)return;if(dr.btn===2||dr.btn===1){pan.x+=(e.clientX-dr.x)*.003;pan.y-=(e.clientY-dr.y)*.003;dr.x=e.clientX;dr.y=e.clientY}else{rot.y=dr.ry+(e.clientX-dr.x)*.005;rot.x=Math.max(-1.4,Math.min(.2,dr.rx+(e.clientY-dr.y)*.005))}};
+    const onWh=e=>{e.preventDefault();zm.v=Math.max(1,Math.min(80,zm.v*(1+e.deltaY*.001)))};
+    renderer.domElement.addEventListener('mousedown',onD);renderer.domElement.addEventListener('mouseup',onU);
+    renderer.domElement.addEventListener('mouseleave',onU);renderer.domElement.addEventListener('mousemove',onM);
+    renderer.domElement.addEventListener('wheel',onWh,{passive:false});renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+    let raf;const anim=()=>{raf=requestAnimationFrame(anim);
+      camera.position.set(tgt.x+zm.v*Math.sin(rot.y)*Math.cos(rot.x)+pan.x,tgt.y+zm.v*Math.sin(-rot.x)+pan.y,tgt.z+zm.v*Math.cos(rot.y)*Math.cos(rot.x));
+      camera.lookAt(tgt.x+pan.x,tgt.y+pan.y,tgt.z);renderer.render(scene,camera)};anim();
+    cMasseSceneRef.current={renderer,raf};
+    const onRs=()=>{const w=el.clientWidth,h=el.clientHeight;if(w>0&&h>0){camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}};
+    window.addEventListener('resize',onRs);
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onRs);renderer.dispose();el.innerHTML='';cMasseSceneRef.current={}};
+  },[cMasse3D,showCPlanMasse,cRooms,activeCRoomIdx]);
 
   // ── Compute tiles ──
   const computeTiles=useMemo(()=>{
@@ -8396,7 +8578,7 @@ function CarrelageApp({onBack,user}){
     if(W<10||H<10)return;
     const tw=orientation==='v'?tileH:tileW,th=orientation==='v'?tileW:tileH;
     const RWm=roomW/1000,RHm=roomH/1000;
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1e2e);
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xeee8e0);
     const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
     const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
@@ -8729,8 +8911,18 @@ function CarrelageApp({onBack,user}){
       <div style={{width:1,height:20,background:'var(--bd)'}}/>
       <span style={{fontSize:12,fontWeight:600,color:'#0ea5e9'}}>🔲 Carrelage</span>
       <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      <span style={{fontSize:11,color:'var(--t2)',fontWeight:500}}>{roomName}</span>
-      <span style={{fontSize:10,color:'var(--t3)',marginLeft:4}}>{roomType==='piscine'?'🏊 Piscine':roomType==='mur'?'🧱 Mur':'🏠 Sol'}</span>
+      {/* Room tabs */}
+      <div style={{display:'flex',gap:2,alignItems:'center',overflow:'auto',maxWidth:300}}>
+        {cRooms.map((rm,i)=><button key={rm.id} onClick={()=>setActiveCRoomIdx(i)}
+          style={{padding:'3px 10px',borderRadius:6,border:'1px solid '+(i===activeCRoomIdx?'rgba(14,165,233,.4)':'var(--bd)'),
+            background:i===activeCRoomIdx?'rgba(14,165,233,.12)':'transparent',
+            color:i===activeCRoomIdx?'#0ea5e9':'var(--t3)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+          {rm.name}</button>)}
+        <button onClick={()=>{const nr=mkRoom('Pièce '+(cRooms.length+1));setCRooms(rs=>[...rs,nr]);setActiveCRoomIdx(cRooms.length)}}
+          style={{padding:'3px 8px',borderRadius:6,border:'1px dashed rgba(14,165,233,.3)',background:'none',color:'#0ea5e9',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>+</button>
+      </div>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <button onClick={()=>setShowCPlanMasse(true)} style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(14,165,233,.2)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>📐 Plan</button>
       <div style={{flex:1}}/>
       <span style={{fontSize:9,color:'var(--t3)'}}>{roomW}×{roomH}mm</span>
     </div>
@@ -9102,6 +9294,76 @@ function CarrelageApp({onBack,user}){
 
       </div>
     </div>
+
+    {/* ═══ CARRELAGE PLAN DE MASSE ═══ */}
+    {showCPlanMasse&&<div style={{position:'fixed',inset:0,zIndex:200,background:'var(--bg)',display:'flex',flexDirection:'column',fontFamily:'inherit'}}>
+      <div style={{padding:'10px 20px',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:12,background:'var(--pnl)'}}>
+        <button onClick={()=>setShowCPlanMasse(false)} style={{padding:'5px 14px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Retour</button>
+        <span style={{fontSize:14,fontWeight:700,color:'var(--t1)'}}>Plan de masse — Carrelage</span>
+        <span style={{fontSize:10,color:'var(--t3)'}}>{cRooms.length} pièce{cRooms.length>1?'s':''}</span>
+        <div style={{flex:1}}/>
+        <button onClick={()=>setCMasse3D(v=>!v)} style={{padding:'5px 14px',borderRadius:7,border:'1px solid '+(cMasse3D?'rgba(139,92,246,.4)':'rgba(139,92,246,.2)'),background:cMasse3D?'rgba(139,92,246,.15)':'rgba(139,92,246,.05)',color:'#8b5cf6',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{cMasse3D?'↩ Plan 2D':'🧊 Vue 3D'}</button>
+        <button onClick={()=>{const nr=mkRoom('Pièce '+(cRooms.length+1));setCRooms(rs=>[...rs,nr])}} style={{padding:'5px 14px',borderRadius:7,border:'1px solid rgba(14,165,233,.2)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Pièce</button>
+      </div>
+      <div style={{flex:1,display:'flex',overflow:'hidden'}}>
+        {/* 3D or 2D view */}
+        {cMasse3D?<div ref={cMasseRef} style={{flex:1,background:'#1a1a2a',cursor:'grab'}}/>
+        :<div style={{flex:1,position:'relative',overflow:'hidden'}}>
+          {(()=>{
+            // Arrange rooms in a grid layout
+            const cols=Math.ceil(Math.sqrt(cRooms.length));
+            const gap=1;// meters
+            let maxW=0,maxH=0;
+            cRooms.forEach(r=>{maxW=Math.max(maxW,r.roomW/1000);maxH=Math.max(maxH,r.roomH/1000)});
+            const cellW=maxW+gap,cellH=maxH+gap;
+            const totalW=cols*cellW,totalH=Math.ceil(cRooms.length/cols)*cellH;
+            const pad=1;
+            const CARR_COLORS=['#0ea5e9','#c4324a','#d97706','#10b981','#8b5cf6','#ec4899'];
+            return<svg viewBox={`${-pad} ${-pad} ${totalW+pad*2} ${totalH+pad*2}`} style={{width:'100%',height:'100%'}} xmlns="http://www.w3.org/2000/svg">
+              <defs><pattern id="c-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.02"/></pattern></defs>
+              <rect x={-pad} y={-pad} width={totalW+pad*2} height={totalH+pad*2} fill="url(#c-grid)"/>
+              {cRooms.map((rm,i)=>{
+                const col=i%cols,row=Math.floor(i/cols);
+                const rx=col*cellW,ry=row*cellH;
+                const rw=rm.roomW/1000,rh=rm.roomH/1000;
+                const clr=CARR_COLORS[i%CARR_COLORS.length];
+                return<g key={rm.id}>
+                  <rect x={rx} y={ry} width={rw} height={rh} fill={clr} fillOpacity={activeCRoomIdx===i?.3:.1}
+                    stroke={clr} strokeWidth={activeCRoomIdx===i?.06:.02} rx={.08}
+                    style={{cursor:'pointer'}} onClick={()=>{setActiveCRoomIdx(i);setShowCPlanMasse(false)}}/>
+                  <text x={rx+rw/2} y={ry+rh/2-.15} textAnchor="middle" fill={clr} fontSize={Math.min(rw,rh)*.12} fontWeight="700">{rm.name}</text>
+                  <text x={rx+rw/2} y={ry+rh/2+.15} textAnchor="middle" fill={clr} fontSize={Math.min(rw,rh)*.08} opacity=".7">{rm.roomW}×{rm.roomH}</text>
+                  <text x={rx+rw/2} y={ry+rh/2+.35} textAnchor="middle" fill={clr} fontSize={Math.min(rw,rh)*.07} opacity=".5">{rm.roomType==='piscine'?'🏊 Piscine':rm.roomType==='mur'?'Mur':'Sol'}</text>
+                </g>})}
+            </svg>
+          })()}
+        </div>}
+        {/* Side panel */}
+        <div style={{width:260,borderLeft:'1px solid var(--bd)',background:'var(--pnl)',padding:12,overflowY:'auto',display:'flex',flexDirection:'column',gap:8}}>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Pièces</div>
+          {cRooms.map((rm,i)=>{
+            const clr=(['#0ea5e9','#c4324a','#d97706','#10b981','#8b5cf6','#ec4899'])[i%6];
+            return<div key={rm.id} style={{padding:10,borderRadius:10,border:activeCRoomIdx===i?'1.5px solid '+clr:'1px solid var(--bd)',background:activeCRoomIdx===i?'rgba(14,165,233,.03)':'var(--crd)',cursor:'pointer'}}
+              onClick={()=>setActiveCRoomIdx(i)}>
+              <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
+                <div style={{width:10,height:10,borderRadius:3,background:clr}}/>
+                <input value={rm.name} onClick={e=>e.stopPropagation()} onChange={e=>{const v=e.target.value;setCRooms(rs=>rs.map((r,j)=>j===i?{...r,name:v}:r))}}
+                  style={{flex:1,fontSize:11,fontWeight:700,color:'var(--t1)',background:'none',border:'none',outline:'none',fontFamily:'inherit',padding:0}}/>
+                <span style={{fontSize:9,color:'var(--t3)'}}>{rm.roomW}×{rm.roomH}</span>
+              </div>
+              <div style={{display:'flex',gap:4,fontSize:9,color:'var(--t3)'}}>
+                <span>{rm.roomType==='piscine'?'🏊':'🏠'} {rm.tileW}×{rm.tileH}mm</span>
+                <span>j:{rm.jointW}mm</span>
+                <span>{(rm.roomW*rm.roomH/1e6).toFixed(1)}m²</span>
+              </div>
+              {cRooms.length>1&&<button onClick={e=>{e.stopPropagation();if(!confirm('Supprimer '+rm.name+' ?'))return;setCRooms(rs=>rs.filter((_,j)=>j!==i));if(activeCRoomIdx>=cRooms.length-1)setActiveCRoomIdx(Math.max(0,cRooms.length-2))}}
+                style={{marginTop:6,padding:'3px 8px',borderRadius:5,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.05)',color:'#ef4444',fontSize:9,cursor:'pointer',fontFamily:'inherit',width:'100%'}}>Supprimer</button>}
+            </div>})}
+          <button onClick={()=>{const nr=mkRoom('Pièce '+(cRooms.length+1));setCRooms(rs=>[...rs,nr])}}
+            style={{padding:10,borderRadius:10,border:'1px dashed rgba(14,165,233,.3)',background:'none',color:'#0ea5e9',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Ajouter une pièce</button>
+        </div>
+      </div>
+    </div>}
   </div>{/* end carrelage inner flex */}
   </div>;
 }
@@ -9115,7 +9377,7 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
   const[selIdx,setSelIdx]=useState(activeZoneIdx);
   const[show3D,setShow3D]=useState(false);
   // Angles INDÉPENDANTS pour le plan de masse
-  const[angles,setAngles]=useState(()=>zones.map(()=>0));
+  const[angles,setAngles]=useState(()=>zones.map((_,i)=>-90+i*90));
   // Breaks: indices de jonction dissociés
   const[breaks,setBreaks]=useState(new Set());
   const toggleBreak=(i)=>setBreaks(b=>{const n=new Set(b);n.has(i)?n.delete(i):n.add(i);return n});
@@ -9130,12 +9392,16 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
   useEffect(()=>{
     setAngles(prev=>{
       if(prev.length===zones.length)return prev;
-      const n=[...prev];while(n.length<zones.length)n.push(n.length*90);
+      const n=[...prev];while(n.length<zones.length)n.push(-90+n.length*90);
       return n.slice(0,zones.length);
     });
   },[zones.length]);
 
   const setAngle=(i,v)=>setAngles(a=>a.map((x,j)=>j===i?v:x));
+  // Presets géométriques
+  const presetRect=()=>{setAngles(zones.map((_,i)=>-90+i*90));setBreaks(new Set());};
+  const presetL=()=>{if(zones.length<2)return;setAngles(zones.map((_,i)=>i<2?-90+i*90:-90+(i%4)*90));setBreaks(new Set());};
+  const presetFree=()=>{setAngles(zones.map(()=>0));setBreaks(new Set());}; 
 
   // Compute chain: facades are segments chained end-to-end
   // angle = direction of the outward normal (0 = up in SVG = towards -Y)
@@ -9208,6 +9474,10 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
         <div style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Plan de masse</div>
         <div style={{fontSize:10,color:'var(--t3)'}}>{zones.length} facade{zones.length>1?'s':''} · Drag = pan · Molette = zoom</div>
       </div>
+      <div style={{display:'flex',gap:3}}>
+        {zones.length>=2&&<button onClick={presetRect} title="Façades en rectangle" style={{padding:'4px 8px',borderRadius:6,fontSize:10,fontWeight:600,border:'1px solid var(--bd)',cursor:'pointer',fontFamily:'inherit',background:'var(--crd)',color:'var(--t2)'}}>⬜ Rect</button>}
+        {zones.length>=2&&<button onClick={presetL} title="Façades en L" style={{padding:'4px 8px',borderRadius:6,fontSize:10,fontWeight:600,border:'1px solid var(--bd)',cursor:'pointer',fontFamily:'inherit',background:'var(--crd)',color:'var(--t2)'}}>⌐ L</button>}
+      </div>
       <button onClick={addScaff} style={{padding:'6px 12px',borderRadius:8,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',background:'rgba(16,185,129,.1)',color:'#34d399'}}>+ 🏗</button>
       <label style={{display:'flex',alignItems:'center',gap:4,fontSize:10,color:'var(--t3)',cursor:'pointer'}}>
         <input type="checkbox" checked={showCorners} onChange={e=>setShowCorners(e.target.checked)} style={{accentColor:'#a78bfa'}}/>Angles</label>
@@ -9226,7 +9496,7 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
           {/* Grille */}
           <defs>
             <pattern id="pm1" width="1" height="1" patternUnits="userSpaceOnUse">
-              <path d="M1 0L0 0 0 1" fill="none" stroke="rgba(255,255,255,.035)" strokeWidth=".02"/></pattern>
+              <path d="M1 0L0 0 0 1" fill="none" stroke="rgba(196,50,74,.07)" strokeWidth=".02"/></pattern>
             <pattern id="pm5" width="5" height="5" patternUnits="userSpaceOnUse">
               <rect width="5" height="5" fill="url(#pm1)"/>
               <path d="M5 0L0 0 0 5" fill="none" stroke="rgba(42,14,20,.07)" strokeWidth=".04"/></pattern>
@@ -9258,9 +9528,10 @@ function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClos
               <circle cx={mx+c.nx*.8} cy={my+c.ny*.8} r=".07" fill={col} opacity=".6"/>
               {/* Labels */}
               <text x={mx+c.nx*.45} y={my+c.ny*.45-.18} textAnchor="middle" dominantBaseline="middle"
-                fontSize=".3" fill={col} fontWeight="700" fontFamily="DM Sans">{zones[c.i].name}</text>
-              <text x={mx-c.nx*.2} y={my-c.ny*.2} textAnchor="middle" dominantBaseline="middle"
-                fontSize=".2" fill="rgba(255,255,255,.3)" fontFamily="monospace">{c.L.toFixed(2)}m</text>
+                fontSize=".3" fill={col} fontWeight="700" fontFamily="DM Sans"
+                transform={`rotate(0,${mx+c.nx*.45},${my+c.ny*.45-.18})`}>{zones[c.i].name}</text>
+              <text x={mx} y={my+.15} textAnchor="middle" dominantBaseline="middle"
+                fontSize=".18" fill={col} fontFamily="monospace" opacity=".6">{c.L.toFixed(1)}m</text>
               {sel&&<><circle cx={c.x1} cy={c.y1} r=".1" fill={col}/><circle cx={c.x2} cy={c.y2} r=".08" fill={col} opacity=".5"/></>}
             </g>;
           })}
@@ -9442,33 +9713,33 @@ function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ra
 
   useEffect(()=>{
     if(!zones.length||!chain||!chain.length||!mountRef.current)return;
+    try{
     const W=mountRef.current.clientWidth,H=mountRef.current.clientHeight;
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1e2e);
-    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,500);
-    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
-    renderer.shadowMap.enabled=true;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
+    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
     renderer.domElement.style.pointerEvents='auto';renderer.domElement.style.cursor='grab';
 
-    scene.add(new THREE.AmbientLight(0xe8e8f0,0.5));
-    const sun=new THREE.DirectionalLight(0xfff5e0,1.0);sun.position.set(8,15,10);sun.castShadow=true;scene.add(sun);
-    const fill=new THREE.DirectionalLight(0x8ab0ff,0.3);fill.position.set(-5,-2,4);scene.add(fill);
+    scene.add(new THREE.AmbientLight(0xffffff,0.5));
+    const sun=new THREE.DirectionalLight(0xffffff,0.8);sun.position.set(3,4,5);scene.add(sun);
+    const fill=new THREE.DirectionalLight(0x8888ff,0.3);fill.position.set(-2,2,-3);scene.add(fill);
 
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x1a1a2a,roughness:.9}));
-    ground.rotation.x=-Math.PI/2;ground.position.y=-.01;ground.receiveShadow=true;scene.add(ground);
+    const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x222233,roughness:.95}));
+    ground.rotation.x=-Math.PI/2;ground.position.y=-.01;scene.add(ground);
 
     // Centroid
     let sx=0,sz=0;chain.forEach(c=>{sx+=(c.x1+c.x2)/2;sz+=(c.y1+c.y2)/2});
     const cx0=sx/chain.length,cz0=sz/chain.length;
 
-    // Shared materials
-    const frameMat=new THREE.MeshStandardMaterial({color:0x3a3a42,metalness:.8,roughness:.15});
-    const glassBackMat=new THREE.MeshStandardMaterial({color:0x1a2a3a,roughness:.95,transparent:true,opacity:.6,side:2});
-    const glassMat=new THREE.MeshStandardMaterial({color:0x9cc8e8,metalness:.4,roughness:.02,transparent:true,opacity:.35,side:2});
-    const ossMat=new THREE.MeshStandardMaterial({color:0x8a8a8a,metalness:.7,roughness:.3});
+    // Retour materials — created per-zone below
+    let retMatP,lintMatP,appMatP;
+    const glassMatP=new THREE.MeshStandardMaterial({color:0x1a3a5f,metalness:.1,roughness:.05,transparent:true,opacity:.5,side:2});
+    // chassisMatP removed — chassis now use per-zone RAL color
+    const ossMat=new THREE.MeshStandardMaterial({color:0x888888,metalness:.6,roughness:.3});
 
-    // ── Build each facade ──
+    // ── Build each facade with REAL calepinage ──
     chain.forEach(c=>{
       const zone=zones[c.i],Lm=c.L,Hm=c.H;
       const zRal=RAL_COLORS[zone.ralIdx??ralIdx]||{hex:'#383E42',finish:'mat'};
@@ -9476,104 +9747,149 @@ function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ra
       const fin=zRal.finish||'mat';
       const grp=new THREE.Group();
       grp.position.set((c.x1+c.x2)/2-cx0,0,(c.y1+c.y2)/2-cz0);
-      grp.rotation.y=Math.PI-c.dir;// +Z local = vers l'extérieur (normale)
+      grp.rotation.y=Math.PI-c.dir;
 
       const metalness=fin==='brillant'?.65:fin==='satine'?.5:.35;
       const roughness=fin==='brillant'?.15:fin==='satine'?.35:.55;
       const panMat=new THREE.MeshStandardMaterial({color:baseColor,metalness,roughness});
-      const retMat=new THREE.MeshStandardMaterial({color:baseColor,metalness,roughness:roughness+.1,
-        polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
       const wallMat=new THREE.MeshStandardMaterial({color:0x787878,roughness:.95,transparent:true,opacity:.5});
       const ouvs=zone.ouvs||[];
       const depth=0.008;
+      retMatP=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(.9),metalness,roughness:roughness+.05});
+      lintMatP=retMatP;appMatP=retMatP;
 
-      // Facade panel = flat shape with holes for openings (ShapeGeometry = reliable normals)
-      const facShape=new THREE.Shape();
-      facShape.moveTo(-Lm/2,0);facShape.lineTo(Lm/2,0);facShape.lineTo(Lm/2,Hm);facShape.lineTo(-Lm/2,Hm);facShape.lineTo(-Lm/2,0);
-      ouvs.forEach(o=>{
-        const ox=o.x/1000-Lm/2,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
-        const hole=new THREE.Path();
-        hole.moveTo(ox,oy);hole.lineTo(ox+ow,oy);hole.lineTo(ox+ow,oy+oh);hole.lineTo(ox,oy+oh);hole.lineTo(ox,oy);
-        facShape.holes.push(hole);
-      });
-      // Front face (exterior) - faces +Z = outward
-      const panMat2=panMat.clone();panMat2.side=THREE.DoubleSide;
-      const facMeshF=new THREE.Mesh(new THREE.ShapeGeometry(facShape),panMat2);
-      facMeshF.position.z=.006;facMeshF.castShadow=true;grp.add(facMeshF);
-      // Back face (interior side of panel, slightly behind)
-      const facMeshB=new THREE.Mesh(new THREE.ShapeGeometry(facShape),panMat2);
-      facMeshB.position.z=0;grp.add(facMeshB);
-
-      // Joint lines (clipped around openings)
-      const panW=(zone.pan_?.l||600)/1000,panH=(zone.pan_?.w||600)/1000;
-      const jH=(zone.jointH||6)/1000||.006,jV=(zone.jointV||6)/1000||.006;
-      const jointMat=new THREE.MeshStandardMaterial({color:0x111418,metalness:.15,roughness:.9});
-      const nC=Math.max(1,Math.round(Lm/panW)),nR=Math.max(1,Math.round(Hm/panH));
-      const oRects=ouvs.map(o=>({l:o.x/1000-Lm/2,r:(o.x+o.w)/1000-Lm/2,b:o.y/1000,t:(o.y+o.h)/1000}));
-      // Vertical joints — split segments around openings
-      for(let j=1;j<nC;j++){const jx=-Lm/2+j*(Lm/nC);
-        let segs=[{a:0,b:Hm}];
-        oRects.forEach(o=>{if(jx<o.l||jx>o.r)return;const ns=[];
-          segs.forEach(s=>{if(o.b>=s.b||o.t<=s.a){ns.push(s);return}
-            if(s.a<o.b)ns.push({a:s.a,b:o.b});if(o.t<s.b)ns.push({a:o.t,b:s.b});});segs=ns;});
-        segs.forEach(s=>{const h=s.b-s.a;if(h<.02)return;
-          const m=new THREE.Mesh(new THREE.BoxGeometry(jV,h,.008),jointMat);m.position.set(jx,s.a+h/2,.004);grp.add(m);});}
-      // Horizontal joints — split segments around openings
-      for(let j=1;j<nR;j++){const jy=j*(Hm/nR);
-        let segs=[{a:-Lm/2,b:Lm/2}];
-        oRects.forEach(o=>{if(jy<o.b||jy>o.t)return;const ns=[];
-          segs.forEach(s=>{if(o.l>=s.b||o.r<=s.a){ns.push(s);return}
-            if(s.a<o.l)ns.push({a:s.a,b:o.l});if(o.r<s.b)ns.push({a:o.r,b:s.b});});segs=ns;});
-        segs.forEach(s=>{const w=s.b-s.a;if(w<.02)return;
-          const m=new THREE.Mesh(new THREE.BoxGeometry(w,jH,.008),jointMat);m.position.set(s.a+w/2,jy,.004);grp.add(m);});}
-
-      // Openings
-      ouvs.forEach(o=>{
-        const ox=o.x/1000-Lm/2,oy=o.y/1000,ow=o.w/1000,oh=o.h/1000;
-        const rt=o.retours||{tG:150,tD:150,lin:150,app:150};
-        const fv=(o.faceVis||50)/1000,st=.003;
-        const rG=rt.tG/1000,rD=rt.tD/1000,rL=rt.lin/1000,rA=rt.app/1000;
-        // Depth returns
-        if(rG>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(st,oh,rG),retMat);m.position.set(ox-st/2,oy+oh/2,-rG/2);grp.add(m);}
-        if(rD>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(st,oh,rD),retMat);m.position.set(ox+ow+st/2,oy+oh/2,-rD/2);grp.add(m);}
-        if(rL>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow,st,rL),retMat);m.position.set(ox+ow/2,oy+oh+st/2,-rL/2);grp.add(m);}
-        if(rA>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow,st,rA),retMat);m.position.set(ox+ow/2,oy-st/2,-rA/2);grp.add(m);}
-        // Face visible
-        if(fv>.001){
-          if(rG>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,st),retMat);m.position.set(ox-fv/2,oy+oh/2,depth+.001);grp.add(m);}
-          if(rD>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(fv,oh+fv*2,st),retMat);m.position.set(ox+ow+fv/2,oy+oh/2,depth+.001);grp.add(m);}
-          if(rL>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,st),retMat);m.position.set(ox+ow/2,oy+oh+fv/2,depth+.001);grp.add(m);}
-          if(rA>.001){const m=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,st),retMat);m.position.set(ox+ow/2,oy-fv/2,depth+.001);grp.add(m);}
-        }
-        // Glass
-        const maxR=Math.max(rG,rD,rL,rA,.05);const gz=-maxR*.65;
-        const gb=new THREE.Mesh(new THREE.PlaneGeometry(ow-.008,oh-.008),glassBackMat);
-        gb.position.set(ox+ow/2,oy+oh/2,gz-.003);grp.add(gb);
-        const gm=new THREE.Mesh(new THREE.PlaneGeometry(ow-.006,oh-.006),glassMat);
-        gm.position.set(ox+ow/2,oy+oh/2,gz);grp.add(gm);
-        // Alu frame
-        const ft=.032,fd=.045;
-        const fT=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd),frameMat);fT.position.set(ox+ow/2,oy+oh+ft/2,gz);grp.add(fT);
-        const fB=new THREE.Mesh(new THREE.BoxGeometry(ow+ft,ft,fd),frameMat);fB.position.set(ox+ow/2,oy-ft/2,gz);grp.add(fB);
-        const fLf=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd),frameMat);fLf.position.set(ox-ft/2,oy+oh/2,gz);grp.add(fLf);
-        const fRf=new THREE.Mesh(new THREE.BoxGeometry(ft,oh+ft*2,fd),frameMat);fRf.position.set(ox+ow+ft/2,oy+oh/2,gz);grp.add(fRf);
-      });
-
-      // Studs (with exclusion around openings)
-      const eM=(zone.oss?.eM||600)/1000,hM=.035;
-      const excl=ouvs.map(o=>({l:o.x/1000-Lm/2-hM,r:(o.x+o.w)/1000-Lm/2+hM,t:o.y/1000-hM,b:(o.y+o.h)/1000+hM}));
-      for(let mx=0;mx<=Lm+.001;mx+=eM){
-        const xp=-Lm/2+mx;let segs=[{a:0,b:Hm}];
-        excl.forEach(ex=>{if(xp<ex.l||xp>ex.r)return;
-          const ns=[];segs.forEach(s=>{if(ex.t>=s.b||ex.b<=s.a){ns.push(s);return}
-            if(s.a<ex.t)ns.push({a:s.a,b:ex.t});if(ex.b<s.b)ns.push({a:ex.b,b:s.b});});segs=ns;});
-        segs.forEach(s=>{const h=s.b-s.a;if(h<.02)return;
-          const m=new THREE.Mesh(new THREE.BoxGeometry(.05,h,.04),ossMat);m.position.set(xp,s.a+h/2,-.025);grp.add(m);});
+      // ── REAL CALEPINAGE from calcZone ──
+      const zSafe={...zone,fix:{pp:6,em:3},pan_:zone.pan_||{l:600,w:600},oss:zone.oss||{eM:600,eL:1350},merges:zone.merges||[],jointsH:zone.jointsH||[],jointsV:zone.jointsV||[],colWidths:zone.colWidths||[],rowHeights:zone.rowHeights||[],exclusions:zone.exclusions||[],ouvs:zone.ouvs||[]};
+      let calc=null;
+      if(zSafe.L>0&&zSafe.H>0&&zSafe.pan_&&zSafe.pan_.l>0){try{calc=calcZone(zSafe)}catch(e){console.warn('calcZone err',c.i,e)}}
+      if(calc&&calc.panelMap){
+        const jH=(zone.jointH||0)/1000,jV=(zone.jointV||0)/1000;
+        const minGap=0.001;
+        const gapX=Math.max(minGap,jH/2),gapY=Math.max(minGap,jV/2);
+        // Real panels from panelMap
+        calc.panelMap.filter(p=>!p.isVoid&&!p.isExcluded).forEach(pm=>{
+          const w=pm.pWa-gapX*2,h=pm.pHa-gapY*2;if(w<.001||h<.001)return;
+          const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,depth),panMat);
+          mesh.position.set(pm.pLeft+pm.pWa/2-Lm/2,Hm-(pm.pTop+pm.pHa/2),depth/2);
+          grp.add(mesh);
+        });
+        // Excluded panels (balconies)
+        calc.panelMap.filter(p=>p.isExcluded).forEach(pm=>{
+          const w=pm.pWa-gapX*2,h=pm.pHa-gapY*2;if(w<.001||h<.001)return;
+          const extD=(pm.exclusionDepth||1500)/1000;
+          const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,extD),new THREE.MeshStandardMaterial({color:0xb0b0a8,roughness:.92}));
+          mesh.position.set(pm.pLeft+pm.pWa/2-Lm/2,Hm-(pm.pTop+pm.pHa/2),depth+extD/2);
+          grp.add(mesh);
+        });
+        // Real joint lines from baseXBounds/baseYBounds
+        const jMat=new THREE.MeshBasicMaterial({color:0x222222});
+        const merges=zone.merges||[];
+        const oRects=ouvs.map(o=>({l:o.x/1000-Lm/2,r:(o.x+o.w)/1000-Lm/2,a:Hm-(o.y+o.h)/1000,b:Hm-o.y/1000}));
+        if(calc.baseXBounds)calc.baseXBounds.forEach((xb,i)=>{
+          if(i===0||i===calc.baseNc)return;
+          if(merges.some(m=>i-1>=m.c1&&i-1<m.c2))return;
+          const jx=xb-Lm/2;
+          let segs=[{a:0,b:Hm}];
+          oRects.forEach(o=>{if(jx<o.l||jx>o.r)return;const ns=[];
+            segs.forEach(s=>{if(o.a>=s.b||o.b<=s.a){ns.push(s);return}
+              if(s.a<o.a)ns.push({a:s.a,b:o.a});if(o.b<s.b)ns.push({a:o.b,b:s.b});});segs=ns;});
+          segs.forEach(s=>{const h=s.b-s.a;if(h<.005)return;
+            const m=new THREE.Mesh(new THREE.BoxGeometry(Math.max(jH,.001),h,.001),jMat);
+            m.position.set(jx,s.a+h/2,depth+.001);grp.add(m);});
+        });
+        if(calc.baseYBounds)calc.baseYBounds.forEach((yb,i)=>{
+          if(i===0||i===calc.baseNr)return;
+          if(merges.some(m=>i-1>=m.r1&&i-1<m.r2))return;
+          let segs=[{a:-Lm/2,b:Lm/2}];
+          oRects.forEach(o=>{const jy=Hm-yb;if(jy<o.a||jy>o.b)return;const ns=[];
+            segs.forEach(s=>{if(o.l>=s.b||o.r<=s.a){ns.push(s);return}
+              if(s.a<o.l)ns.push({a:s.a,b:o.l});if(o.r<s.b)ns.push({a:o.r,b:s.b});});segs=ns;});
+          segs.forEach(s=>{const w=s.b-s.a;if(w<.005)return;
+            const m=new THREE.Mesh(new THREE.BoxGeometry(w,Math.max(jV,.001),.001),jMat);
+            m.position.set(s.a+w/2,Hm-yb,depth+.001);grp.add(m);});
+        });
+      } else {
+        const panMat2=panMat.clone();panMat2.side=THREE.DoubleSide;
+        grp.add(new THREE.Mesh(new THREE.PlaneGeometry(Lm,Hm),panMat2));
       }
 
-      // Concrete wall
-      const wall=new THREE.Mesh(new THREE.BoxGeometry(Lm+.02,Hm+.02,.18),wallMat);
-      wall.position.set(0,Hm/2,-.12);wall.receiveShadow=true;grp.add(wall);
+      // V18-style openings: colored retours + simple glass + chassis (Y=Hm-oy coords)
+      const fz=depth+.002;
+      ouvs.forEach(o=>{
+        const ox=o.x/1000-Lm/2,ow=o.w/1000,oh=o.h/1000;
+        const oy_top=o.y/1000;// distance from facade top
+        const cy=Hm-(oy_top+oh/2);// center Y in bottom-up coords
+        const r=o.retours||{tG:150,tD:150,lin:150,app:150};
+        const fv=(o.faceVis||50)/1000,retD=.15;
+        // Tab G
+        if(r.tG>0){const gF=new THREE.Mesh(new THREE.BoxGeometry(fv,oh,.004),retMatP);gF.position.set(ox-fv/2,cy,fz);grp.add(gF);
+          const rdG=r.tG/1000||retD;const gR=new THREE.Mesh(new THREE.BoxGeometry(.005,oh,rdG),retMatP);gR.position.set(ox,cy,-rdG/2);grp.add(gR);}
+        // Tab D
+        if(r.tD>0){const gF=new THREE.Mesh(new THREE.BoxGeometry(fv,oh,.004),retMatP);gF.position.set(ox+ow+fv/2,cy,fz);grp.add(gF);
+          const rdD=r.tD/1000||retD;const gR=new THREE.Mesh(new THREE.BoxGeometry(.005,oh,rdD),retMatP);gR.position.set(ox+ow,cy,-rdD/2);grp.add(gR);}
+        // Linteau (top of opening)
+        if(r.lin>0){const gF=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,.004),lintMatP);gF.position.set(ox+ow/2,Hm-oy_top+fv/2,fz);grp.add(gF);
+          const rdL=r.lin/1000||retD;const gR=new THREE.Mesh(new THREE.BoxGeometry(ow,.005,rdL),lintMatP);gR.position.set(ox+ow/2,Hm-oy_top,-rdL/2);grp.add(gR);}
+        // Appui (bottom of opening)
+        if(r.app>0){const gF=new THREE.Mesh(new THREE.BoxGeometry(ow+fv*2,fv,.004),appMatP);gF.position.set(ox+ow/2,Hm-(oy_top+oh)-fv/2,fz);grp.add(gF);
+          const rdA=r.app/1000||retD;const gR=new THREE.Mesh(new THREE.BoxGeometry(ow,.005,rdA),appMatP);gR.position.set(ox+ow/2,Hm-(oy_top+oh),-rdA/2);grp.add(gR);}
+        // Glass V18
+        const gm=new THREE.Mesh(new THREE.PlaneGeometry(ow,oh),glassMatP);
+        gm.position.set(ox+ow/2,cy,-(r.tG/1000||retD)*.5);grp.add(gm);
+        // Chassis — même couleur RAL que les cassettes
+        const ct=.04;
+        const chMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(.85),metalness,roughness:roughness+.1});
+        const chT=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,ct),chMat);chT.position.set(ox+ow/2,Hm-oy_top+ct/2,-ct/2);grp.add(chT);
+        const chB=new THREE.Mesh(new THREE.BoxGeometry(ow+ct*2,ct,ct),chMat);chB.position.set(ox+ow/2,Hm-(oy_top+oh)-ct/2,-ct/2);grp.add(chB);
+        const chL=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,ct),chMat);chL.position.set(ox-ct/2,cy,-ct/2);grp.add(chL);
+        const chR=new THREE.Mesh(new THREE.BoxGeometry(ct,oh,ct),chMat);chR.position.set(ox+ow+ct/2,cy,-ct/2);grp.add(chR);
+      });
+
+      // Ossature V18 — montants + lisses (Y bottom-up)
+      const eM=(zone.oss?.eM||600)/1000;
+      const eLi=(zone.oss?.eL||1350)/1000;
+      const exclM=ouvs.map(o=>({l:o.x/1000-Lm/2-.01,r:(o.x+o.w)/1000-Lm/2+.01,
+        a:Hm-(o.y+o.h)/1000-.01,b:Hm-o.y/1000+.01}));
+      // Montants (vertical)
+      for(let mx=0;mx<=Lm+.001;mx+=eM){
+        const xp=-Lm/2+mx;let segs=[{a:0,b:Hm}];
+        exclM.forEach(ex=>{if(xp<ex.l||xp>ex.r)return;
+          const ns=[];segs.forEach(s=>{if(ex.a>=s.b||ex.b<=s.a){ns.push(s);return}
+            if(s.a<ex.a)ns.push({a:s.a,b:ex.a});if(ex.b<s.b)ns.push({a:ex.b,b:s.b});});segs=ns;});
+        segs.forEach(s=>{const h=s.b-s.a;if(h<.02)return;
+          const om=new THREE.Mesh(new THREE.BoxGeometry(.05,h,.05),ossMat);om.position.set(xp,s.a+h/2,-.04);grp.add(om);});
+      }
+      // Lisses (horizontal)
+      for(let li=0;li<=Math.floor(Hm/eLi);li++){
+        const ly=li*eLi;if(ly>Hm)break;
+        const lyY=ly;// Y in bottom-up = distance from bottom
+        let segs=[{a:-Lm/2,b:Lm/2}];
+        exclM.forEach(ex=>{if(lyY<ex.a||lyY>ex.b)return;
+          const ns=[];segs.forEach(s=>{if(ex.l>=s.b||ex.r<=s.a){ns.push(s);return}
+            if(s.a<ex.l)ns.push({a:s.a,b:ex.l});if(ex.r<s.b)ns.push({a:ex.r,b:s.b});});segs=ns;});
+        segs.forEach(s=>{const w=s.b-s.a;if(w<.02)return;
+          const lm=new THREE.Mesh(new THREE.BoxGeometry(w,.04,.04),ossMat);lm.position.set(s.a+w/2,lyY,-.04);grp.add(lm);});
+      }
+
+      // Wall + bavette + couvertine
+      // Wall découpé autour ouvertures
+      const wOuvs=ouvs.map(o=>({l:o.x/1000,r:(o.x+o.w)/1000,t:o.y/1000,b:(o.y+o.h)/1000}));
+      let wRects=[{l:0,r:Lm,t:0,b:Hm}];
+      wOuvs.forEach(ouv=>{const nx=[];wRects.forEach(wr=>{
+        if(ouv.l>=wr.r||ouv.r<=wr.l||ouv.t>=wr.b||ouv.b<=wr.t){nx.push(wr);return}
+        if(wr.t<ouv.t)nx.push({l:wr.l,r:wr.r,t:wr.t,b:ouv.t});
+        if(ouv.b<wr.b)nx.push({l:wr.l,r:wr.r,t:ouv.b,b:wr.b});
+        if(wr.l<ouv.l)nx.push({l:wr.l,r:ouv.l,t:Math.max(wr.t,ouv.t),b:Math.min(wr.b,ouv.b)});
+        if(ouv.r<wr.r)nx.push({l:ouv.r,r:wr.r,t:Math.max(wr.t,ouv.t),b:Math.min(wr.b,ouv.b)});
+      });wRects=nx;});
+      wRects.forEach(wr=>{const w=wr.r-wr.l,h=wr.b-wr.t;if(w<.01||h<.01)return;
+        const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,.18),wallMat);
+        m.position.set(wr.l+w/2-Lm/2,Hm-(wr.t+h/2),-.14);grp.add(m);});
+      const bavMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(.85),metalness:.5,roughness:.4});
+      const bvm=new THREE.Mesh(new THREE.BoxGeometry(Lm+.02,.04,.06),bavMat);bvm.position.set(0,-.02,.02);grp.add(bvm);
+      const covMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(.9),metalness:.5,roughness:.35});
+      const cvm=new THREE.Mesh(new THREE.BoxGeometry(Lm+.04,.035,.08),covMat);cvm.position.set(0,Hm+.0175,.02);grp.add(cvm);
+
       scene.add(grp);
     });
 
@@ -9666,6 +9982,7 @@ function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ra
     canvas.addEventListener('mouseup',onMU);canvas.addEventListener('mouseleave',onMU);
     canvas.addEventListener('wheel',onWH,{passive:false});canvas.addEventListener('contextmenu',e=>e.preventDefault());
     return()=>{cancelAnimationFrame(frameRef.current);renderer.dispose();if(mountRef.current)mountRef.current.innerHTML=''}
+    }catch(err){console.error('Facade3DMulti render error:',err);if(mountRef.current)mountRef.current.innerHTML='<div style="color:#f88;padding:20px;font-size:12px">3D Error: '+err.message+'</div>'}
   },[zones,chain,scaffs,showCorners,ralIdx]);// eslint-disable-line
 
   return<div ref={mountRef} style={{width:'100%',height:'100%',touchAction:'none'}}/>;
