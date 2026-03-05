@@ -552,18 +552,30 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
   useEffect(()=>{
     if(!zone||!calc||!mountRef.current)return;
     const W=mountRef.current.clientWidth,H=mountRef.current.clientHeight;
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
-    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,200);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.015);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
     renderer.domElement.style.pointerEvents='auto';
     renderer.domElement.style.cursor='grab';
 
-    // Lights
-    const amb=new THREE.AmbientLight(0xffffff,0.5);scene.add(amb);
-    const dir=new THREE.DirectionalLight(0xffffff,0.8);dir.position.set(3,4,5);scene.add(dir);
-    const dir2=new THREE.DirectionalLight(0x8888ff,0.3);dir2.position.set(-2,2,-3);scene.add(dir2);
+    // Lights — warm beige style
+    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    const sunS=new THREE.DirectionalLight(0xfff5e8,1.15);sunS.position.set(20,32,14);sunS.castShadow=true;
+    sunS.shadow.mapSize.set(2048,2048);sunS.shadow.camera.near=.5;sunS.shadow.camera.far=80;
+    sunS.shadow.camera.left=-20;sunS.shadow.camera.right=20;sunS.shadow.camera.top=20;sunS.shadow.camera.bottom=-20;
+    sunS.shadow.bias=-.0003;scene.add(sunS);
+    const skyS=new THREE.DirectionalLight(0xc8dcff,.28);skyS.position.set(0,20,-5);scene.add(skyS);
+    const fillS=new THREE.DirectionalLight(0xe8f0ff,.22);fillS.position.set(-18,10,-12);scene.add(fillS);
+    // Ground + grid
+    const flrS=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
+    flrS.rotation.x=-Math.PI/2;flrS.position.y=0;flrS.receiveShadow=true;scene.add(flrS);
+    const g1S=new THREE.GridHelper(60,12,0xa89880,0xb8aa98);g1S.position.y=.003;scene.add(g1S);
+    const g2S=new THREE.GridHelper(60,60,0xb8aa98,0xc0b4a4);g2S.position.y=.001;scene.add(g2S);
 
 
 
@@ -1390,7 +1402,7 @@ const PLAN_LIMITS={
     id:'free', name:'Freemium', price:0,
     maxProjects:2,          // nb de projets cloud max
     maxZonesPerProject:1,   // zones par projet cassettes
-    modules:['cassettes'],  // modules accessibles
+    modules:['cassettes','etancheite'],  // modules accessibles
     has3D:false,
     hasQR:false,
     hasDXF:true,            // import image/PDF ok, DXF non
@@ -1418,7 +1430,7 @@ const PLAN_LIMITS={
     id:'pro', name:'Pro', price:39,
     maxProjects:-1,
     maxZonesPerProject:-1,
-    modules:['cassettes','briques','carrelage'],
+    modules:['cassettes','briques','carrelage','etancheite','charpente'],
     has3D:true,
     hasQR:true,
     hasDXF:true,
@@ -1442,7 +1454,7 @@ const PLAN_LIMITS={
     id:'entreprise', name:'Entreprise', price:99,
     maxProjects:-1,
     maxZonesPerProject:-1,
-    modules:['cassettes','briques','carrelage'],
+    modules:['cassettes','briques','carrelage','etancheite','charpente'],
     has3D:true,
     hasQR:true,
     hasDXF:true,
@@ -3549,6 +3561,8 @@ function App({user,profile,signOut,subStatus}){
   const planLimits=getPlanLimits(subStatus);
   const canUseBrique=planLimits.modules.includes('briques');
   const canUseCarrelage=planLimits.modules.includes('carrelage');
+  const canUseEtancheite=planLimits.modules.includes('etancheite');
+  const canUseCharpente=planLimits.modules.includes('charpente');
   const canUse3D=planLimits.has3D;
   const canUseQR=planLimits.hasQR;
   const canUseExcel=planLimits.hasExcel;
@@ -5602,7 +5616,7 @@ function App({user,profile,signOut,subStatus}){
   return(
     <div className="h-full flex flex-col">
       {/* ── LIGNE 1 : Logo + projet + outils ── */}
-      <div className="flex items-center px-3 flex-shrink-0" style={{height:step==='dashboard'||step==='carrelage'||step==='brique'?0:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)',overflow:step==='work'?'visible':'hidden',transition:'height .2s'}}>
+      <div className="flex items-center px-3 flex-shrink-0" style={{height:step==='dashboard'||step==='carrelage'||step==='brique'||step==='etancheite'||step==='charpente'?0:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)',overflow:step==='work'?'visible':'hidden',transition:'height .2s'}}>
         <div className="flex items-center gap-2 flex-shrink-0" style={{cursor:'pointer'}} onClick={()=>{if(step!=='dashboard')setStep('dashboard')}} title="Retour au dashboard">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{background:'linear-gradient(135deg,#c4324a,#a0243a)'}}>
             <svg width="14" height="14" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
@@ -6030,6 +6044,32 @@ function App({user,profile,signOut,subStatus}){
                   {['Sol','Mur','Piscine','Coupes','Métrés','Motifs'].map(t=><span key={t} style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(14,165,233,.08)',color:'#0ea5e9'}}>{t}</span>)}
                 </div>
               </div>
+              {/* Étanchéité */}
+              <div onClick={()=>{if(!canUseEtancheite){setShowPaywall(true);return;}setProjectType('etancheite');setStep('etancheite')}}
+                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(126,79,170,.05),rgba(126,79,170,.01))',border:'1.5px solid rgba(126,79,170,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{if(canUseEtancheite){e.currentTarget.style.borderColor='rgba(126,79,170,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(126,79,170,.12)'}}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(126,79,170,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                {!canUseEtancheite&&<ModuleLock label="Étanchéité" onUpgrade={()=>setShowPaywall(true)}/>}
+                <div style={{fontSize:30,marginBottom:10}}>🏗</div>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Étanchéité</div>
+                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Toiture terrasse, relevé d'acrotère, couvertine, lanterneaux, EP.</div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {['Complexe','Acrotère','EP','Couvertine','3D','Métrés'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(126,79,170,.08)',color:'#7e4faa'}}>{t}</span>)}
+                </div>
+              </div>
+              {/* Charpente */}
+              <div onClick={()=>{if(!canUseCharpente){setShowPaywall(true);return;}setProjectType('charpente');setStep('charpente')}}
+                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(14,146,104,.05),rgba(14,146,104,.01))',border:'1.5px solid rgba(14,146,104,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
+                onMouseOver={e=>{if(canUseCharpente){e.currentTarget.style.borderColor='rgba(14,146,104,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(14,146,104,.12)'}}}
+                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(14,146,104,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                {!canUseCharpente&&<ModuleLock label="Charpente" onUpgrade={()=>setShowPaywall(true)}/>}
+                <div style={{fontSize:30,marginBottom:10}}>⛩</div>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Charpente</div>
+                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Dimensionnement EC3/EC5, portique, ferme, pannes. Végétalisé, bac, PV.</div>
+                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+                  {['EC3','EC5','Portique','Ferme','Bac','PV','3D'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(14,146,104,.08)',color:'#0e9268'}}>{t}</span>)}
+                </div>
+              </div>
               
             </div>
           </div>
@@ -6060,7 +6100,7 @@ function App({user,profile,signOut,subStatus}){
                       style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:12,boxSizing:'border-box',marginBottom:10,fontFamily:'inherit',outline:'none'}}/>
                     <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>TYPE</div>
                     <div style={{display:'flex',gap:6,marginBottom:12}}>
-                      {[{t:'cassette',icon:'🏢',label:'Cassettes',color:'196,50,74'},{t:'brique',icon:'🧱',label:'Brique',color:'217,119,6'},{t:'carrelage',icon:'🔲',label:'Carrelage',color:'14,165,233'}].map(m=>
+                      {[{t:'cassette',icon:'🏢',label:'Cassettes',color:'196,50,74'},{t:'brique',icon:'🧱',label:'Brique',color:'217,119,6'},{t:'carrelage',icon:'🔲',label:'Carrelage',color:'14,165,233'},{t:'etancheite',icon:'🏗',label:'Étanch.',color:'126,79,170'},{t:'charpente',icon:'⛩',label:'Charpente',color:'14,146,104'}].map(m=>
                         <button key={m.t} onClick={()=>setNewProjType(m.t)}
                           style={{flex:1,padding:'8px 4px',borderRadius:8,border:`1.5px solid rgba(${m.color},${newProjType===m.t?'.4':'.1'})`,
                             background:`rgba(${m.color},${newProjType===m.t?'.12':'.03'})`,cursor:'pointer',textAlign:'center',fontFamily:'inherit'}}>
@@ -6068,7 +6108,7 @@ function App({user,profile,signOut,subStatus}){
                           <div style={{fontSize:8,fontWeight:700,color:`rgb(${m.color})`}}>{m.label}</div>
                         </button>)}
                     </div>
-                    <button onClick={async()=>{if(!newProjName.trim())return;const stepMap={cassette:'welcome',brique:'brique',carrelage:'carrelage'};setProjectType(newProjType==='cassette'?'facade':newProjType);setShowQuickCreate(false);setStep(stepMap[newProjType]);setNewProjName('')}}
+                    <button onClick={async()=>{if(!newProjName.trim())return;const stepMap={cassette:'welcome',brique:'brique',carrelage:'carrelage',etancheite:'etancheite',charpente:'charpente'};setProjectType(newProjType==='cassette'?'facade':newProjType);setShowQuickCreate(false);setStep(stepMap[newProjType]);setNewProjName('')}}
                       style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Créer et ouvrir →</button>
                   </div></>}
                 </div>
@@ -6176,6 +6216,8 @@ function App({user,profile,signOut,subStatus}){
         {step==='welcome'&&<Welcome/>}
         {step==='carrelage'&&<CarrelageApp onBack={()=>setStep('dashboard')} user={user}/>}
         {step==='brique'&&<BriqueApp onBack={()=>setStep('dashboard')} user={user}/>}
+        {step==='etancheite'&&<EtancheiteApp onBack={()=>setStep('dashboard')} user={user}/>}
+        {step==='charpente'&&<CharpenteApp onBack={()=>setStep('dashboard')} user={user}/>}
         {step==='admin'&&profile?.role==='superadmin'&&<AdminApp onBack={()=>setStep('dashboard')} currentUser={user} isSuperAdmin={true}/>}
         {/* LEFT */}
         {step==='work'&&az&&(
@@ -7524,17 +7566,29 @@ function BriqueApp({onBack,user}){
     el.innerHTML='';
 
     const scene=new THREE.Scene();
-    scene.background=new THREE.Color(0x1a1a2a);
-    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,200);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.015);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
     el.appendChild(renderer.domElement);
     renderer.domElement.style.cursor='grab';
     renderer.domElement.style.pointerEvents='auto';
 
-    scene.add(new THREE.AmbientLight(0xffffff,0.5));
-    const sun=new THREE.DirectionalLight(0xffffff,0.8);sun.position.set(3,4,5);scene.add(sun);
-    const fill=new THREE.DirectionalLight(0x8888ff,0.3);fill.position.set(-2,2,-3);scene.add(fill);
+    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    const sun=new THREE.DirectionalLight(0xfff5e8,1.15);sun.position.set(20,32,14);sun.castShadow=true;
+    sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.near=.5;sun.shadow.camera.far=80;
+    sun.shadow.camera.left=-20;sun.shadow.camera.right=20;sun.shadow.camera.top=20;sun.shadow.camera.bottom=-20;
+    sun.shadow.bias=-.0003;scene.add(sun);
+    const skyBk=new THREE.DirectionalLight(0xc8dcff,.28);skyBk.position.set(0,20,-5);scene.add(skyBk);
+    const fillBk=new THREE.DirectionalLight(0xe8f0ff,.22);fillBk.position.set(-18,10,-12);scene.add(fillBk);
+    // Ground + grid
+    const floorBk=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
+    floorBk.rotation.x=-Math.PI/2;floorBk.position.y=0;floorBk.receiveShadow=true;scene.add(floorBk);
+    const g1Bk=new THREE.GridHelper(60,12,0xa89880,0xb8aa98);g1Bk.position.y=.003;scene.add(g1Bk);
+    const g2Bk=new THREE.GridHelper(60,60,0xb8aa98,0xc0b4a4);g2Bk.position.y=.001;scene.add(g2Bk);
 
     const brickDepth=0.065;
     const brickHash=(i)=>{let h=i*2654435761;h=((h>>>16)^h)*0x45d9f3b;h=((h>>>16)^h)*0x45d9f3b;h=(h>>>16)^h;return(h&0xffff)/65535};
@@ -7722,16 +7776,25 @@ function BriqueApp({onBack,user}){
     const W=el.clientWidth,H=el.clientHeight;if(W<10||H<10)return;
     if(bkMasseSceneRef.current.renderer){bkMasseSceneRef.current.renderer.dispose()}
     el.innerHTML='';
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
-    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,500);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.008);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
     el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.style.pointerEvents='auto';
-    scene.add(new THREE.AmbientLight(0xffffff,0.5));
-    const sun2=new THREE.DirectionalLight(0xffffff,0.8);sun2.position.set(3,4,5);scene.add(sun2);
-    const fill2b=new THREE.DirectionalLight(0x8888ff,0.3);fill2b.position.set(-2,2,-3);scene.add(fill2b);
-    const ground2=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x222233,roughness:.95}));
-    ground2.rotation.x=-Math.PI/2;ground2.position.y=-.01;scene.add(ground2);
+    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    const sun2=new THREE.DirectionalLight(0xfff5e8,1.1);sun2.position.set(20,30,14);sun2.castShadow=true;
+    sun2.shadow.mapSize.set(2048,2048);sun2.shadow.camera.near=.5;sun2.shadow.camera.far=120;
+    sun2.shadow.camera.left=-40;sun2.shadow.camera.right=40;sun2.shadow.camera.top=40;sun2.shadow.camera.bottom=-40;
+    sun2.shadow.bias=-.0003;scene.add(sun2);
+    const sky2=new THREE.DirectionalLight(0xc8dcff,.28);sky2.position.set(0,20,-5);scene.add(sky2);
+    const fill2b=new THREE.DirectionalLight(0xe8f0ff,.22);fill2b.position.set(-18,10,-12);scene.add(fill2b);
+    const ground2=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
+    ground2.rotation.x=-Math.PI/2;ground2.position.y=-.01;ground2.receiveShadow=true;scene.add(ground2);
+    const g1bk2=new THREE.GridHelper(100,20,0xa89880,0xb8aa98);g1bk2.position.y=.003;scene.add(g1bk2);
+    const g2bk2=new THREE.GridHelper(100,100,0xb8aa98,0xc0b4a4);g2bk2.position.y=.001;scene.add(g2bk2);
     const brickDepth2=0.065;
     const brickHash2=(i)=>{let h=i*2654435761;h=((h>>>16)^h)*0x45d9f3b;h=((h>>>16)^h)*0x45d9f3b;h=(h>>>16)^h;return(h&0xffff)/65535};
     // Chain
@@ -8398,17 +8461,22 @@ function CarrelageApp({onBack,user}){
     const W=el.clientWidth,H=el.clientHeight;if(W<10||H<10)return;
     if(cMasseSceneRef.current.renderer){cMasseSceneRef.current.renderer.dispose()}
     el.innerHTML='';
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
-    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,500);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.008);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
     el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.style.pointerEvents='auto';
-    scene.add(new THREE.AmbientLight(0xffffff,0.6));
-    const s3d=new THREE.DirectionalLight(0xffffff,0.7);s3d.position.set(5,8,5);scene.add(s3d);
-    const f3d=new THREE.DirectionalLight(0x8888ff,0.25);f3d.position.set(-3,3,-3);scene.add(f3d);
-    // Ground
-    const gnd=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x222233,roughness:.95}));
-    gnd.rotation.x=-Math.PI/2;gnd.position.y=-.01;scene.add(gnd);
+    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    const s3d=new THREE.DirectionalLight(0xfff5e8,1.1);s3d.position.set(20,30,14);s3d.castShadow=true;scene.add(s3d);
+    const sk3d=new THREE.DirectionalLight(0xc8dcff,.28);sk3d.position.set(0,20,-5);scene.add(sk3d);
+    const f3d=new THREE.DirectionalLight(0xe8f0ff,.22);f3d.position.set(-18,10,-12);scene.add(f3d);
+    const gnd=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
+    gnd.rotation.x=-Math.PI/2;gnd.position.y=-.01;gnd.receiveShadow=true;scene.add(gnd);
+    const g1c=new THREE.GridHelper(100,20,0xa89880,0xb8aa98);g1c.position.y=.003;scene.add(g1c);
+    const g2c=new THREE.GridHelper(100,100,0xb8aa98,0xc0b4a4);g2c.position.y=.001;scene.add(g2c);
     // Layout rooms in grid
     const cols=Math.ceil(Math.sqrt(cRooms.length));const gap=1;
     let maxRw=0,maxRh=0;
@@ -8578,10 +8646,13 @@ function CarrelageApp({onBack,user}){
     if(W<10||H<10)return;
     const tw=orientation==='v'?tileH:tileW,th=orientation==='v'?tileW:tileH;
     const RWm=roomW/1000,RHm=roomH/1000;
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0xeee8e0);
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.015);
     const camera=new THREE.PerspectiveCamera(42,W/H,0.01,200);
-    const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
-    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,1.5));
+    const renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
     renderer.outputEncoding=THREE.sRGBEncoding;
@@ -8600,9 +8671,11 @@ function CarrelageApp({onBack,user}){
     const rim=new THREE.DirectionalLight(0xffd4a0,0.2);rim.position.set(0,6,-8);scene.add(rim);
 
     // Ground plane
-    const groundMat=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
+    const groundMat=new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2});
     const ground=new THREE.Mesh(new THREE.PlaneGeometry(30,30),groundMat);
     ground.rotation.x=-Math.PI/2;ground.position.y=0;ground.receiveShadow=true;scene.add(ground);
+    const gCr1=new THREE.GridHelper(30,6,0xa89880,0xb8aa98);gCr1.position.y=.002;scene.add(gCr1);
+    const gCr2=new THREE.GridHelper(30,30,0xb8aa98,0xc0b4a4);gCr2.position.y=.001;scene.add(gCr2);
 
     // Grout slab — FLOOR: XZ plane (y=height, very thin)
     const jcC=new THREE.Color(jointColor);
@@ -8668,7 +8741,7 @@ function CarrelageApp({onBack,user}){
       scene.remove(bw);scene.remove(lw);scene.remove(rw);scene.remove(fw);
       scene.remove(bb1);scene.remove(bb2);scene.remove(bb3);
       // Add surrounding ground segments around pool
-      var gndCol=new THREE.MeshStandardMaterial({color:0x2a2a35,roughness:0.95});
+      var gndCol=new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2});
       var gndS=8;// surrounding ground size
       var gB=new THREE.Mesh(new THREE.PlaneGeometry(RWm+gndS*2,gndS),gndCol);gB.rotation.x=-Math.PI/2;gB.position.set(0,0,-RHm/2-gndS/2);gB.receiveShadow=true;scene.add(gB);
       var gF=new THREE.Mesh(new THREE.PlaneGeometry(RWm+gndS*2,gndS),gndCol);gF.rotation.x=-Math.PI/2;gF.position.set(0,0,RHm/2+gndS/2);gF.receiveShadow=true;scene.add(gF);
@@ -9370,6 +9443,821 @@ function CarrelageApp({onBack,user}){
 
 // PLAN DE MASSE — Vue de dessus avec angles indépendants
 // ══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// MODULE ÉTANCHÉITÉ
+// ═══════════════════════════════════════════════════════════════
+function EtancheiteApp({onBack,user}){
+  // ── Polygon roof shape ──
+  const defPoly=[[0,0],[20,0],[20,15],[0,15]];// meters
+  const[roofPts,setRoofPts]=useState(defPoly);
+  const[drawMode,setDrawMode]=useState(null);// null, 'roof', 'edicule'
+  const[drawPts,setDrawPts]=useState([]);
+  // ── Édicules (raised structures on roof) ──
+  const mkEdic=(pts,name='Édicule')=>({id:Date.now()+Math.random(),name,pts,h:2500,type:'ventelles',hasLant:false,lantW:1200,lantL:1200});
+  const[edicules,setEdicules]=useState([]);
+  const[selEdic,setSelEdic]=useState(null);
+  // ── Lanterneaux (on roof, not on edicules) ──
+  const mkLant=()=>({id:Date.now()+Math.random(),x:5,y:5,w:1.2,l:1.2});
+  const[lanterneaux,setLanterneaux]=useState([mkLant()]);
+  // ── EP ──
+  const mkEP=()=>({id:Date.now()+Math.random(),x:0,y:0});
+  const[eps,setEps]=useState([{id:1,x:0,y:7.5},{id:2,x:20,y:7.5}]);
+  const[epDiam,setEpDiam]=useState(100);
+  // ── Acrotère & complexe ──
+  const[acroH,setAcroH]=useState(300);
+  const[relH,setRelH]=useState(150);
+  const[couvertW,setCouvertW]=useState(400);
+  const[couvertType,setCouvertType]=useState('alu');
+  const[complexType,setComplexType]=useState('bicouche');
+  const[isolType,setIsolType]=useState('pir');
+  const[isolEp,setIsolEp]=useState(120);
+  const[pvActive,setPvActive]=useState(true);
+  const[pentePerc,setPentePerc]=useState(1.5);
+  // ── View ──
+  const[view3D,setView3D]=useState(false);
+  const[dragPt,setDragPt]=useState(null);// {type:'roof'|'edic'|'lant'|'ep', idx, edicId?}
+  const[panState,setPanState]=useState({x:0,y:0});
+  const[zoomSvg,setZoomSvg]=useState(1);
+  const svgRef=useRef(null);
+  const mountRef=useRef(null);const scRef=useRef({});
+
+  // ── Geometry helpers ──
+  const polyArea=(pts)=>{let a=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;a+=pts[i][0]*pts[j][1]-pts[j][0]*pts[i][1]}return Math.abs(a/2)};
+  const polyPerimeter=(pts)=>{let p=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;const dx=pts[j][0]-pts[i][0],dy=pts[j][1]-pts[i][1];p+=Math.sqrt(dx*dx+dy*dy)}return p};
+  const polyCentroid=(pts)=>{let cx=0,cy=0;pts.forEach(p=>{cx+=p[0];cy+=p[1]});return[cx/pts.length,cy/pts.length]};
+  const polyBounds=(pts)=>{let mn=[Infinity,Infinity],mx=[-Infinity,-Infinity];pts.forEach(p=>{mn[0]=Math.min(mn[0],p[0]);mn[1]=Math.min(mn[1],p[1]);mx[0]=Math.max(mx[0],p[0]);mx[1]=Math.max(mx[1],p[1])});return{min:mn,max:mx,w:mx[0]-mn[0],h:mx[1]-mn[1]}};
+
+  // ── Derived calcs ──
+  const surfToit=polyArea(roofPts);
+  const periToit=polyPerimeter(roofPts);
+  const surfEdic=edicules.reduce((s,e)=>s+polyArea(e.pts),0);
+  const surfLant=lanterneaux.reduce((s,l)=>s+l.w*l.l,0);
+  const edicLant=edicules.filter(e=>e.hasLant).reduce((s,e)=>s+e.lantW/1000*e.lantL/1000,0);
+  const surfNette=surfToit-surfEdic-surfLant;
+  const surfReleve=periToit*(relH/1000);
+  const surfCouvertine=periToit*(couvertW/1000);
+  const ISOL_PRIX={pir:28,pu:22,ldr:15,xps:20};
+  const COMPLEX_PRIX={mono:18,bicouche:28,pvc:22,epdm:32};
+  const COUV_PRIX={alu:35,zinc:55,acier:28};
+  const prixTotal=(surfNette*COMPLEX_PRIX[complexType])+(surfNette*ISOL_PRIX[isolType])+(pvActive?surfNette*3.5:0)
+    +(surfReleve*42)+(surfCouvertine*COUV_PRIX[couvertType])+(lanterneaux.length*850)+(edicLant>0?edicules.filter(e=>e.hasLant).length*1200:0)
+    +(eps.length*220)+(edicules.length*2500);
+  const r2=v=>Math.round(v*100)/100;
+
+  // ── SVG interaction ──
+  const svgCoord=(e)=>{
+    const svg=svgRef.current;if(!svg)return[0,0];
+    const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+    const ctm=svg.getScreenCTM();if(!ctm)return[0,0];
+    const svgPt=pt.matrixTransform(ctm.inverse());
+    return[Math.round(svgPt.x*10)/10,Math.round(svgPt.y*10)/10];
+  };
+  const handleSvgMouseMove=(e)=>{
+    if(!dragPt)return;
+    const[x,y]=svgCoord(e);
+    if(dragPt.type==='roof')setRoofPts(ps=>ps.map((p,i)=>i===dragPt.idx?[x,y]:p));
+    else if(dragPt.type==='lant')setLanterneaux(ls=>ls.map((l,i)=>i===dragPt.idx?{...l,x,y}:l));
+    else if(dragPt.type==='ep')setEps(es=>es.map((ep2,i)=>i===dragPt.idx?{...ep2,x,y}:ep2));
+  };
+  const handleSvgMouseUp=()=>setDragPt(null);
+
+  const handleSvgClick=(e)=>{
+    if(drawMode==='roof'){
+      const[x,y]=svgCoord(e);
+      const np=[...drawPts,[x,y]];
+      if(np.length>=3&&Math.hypot(np[0][0]-x,np[0][1]-y)<.8){
+        setRoofPts(np.slice(0,-1));setDrawMode(null);setDrawPts([]);
+      } else setDrawPts(np);
+    } else if(drawMode==='edicule'){
+      const[x,y]=svgCoord(e);
+      const np=[...drawPts,[x,y]];
+      if(np.length>=3&&Math.hypot(np[0][0]-x,np[0][1]-y)<.8){
+        setEdicules(es=>[...es,mkEdic(np.slice(0,-1),'Édicule '+(es.length+1))]);
+        setDrawMode(null);setDrawPts([]);
+      } else setDrawPts(np);
+    }
+  };
+
+  const handleSvgDblClick=(e)=>{
+    if(drawMode==='roof'&&drawPts.length>=3){setRoofPts(drawPts);setDrawMode(null);setDrawPts([])}
+    else if(drawMode==='edicule'&&drawPts.length>=3){
+      setEdicules(es=>[...es,mkEdic(drawPts,'Édicule '+(es.length+1))]);setDrawMode(null);setDrawPts([]);
+    }
+  };
+
+  // ── 3D ──
+  useEffect(()=>{
+    if(!view3D||!mountRef.current)return;
+    const el=mountRef.current;const W=el.clientWidth,H=el.clientHeight;if(W<10||H<10)return;
+    if(scRef.current.renderer){scRef.current.renderer.dispose()}el.innerHTML='';
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.006);
+    const camera=new THREE.PerspectiveCamera(42,W/H,.01,300);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';
+    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    const sun=new THREE.DirectionalLight(0xfff5e8,1.1);sun.position.set(20,30,14);sun.castShadow=true;
+    sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.near=.5;sun.shadow.camera.far=120;
+    sun.shadow.camera.left=-40;sun.shadow.camera.right=40;sun.shadow.camera.top=40;sun.shadow.camera.bottom=-40;
+    sun.shadow.bias=-.0003;scene.add(sun);
+    const skyL=new THREE.DirectionalLight(0xc8dcff,.28);skyL.position.set(0,20,-5);scene.add(skyL);
+    const fillL=new THREE.DirectionalLight(0xe8f0ff,.22);fillL.position.set(-18,10,-12);scene.add(fillL);
+    // Ground
+    const flr=new THREE.Mesh(new THREE.PlaneGeometry(120,120),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
+    flr.rotation.x=-Math.PI/2;flr.receiveShadow=true;scene.add(flr);
+    const gr1=new THREE.GridHelper(120,24,0xa89880,0xb8aa98);gr1.position.y=.003;scene.add(gr1);
+    const gr2=new THREE.GridHelper(120,120,0xb8aa98,0xc0b4a4);gr2.position.y=.001;scene.add(gr2);
+
+    // Center
+    const ct=polyCentroid(roofPts);
+    const ROOF_Y=3;// roof at 3m height
+    const slabH=.15+isolEp/1000;
+
+    // ── Roof slab (extruded polygon) ──
+    const shape=new THREE.Shape();
+    roofPts.forEach((p,i)=>{
+      const x=p[0]-ct[0],z=p[1]-ct[1];
+      if(i===0)shape.moveTo(x,z);else shape.lineTo(x,z);
+    });
+    shape.closePath();
+    // Cut out edicules
+    edicules.forEach(ed=>{
+      const hole=new THREE.Path();
+      ed.pts.forEach((p,i)=>{const x=p[0]-ct[0],z=p[1]-ct[1];if(i===0)hole.moveTo(x,z);else hole.lineTo(x,z)});
+      hole.closePath();shape.holes.push(hole);
+    });
+    // Cut out lanterneaux
+    lanterneaux.forEach(la=>{
+      const hole=new THREE.Path();
+      hole.moveTo(la.x-ct[0]-la.w/2,la.y-ct[1]-la.l/2);
+      hole.lineTo(la.x-ct[0]+la.w/2,la.y-ct[1]-la.l/2);
+      hole.lineTo(la.x-ct[0]+la.w/2,la.y-ct[1]+la.l/2);
+      hole.lineTo(la.x-ct[0]-la.w/2,la.y-ct[1]+la.l/2);
+      hole.closePath();shape.holes.push(hole);
+    });
+
+    const memColor=complexType==='pvc'?0xd0d0d0:complexType==='epdm'?0x333333:0x555555;
+    // Slab
+    const geo=new THREE.ExtrudeGeometry(shape,{depth:slabH,bevelEnabled:false});
+    const slabMesh=new THREE.Mesh(geo,new THREE.MeshPhongMaterial({color:0x888888,shininess:10}));
+    slabMesh.rotation.x=-Math.PI/2;slabMesh.position.y=ROOF_Y;slabMesh.castShadow=true;slabMesh.receiveShadow=true;scene.add(slabMesh);
+    // Membrane top
+    const memGeo=new THREE.ExtrudeGeometry(shape,{depth:.02,bevelEnabled:false});
+    const memMesh=new THREE.Mesh(memGeo,new THREE.MeshPhongMaterial({color:memColor,shininess:30}));
+    memMesh.rotation.x=-Math.PI/2;memMesh.position.y=ROOF_Y+slabH;scene.add(memMesh);
+
+    // ── Acrotères (walls along perimeter) ──
+    const acMat=new THREE.MeshPhongMaterial({color:0xb8b0a0,shininess:5});
+    const acHm=acroH/1000,acT=.15;
+    for(let i=0;i<roofPts.length;i++){
+      const j=(i+1)%roofPts.length;
+      const ax=roofPts[i][0]-ct[0],az=roofPts[i][1]-ct[1];
+      const bx=roofPts[j][0]-ct[0],bz=roofPts[j][1]-ct[1];
+      const dx=bx-ax,dz=bz-az,len=Math.sqrt(dx*dx+dz*dz);if(len<.01)continue;
+      const mx=(ax+bx)/2,mz=(az+bz)/2;
+      const angle=Math.atan2(dz,dx);
+      const wall=new THREE.Mesh(new THREE.BoxGeometry(len,acHm,acT),acMat);
+      wall.position.set(mx,ROOF_Y+slabH+acHm/2,mz);
+      wall.rotation.y=-angle;wall.castShadow=true;scene.add(wall);
+      // Couvertine on top
+      const cvMat=new THREE.MeshPhongMaterial({color:couvertType==='zinc'?0xaab8c0:couvertType==='alu'?0xc0c0c8:0x8a8a90,shininess:60,specular:0x444444});
+      const cv=new THREE.Mesh(new THREE.BoxGeometry(len+.05,.015,couvertW/1000),cvMat);
+      cv.position.set(mx,ROOF_Y+slabH+acHm+.008,mz);
+      cv.rotation.y=-angle;scene.add(cv);
+    }
+
+    // ── Édicules ──
+    edicules.forEach(ed=>{
+      const eShape=new THREE.Shape();
+      ed.pts.forEach((p,i)=>{const x=p[0]-ct[0],z=p[1]-ct[1];if(i===0)eShape.moveTo(x,z);else eShape.lineTo(x,z)});
+      eShape.closePath();
+      const eH=ed.h/1000;
+      // Walls
+      for(let i=0;i<ed.pts.length;i++){
+        const j2=(i+1)%ed.pts.length;
+        const ax2=ed.pts[i][0]-ct[0],az2=ed.pts[i][1]-ct[1];
+        const bx2=ed.pts[j2][0]-ct[0],bz2=ed.pts[j2][1]-ct[1];
+        const dx2=bx2-ax2,dz2=bz2-az2,len2=Math.sqrt(dx2*dx2+dz2*dz2);if(len2<.01)continue;
+        const mx2=(ax2+bx2)/2,mz2=(az2+bz2)/2;
+        const angle2=Math.atan2(dz2,dx2);
+        if(ed.type==='ventelles'){
+          // Ventelles: horizontal slats
+          const nSlats=Math.max(3,Math.floor(eH/.15));
+          const slatMat=new THREE.MeshPhongMaterial({color:0x606060,shininess:40});
+          for(let s=0;s<nSlats;s++){
+            const sy=ROOF_Y+slabH+.1+s*(eH/nSlats);
+            const slat=new THREE.Mesh(new THREE.BoxGeometry(len2,.04,.06),slatMat);
+            slat.position.set(mx2,sy,mz2);slat.rotation.y=-angle2;slat.castShadow=true;scene.add(slat);
+          }
+          // Frame posts at corners
+          const frameMat=new THREE.MeshPhongMaterial({color:0x444444,shininess:30});
+          [ed.pts[i],ed.pts[j2]].forEach(pp=>{
+            const post=new THREE.Mesh(new THREE.BoxGeometry(.06,eH,.06),frameMat);
+            post.position.set(pp[0]-ct[0],ROOF_Y+slabH+eH/2,pp[1]-ct[1]);post.castShadow=true;scene.add(post);
+          });
+        } else {
+          // Cassette: solid wall
+          const wallMat=new THREE.MeshPhongMaterial({color:0x8a8a90,shininess:20});
+          const w=new THREE.Mesh(new THREE.BoxGeometry(len2,eH,.08),wallMat);
+          w.position.set(mx2,ROOF_Y+slabH+eH/2,mz2);w.rotation.y=-angle2;w.castShadow=true;scene.add(w);
+        }
+      }
+      // Roof of edicule
+      const eroofGeo=new THREE.ExtrudeGeometry(eShape,{depth:.08,bevelEnabled:false});
+      const eroofMesh=new THREE.Mesh(eroofGeo,new THREE.MeshPhongMaterial({color:0x666666,shininess:20}));
+      eroofMesh.rotation.x=-Math.PI/2;eroofMesh.position.y=ROOF_Y+slabH+eH;eroofMesh.castShadow=true;scene.add(eroofMesh);
+      // Lanterneau on edicule
+      if(ed.hasLant){
+        const ect=polyCentroid(ed.pts);
+        const glMat=new THREE.MeshPhongMaterial({color:0x88bbdd,transparent:true,opacity:.45,shininess:120,specular:0x8888ff});
+        const gl=new THREE.Mesh(new THREE.BoxGeometry(ed.lantW/1000,.06,ed.lantL/1000),glMat);
+        gl.position.set(ect[0]-ct[0],ROOF_Y+slabH+eH+.12,ect[1]-ct[1]);gl.castShadow=true;scene.add(gl);
+      }
+    });
+
+    // ── Lanterneaux (on roof) ──
+    const glMat=new THREE.MeshPhongMaterial({color:0x88bbdd,transparent:true,opacity:.45,shininess:120,specular:0x8888ff});
+    const frMat=new THREE.MeshPhongMaterial({color:0x505050,shininess:40});
+    lanterneaux.forEach(la=>{
+      const lx=la.x-ct[0],lz=la.y-ct[1];
+      const gl=new THREE.Mesh(new THREE.BoxGeometry(la.w,.06,la.l),glMat);
+      gl.position.set(lx,ROOF_Y+slabH+.08,lz);gl.castShadow=true;scene.add(gl);
+      // Frame
+      const ft=.035;
+      [[lx,lz-la.l/2,la.w+ft*2,ft],[lx,lz+la.l/2,la.w+ft*2,ft]].forEach(([fx,fz,fw,fd])=>{
+        const f=new THREE.Mesh(new THREE.BoxGeometry(fw,.04,fd),frMat);f.position.set(fx,ROOF_Y+slabH+.07,fz);scene.add(f)});
+      [[lx-la.w/2,lz,ft,la.l],[lx+la.w/2,lz,ft,la.l]].forEach(([fx,fz,fw,fd])=>{
+        const f=new THREE.Mesh(new THREE.BoxGeometry(fw,.04,fd),frMat);f.position.set(fx,ROOF_Y+slabH+.07,fz);scene.add(f)});
+    });
+
+    // ── EP pipes ──
+    const pipeMat=new THREE.MeshPhongMaterial({color:0x606060,shininess:30});
+    eps.forEach(ep=>{
+      const px=ep.x-ct[0],pz=ep.y-ct[1];
+      const pipe=new THREE.Mesh(new THREE.CylinderGeometry(epDiam/2000,epDiam/2000,ROOF_Y+.5,8),pipeMat);
+      pipe.position.set(px,(ROOF_Y+.5)/2,pz);pipe.castShadow=true;scene.add(pipe);
+      const collar=new THREE.Mesh(new THREE.CylinderGeometry(epDiam/1500,epDiam/1500,.04,8),new THREE.MeshPhongMaterial({color:0x444444}));
+      collar.position.set(px,ROOF_Y+slabH+.02,pz);scene.add(collar);
+    });
+
+    // Support pillars at corners
+    const pilMat=new THREE.MeshPhongMaterial({color:0x888880,shininess:5});
+    roofPts.forEach((p,i)=>{
+      if(i%Math.max(1,Math.floor(roofPts.length/4))===0){
+        const pil=new THREE.Mesh(new THREE.BoxGeometry(.3,ROOF_Y,.3),pilMat);
+        pil.position.set(p[0]-ct[0],ROOF_Y/2,p[1]-ct[1]);pil.castShadow=true;scene.add(pil);
+      }
+    });
+
+    // Camera
+    const bnd=polyBounds(roofPts);
+    const span=Math.max(bnd.w,bnd.h)*2;
+    const rot={x:-.35,y:.4};const zm={v:Math.max(span,8)};const pan={x:0,y:0};
+    const tgt=new THREE.Vector3(0,ROOF_Y,0);let dr=null;
+    const onD=e=>{dr={x:e.clientX,y:e.clientY,rx:rot.x,ry:rot.y,btn:e.button}};
+    const onU=()=>{dr=null};
+    const onM=e=>{if(!dr)return;if(dr.btn===2||dr.btn===1){pan.x+=(e.clientX-dr.x)*.005;pan.y-=(e.clientY-dr.y)*.005;dr.x=e.clientX;dr.y=e.clientY}else{rot.y=dr.ry+(e.clientX-dr.x)*.005;rot.x=Math.max(-1.4,Math.min(.2,dr.rx+(e.clientY-dr.y)*.005))}};
+    const onWh=e=>{e.preventDefault();zm.v=Math.max(3,Math.min(80,zm.v*(1+e.deltaY*.001)))};
+    renderer.domElement.addEventListener('mousedown',onD);renderer.domElement.addEventListener('mouseup',onU);
+    renderer.domElement.addEventListener('mouseleave',onU);renderer.domElement.addEventListener('mousemove',onM);
+    renderer.domElement.addEventListener('wheel',onWh,{passive:false});renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+    let raf;const anim=()=>{raf=requestAnimationFrame(anim);
+      camera.position.set(tgt.x+zm.v*Math.sin(rot.y)*Math.cos(rot.x)+pan.x,tgt.y+zm.v*Math.sin(-rot.x)+pan.y,tgt.z+zm.v*Math.cos(rot.y)*Math.cos(rot.x));
+      camera.lookAt(tgt.x+pan.x,tgt.y+pan.y,tgt.z);renderer.render(scene,camera)};anim();
+    scRef.current={renderer,raf};
+    const onR=()=>{const w=el.clientWidth,h=el.clientHeight;if(w>0&&h>0){camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}};
+    window.addEventListener('resize',onR);
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onR);renderer.dispose();el.innerHTML='';scRef.current={}};
+  },[view3D,roofPts,edicules,lanterneaux,eps,acroH,couvertW,couvertType,complexType,isolEp,epDiam,relH,pvActive]);
+
+  const InputRow=({label,value,onChange,unit,min=0,max=99999,step=1})=><div style={{marginBottom:5}}>
+    <div style={{fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2,display:'flex',justifyContent:'space-between'}}><span>{label}</span><span style={{color:'var(--t3)',fontWeight:400}}>{unit}</span></div>
+    <input type="number" value={value} min={min} max={max} step={step} onChange={e=>onChange(Number(e.target.value))}
+      onKeyDown={e=>e.stopPropagation()}
+      style={{width:'100%',padding:'4px 6px',borderRadius:6,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontFamily:'JetBrains Mono,monospace',fontWeight:700,textAlign:'right',outline:'none',boxSizing:'border-box'}}/>
+  </div>;
+
+  // SVG viewBox
+  const bnd=polyBounds(roofPts.length>=3?roofPts:defPoly);
+  const pad=3;const vb=`${bnd.min[0]-pad} ${bnd.min[1]-pad} ${bnd.w+pad*2} ${bnd.h+pad*2}`;
+
+  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+    {/* Header */}
+    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:8,background:'var(--pnl)',borderBottom:'1px solid var(--bd)'}}>
+      <button onClick={onBack} style={{padding:'4px 12px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Retour</button>
+      <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#7e4faa,#5a3080)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:900}}>K</div>
+      <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <span style={{fontSize:12,fontWeight:600,color:'#7e4faa'}}>🏗 Étanchéité</span>
+      <div style={{flex:1}}/>
+      {drawMode&&<span style={{fontSize:10,fontWeight:700,color:'#c4324a',padding:'3px 10px',borderRadius:6,background:'rgba(196,50,74,.08)',border:'1px solid rgba(196,50,74,.2)'}}>
+        ✏ {drawMode==='roof'?'Tracé toiture':'Tracé édicule'} — cliquez pour poser des points · double-clic pour fermer
+        <button onClick={()=>{setDrawMode(null);setDrawPts([])}} style={{marginLeft:8,color:'#c4324a',fontWeight:700,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit'}}>✕ Annuler</button>
+      </span>}
+      <button onClick={()=>{setDrawMode('roof');setDrawPts([])}} style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(126,79,170,.2)',background:drawMode==='roof'?'rgba(126,79,170,.15)':'rgba(126,79,170,.05)',color:'#7e4faa',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>✏ Toiture</button>
+      <button onClick={()=>{setDrawMode('edicule');setDrawPts([])}} style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(14,146,104,.2)',background:drawMode==='edicule'?'rgba(14,146,104,.15)':'rgba(14,146,104,.05)',color:'#0e9268',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🏢 Édicule</button>
+      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 12px',borderRadius:6,border:'1px solid '+(view3D?'rgba(126,79,170,.4)':'rgba(126,79,170,.2)'),background:view3D?'rgba(126,79,170,.15)':'rgba(126,79,170,.05)',color:'#7e4faa',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{view3D?'↩ 2D':'🧊 3D'}</button>
+    </div>
+    <div style={{display:'flex',flex:1,minHeight:0}}>
+      {/* Panel */}
+      <div style={{width:250,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',overflowY:'auto',padding:7}}>
+        {/* Complexe */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5,background:'linear-gradient(135deg,rgba(126,79,170,.06),rgba(126,79,170,.02))'}}>
+          <div style={{fontSize:9,fontWeight:700,color:'#7e4faa',marginBottom:5}}>🔧 Complexe</div>
+          <div style={{display:'flex',gap:2,marginBottom:5}}>
+            {[{id:'bicouche',l:'Bic.'},{id:'mono',l:'Mono'},{id:'pvc',l:'PVC'},{id:'epdm',l:'EPDM'}].map(t=>
+              <button key={t.id} onClick={()=>setComplexType(t.id)}
+                style={{flex:1,padding:'3px 1px',fontSize:8,fontWeight:700,borderRadius:5,border:'1.5px solid '+(complexType===t.id?'rgba(126,79,170,.4)':'var(--bd)'),
+                  background:complexType===t.id?'rgba(126,79,170,.1)':'var(--inp)',color:complexType===t.id?'#7e4faa':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
+          </div>
+          <div style={{display:'flex',gap:2,marginBottom:5}}>
+            {[{id:'pir',l:'PIR'},{id:'pu',l:'PU'},{id:'ldr',l:'LdR'},{id:'xps',l:'XPS'}].map(t=>
+              <button key={t.id} onClick={()=>setIsolType(t.id)}
+                style={{flex:1,padding:'3px 1px',fontSize:8,fontWeight:700,borderRadius:5,border:'1.5px solid '+(isolType===t.id?'rgba(14,146,104,.4)':'var(--bd)'),
+                  background:isolType===t.id?'rgba(14,146,104,.1)':'var(--inp)',color:isolType===t.id?'#0e9268':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
+          </div>
+          <InputRow label="Ép. isolant" value={isolEp} onChange={setIsolEp} unit="mm" step={10} min={40} max={300}/>
+          <label style={{display:'flex',alignItems:'center',gap:5,fontSize:9,color:'var(--t2)',cursor:'pointer'}}>
+            <input type="checkbox" checked={pvActive} onChange={e=>setPvActive(e.target.checked)}/> Pare-vapeur</label>
+        </div>
+        {/* Acrotère */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
+          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🧱 Acrotère & Relevé</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
+            <InputRow label="H acrotère" value={acroH} onChange={setAcroH} unit="mm" min={100} max={1200}/>
+            <InputRow label="H relevé" value={relH} onChange={setRelH} unit="mm" min={100} max={500}/>
+          </div>
+        </div>
+        {/* Couvertine */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
+          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🔩 Couvertines</div>
+          <div style={{display:'flex',gap:2,marginBottom:5}}>
+            {[{id:'alu',l:'Alu'},{id:'zinc',l:'Zinc'},{id:'acier',l:'Acier'}].map(t=>
+              <button key={t.id} onClick={()=>setCouvertType(t.id)}
+                style={{flex:1,padding:'3px 2px',fontSize:8,fontWeight:700,borderRadius:5,border:'1.5px solid '+(couvertType===t.id?'rgba(14,165,233,.4)':'var(--bd)'),
+                  background:couvertType===t.id?'rgba(14,165,233,.1)':'var(--inp)',color:couvertType===t.id?'#0ea5e9':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
+          </div>
+          <InputRow label="Développé" value={couvertW} onChange={setCouvertW} unit="mm" min={200} max={800}/>
+        </div>
+        {/* Édicules */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5,background:'linear-gradient(135deg,rgba(14,146,104,.06),rgba(14,146,104,.02))'}}>
+          <div style={{fontSize:9,fontWeight:700,color:'#0e9268',marginBottom:5}}>🏢 Édicules ({edicules.length})</div>
+          {edicules.map((ed,i)=><div key={ed.id} style={{padding:6,borderRadius:7,border:'1px solid '+(selEdic===ed.id?'rgba(14,146,104,.4)':'var(--bd)'),background:selEdic===ed.id?'rgba(14,146,104,.06)':'var(--crd)',marginBottom:4,cursor:'pointer'}}
+            onClick={()=>setSelEdic(ed.id===selEdic?null:ed.id)}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
+              <span style={{fontSize:9,fontWeight:700,color:'var(--t1)'}}>{ed.name}</span>
+              <button onClick={e=>{e.stopPropagation();setEdicules(es=>es.filter(x=>x.id!==ed.id))}} style={{fontSize:8,color:'#ef4444',fontFamily:'inherit',cursor:'pointer'}}>✕</button>
+            </div>
+            {selEdic===ed.id&&<>
+              <InputRow label="Hauteur" value={ed.h} onChange={v=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,h:v}:x))} unit="mm" min={500} max={5000}/>
+              <div style={{display:'flex',gap:2,marginBottom:4}}>
+                {['ventelles','cassette'].map(t=><button key={t} onClick={()=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,type:t}:x))}
+                  style={{flex:1,padding:'3px 2px',fontSize:8,fontWeight:700,borderRadius:5,
+                    border:'1.5px solid '+(ed.type===t?'rgba(14,146,104,.4)':'var(--bd)'),
+                    background:ed.type===t?'rgba(14,146,104,.1)':'var(--inp)',
+                    color:ed.type===t?'#0e9268':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t==='ventelles'?'Ventelles':'Cassette'}</button>)}
+              </div>
+              <label style={{display:'flex',alignItems:'center',gap:5,fontSize:8,color:'var(--t2)',cursor:'pointer'}}>
+                <input type="checkbox" checked={ed.hasLant} onChange={e=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,hasLant:e.target.checked}:x))}/> Lanterneau dessus</label>
+              {ed.hasLant&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginTop:4}}>
+                <InputRow label="Lant. L" value={ed.lantW} onChange={v=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,lantW:v}:x))} unit="mm"/>
+                <InputRow label="Lant. l" value={ed.lantL} onChange={v=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,lantL:v}:x))} unit="mm"/>
+              </div>}
+              <div style={{fontSize:7,color:'var(--t3)',marginTop:3}}>{r2(polyArea(ed.pts))} m² · {ed.pts.length} pts</div>
+            </>}
+          </div>)}
+          <button onClick={()=>{setDrawMode('edicule');setDrawPts([])}}
+            style={{width:'100%',padding:'5px',borderRadius:6,border:'1px dashed rgba(14,146,104,.3)',background:'none',color:'#0e9268',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Dessiner un édicule</button>
+        </div>
+        {/* Lanterneaux + EP */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
+          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>💡 Lanterneaux ({lanterneaux.length})</div>
+          {lanterneaux.map((la,i)=><div key={la.id} style={{display:'flex',gap:3,alignItems:'center',marginBottom:3}}>
+            <span style={{fontSize:8,color:'var(--t3)',width:16}}>#{i+1}</span>
+            <input type="number" value={la.w} step={.1} min={.3} max={5} onChange={e=>setLanterneaux(ls=>ls.map(x=>x.id===la.id?{...x,w:Number(e.target.value)}:x))}
+              style={{flex:1,padding:'2px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:9,fontFamily:'monospace',textAlign:'right'}}/>
+            <span style={{fontSize:7,color:'var(--t3)'}}>×</span>
+            <input type="number" value={la.l} step={.1} min={.3} max={5} onChange={e=>setLanterneaux(ls=>ls.map(x=>x.id===la.id?{...x,l:Number(e.target.value)}:x))}
+              style={{flex:1,padding:'2px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:9,fontFamily:'monospace',textAlign:'right'}}/>
+            <button onClick={()=>setLanterneaux(ls=>ls.filter(x=>x.id!==la.id))} style={{fontSize:8,color:'#ef4444',cursor:'pointer'}}>✕</button>
+          </div>)}
+          <button onClick={()=>{const c2=polyCentroid(roofPts);setLanterneaux(ls=>[...ls,{...mkLant(),x:c2[0]+(Math.random()-.5)*3,y:c2[1]+(Math.random()-.5)*3}])}}
+            style={{width:'100%',padding:4,borderRadius:5,border:'1px dashed var(--bd)',background:'none',color:'var(--t2)',fontSize:8,cursor:'pointer',fontFamily:'inherit'}}>+ Lanterneau</button>
+        </div>
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
+          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🔽 EP ({eps.length})</div>
+          <InputRow label="Diamètre" value={epDiam} onChange={setEpDiam} unit="mm" min={50} max={200}/>
+          <button onClick={()=>{const p=roofPts[eps.length%roofPts.length];setEps(es=>[...es,{id:Date.now(),x:p[0],y:p[1]}])}}
+            style={{width:'100%',padding:4,borderRadius:5,border:'1px dashed var(--bd)',background:'none',color:'var(--t2)',fontSize:8,cursor:'pointer',fontFamily:'inherit'}}>+ Descente EP</button>
+        </div>
+        {/* Métrés */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid rgba(126,79,170,.15)',background:'rgba(126,79,170,.03)',marginBottom:5}}>
+          <div style={{fontSize:9,fontWeight:700,color:'#7e4faa',marginBottom:5}}>📊 Métrés</div>
+          <div style={{fontSize:8,color:'var(--t2)',lineHeight:1.8}}>
+            Surface toiture: <strong>{r2(surfToit)} m²</strong><br/>
+            Surface nette: <strong>{r2(surfNette)} m²</strong><br/>
+            Périmètre: <strong>{r2(periToit)} ml</strong><br/>
+            Relevé: <strong>{r2(surfReleve)} m²</strong><br/>
+            Couvertines: <strong>{r2(surfCouvertine)} m²</strong><br/>
+            Édicules: <strong>{edicules.length}u · {r2(surfEdic)} m²</strong><br/>
+            Lanterneaux: <strong>{lanterneaux.length}u · {r2(surfLant+edicLant)} m²</strong><br/>
+            EP: <strong>{eps.length}u · Ø{epDiam}</strong>
+          </div>
+          <div style={{fontWeight:700,color:'#c4324a',fontSize:10,marginTop:4,borderTop:'1px solid var(--bd)',paddingTop:4}}>
+            Total: {Math.round(prixTotal).toLocaleString('fr-FR')} €HT
+          </div>
+        </div>
+      </div>
+      {/* Viewport */}
+      <div style={{flex:1,position:'relative',overflow:'hidden',minWidth:0}}>
+        {view3D?<div ref={mountRef} style={{width:'100%',height:'100%',background:'#ddd4c8'}}/>
+        :<svg ref={svgRef} viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{width:'100%',height:'100%',background:'#f4ece5',cursor:drawMode?'crosshair':dragPt?'grabbing':'default'}}
+          onClick={handleSvgClick} onDoubleClick={handleSvgDblClick} onMouseMove={handleSvgMouseMove} onMouseUp={handleSvgMouseUp} onMouseLeave={handleSvgMouseUp}>
+          <defs>
+            <pattern id="et-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
+          </defs>
+          <rect x={bnd.min[0]-pad} y={bnd.min[1]-pad} width={bnd.w+pad*2} height={bnd.h+pad*2} fill="url(#et-grid)"/>
+          {/* Roof polygon */}
+          <polygon points={roofPts.map(p=>p.join(',')).join(' ')} fill="rgba(126,79,170,.06)" stroke="#7e4faa" strokeWidth=".04"/>
+          {/* Acrotère lines (thicker) */}
+          <polygon points={roofPts.map(p=>p.join(',')).join(' ')} fill="none" stroke="#c4324a" strokeWidth=".12" strokeOpacity=".25"/>
+          {/* Roof point handles */}
+          {!drawMode&&roofPts.map((p,i)=><circle key={'rp'+i} cx={p[0]} cy={p[1]} r=".18" fill="#7e4faa" stroke="#fff" strokeWidth=".04" style={{cursor:'grab'}}
+            onMouseDown={e=>{e.stopPropagation();setDragPt({type:'roof',idx:i})}}/>)}
+          {/* Dimensions along edges */}
+          {roofPts.map((p,i)=>{const j=(i+1)%roofPts.length;const mx=(p[0]+roofPts[j][0])/2,my=(p[1]+roofPts[j][1])/2;
+            const dx=roofPts[j][0]-p[0],dy=roofPts[j][1]-p[1],len=Math.sqrt(dx*dx+dy*dy);
+            return<text key={'d'+i} x={mx} y={my-.2} textAnchor="middle" fill="#7e4faa" fontSize=".22" fontWeight="700">{r2(len)}m</text>})}
+          {/* Édicules */}
+          {edicules.map(ed=><g key={ed.id}>
+            <polygon points={ed.pts.map(p=>p.join(',')).join(' ')} fill={ed.type==='ventelles'?'rgba(14,146,104,.12)':'rgba(100,100,110,.12)'} stroke={ed.type==='ventelles'?'#0e9268':'#666'} strokeWidth=".05" strokeDasharray={ed.type==='ventelles'?'.15,.1':'none'}
+              style={{cursor:'pointer'}} onClick={e=>{e.stopPropagation();setSelEdic(ed.id)}}/>
+            {/* Ventelles pattern */}
+            {ed.type==='ventelles'&&ed.pts.length>=2&&(()=>{const eb=polyBounds(ed.pts);const nLines=Math.floor(eb.h/.3);
+              return Array.from({length:nLines}).map((_,li)=>{const y=eb.min[1]+.15+(li*(eb.h-.3)/Math.max(1,nLines-1));
+                return<line key={li} x1={eb.min[0]+.1} y1={y} x2={eb.max[0]-.1} y2={y} stroke="#0e9268" strokeWidth=".03" opacity=".4"/>})})()}
+            <text x={polyCentroid(ed.pts)[0]} y={polyCentroid(ed.pts)[1]+.1} textAnchor="middle" fill={ed.type==='ventelles'?'#0e9268':'#666'} fontSize=".2" fontWeight="700">{ed.name}</text>
+            {/* Lanterneau on edicule */}
+            {ed.hasLant&&(()=>{const ec=polyCentroid(ed.pts);return<rect x={ec[0]-ed.lantW/2000} y={ec[1]-ed.lantL/2000} width={ed.lantW/1000} height={ed.lantL/1000} fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".03" rx=".03"/>})()}
+          </g>)}
+          {/* Lanterneaux on roof */}
+          {lanterneaux.map((la,i)=><g key={la.id}>
+            <rect x={la.x-la.w/2} y={la.y-la.l/2} width={la.w} height={la.l} fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".03" rx=".04"
+              style={{cursor:'grab'}} onMouseDown={e=>{e.stopPropagation();setDragPt({type:'lant',idx:i})}}/>
+            <text x={la.x} y={la.y+.05} textAnchor="middle" fill="#0ea5e9" fontSize=".16" fontWeight="600">L{i+1}</text>
+          </g>)}
+          {/* EP markers */}
+          {eps.map((ep,i)=><g key={ep.id}>
+            <circle cx={ep.x} cy={ep.y} r={epDiam/1500} fill="rgba(14,146,104,.3)" stroke="#0e9268" strokeWidth=".03"
+              style={{cursor:'grab'}} onMouseDown={e=>{e.stopPropagation();setDragPt({type:'ep',idx:i})}}/>
+            <text x={ep.x} y={ep.y+.05} textAnchor="middle" fill="#0e9268" fontSize=".14" fontWeight="600">EP{i+1}</text>
+          </g>)}
+          {/* Drawing preview */}
+          {drawMode&&drawPts.length>0&&<>
+            <polyline points={drawPts.map(p=>p.join(',')).join(' ')} fill="none" stroke={drawMode==='roof'?'#7e4faa':'#0e9268'} strokeWidth=".05" strokeDasharray=".15,.1"/>
+            {drawPts.map((p,i)=><circle key={i} cx={p[0]} cy={p[1]} r=".12" fill={drawMode==='roof'?'#7e4faa':'#0e9268'}/>)}
+          </>}
+          {/* Surface label */}
+          {(()=>{const c2=polyCentroid(roofPts);return<text x={c2[0]} y={c2[1]} textAnchor="middle" fill="#7e4faa" fontSize=".35" fontWeight="800" opacity=".3">{r2(surfToit)} m²</text>})()}
+        </svg>}
+      </div>
+    </div>
+  </div>;
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// MODULE CHARPENTE — Dimensionnement EC3/EC5
+// ═══════════════════════════════════════════════════════════════
+function CharpenteApp({onBack,user}){
+  const PM_DATA=[
+    {n:'IPE 100',h:100,Iy:171,Wy:34.2,kg:8.1},{n:'IPE 120',h:120,Iy:318,Wy:53,kg:10.4},
+    {n:'IPE 140',h:140,Iy:541,Wy:77.3,kg:12.9},{n:'IPE 160',h:160,Iy:869,Wy:109,kg:15.8},
+    {n:'IPE 180',h:180,Iy:1320,Wy:146,kg:18.8},{n:'IPE 200',h:200,Iy:1943,Wy:194,kg:22.4},
+    {n:'IPE 220',h:220,Iy:2772,Wy:252,kg:26.2},{n:'IPE 240',h:240,Iy:3892,Wy:324,kg:30.7},
+    {n:'IPE 270',h:270,Iy:5790,Wy:429,kg:36.1},{n:'IPE 300',h:300,Iy:8356,Wy:557,kg:42.2},
+    {n:'IPE 360',h:360,Iy:16270,Wy:904,kg:57.1},{n:'IPE 400',h:400,Iy:23130,Wy:1156,kg:66.3},
+    {n:'IPE 500',h:500,Iy:48200,Wy:1928,kg:90.7},
+    {n:'HEA 200',h:190,Iy:3692,Wy:389,kg:42.3},{n:'HEA 240',h:230,Iy:7763,Wy:675,kg:60.3},
+    {n:'HEA 300',h:290,Iy:18260,Wy:1260,kg:88.3},{n:'HEA 400',h:390,Iy:45070,Wy:2311,kg:125},
+  ];
+  const PB_DATA=[
+    {n:'GL24h 80×200',Iy:53333,Wy:533,kg:66},{n:'GL24h 100×240',Iy:115200,Wy:960,kg:100},
+    {n:'GL24h 100×300',Iy:225000,Wy:1500,kg:125},{n:'GL24h 120×360',Iy:466560,Wy:2592,kg:180},
+    {n:'GL24h 140×400',Iy:746667,Wy:3733,kg:233},{n:'GL24h 160×500',Iy:1666667,Wy:6667,kg:333},
+  ];
+  const NZ_DATA=[{id:'A1',sk:.45,l:'Paris'},{id:'B1',sk:.55,l:'Centre'},{id:'C1',sk:.65,l:'MC bas'},{id:'C2',sk:.9,l:'MC haut'},{id:'D',sk:1.4,l:'Alpes base'},{id:'E',sk:1.8,l:'Sommets'}];
+  const VZ_DATA=[{id:'1',v:22,l:'Centre'},{id:'2',v:24,l:'Est'},{id:'3',v:26,l:'Méd.'},{id:'4',v:28,l:'Atl.'}];
+
+  const[geo,setGeo]=useState('portique');
+  const[L,setL]=useState(8);const[ea,setEa]=useState(2.5);const[ht,setHt]=useState(4);
+  const[pe,setPe]=useState(15);const[nb,setNb]=useState(4);
+  const[gb,setGb]=useState(.15);const[gi,setGi]=useState(.10);const[gs,setGs]=useState(.20);const[gv,setGv]=useState(1.8);
+  const[qe,setQe]=useState(1.0);const[niIdx,setNiIdx]=useState(0);const[viIdx,setViIdx]=useState(1);
+  const[alt,setAlt]=useState(200);const[couv,setCouv]=useState('veg');
+  const[view3D,setView3D]=useState(true);const[showRes,setShowRes]=useState(false);
+  const mountRef=useRef(null);const scRef=useRef({});
+  const r2=v=>Math.round(v*100)/100;const r1=v=>Math.round(v*10)/10;
+
+  // ── CALC EC3/EC5 ──
+  const calc=useMemo(()=>{
+    const nz=NZ_DATA[niIdx],vz=VZ_DATA[viIdx];
+    const sk=alt>200?nz.sk*(1+Math.pow(alt/736,2)):nz.sk;
+    const mu=pe<=30?.8:pe<=60?.8*(60-pe)/30:0;
+    const sn=r2(mu*sk);const qv=r2(.5*1.25*vz.v*vz.v/1000*.6);
+    const G=r2(gb+gi+gs+gv);const Q=r2(Math.max(sn,qe));
+    const Lc=geo==='panne'?ea:L;
+    const fadm=r1(Lc*1000/300);
+    const qels=r2((G+Q)*ea);const qelu=r2((1.35*G+1.5*Q)*ea);
+    const Mels=r2(qels*Lc*Lc/8);const Melu=r2(qelu*Lc*Lc/8);
+    const Relu=r2(qelu*Lc/2);
+    // EC3
+    const fy=235;
+    const Wreq=r1(Melu*1e6/fy/1000);const Ireq=r1((5*qels*1000*Math.pow(Lc*1000,4))/(384*210000*fadm)/10000);
+    const ok=PM_DATA.filter(p=>p.Wy>=Wreq&&p.Iy>=Ireq);
+    const pM=ok.length?ok.reduce((a,b)=>a.Iy<b.Iy?a:b):null;
+    let fM=null,tW=null,tF=null;
+    if(pM){fM=r1((5*qels*1000*Math.pow(Lc*1000,4))/(384*210000*pM.Iy*10000));tW=r2(Wreq/pM.Wy*100);tF=r2(fM/fadm*100)}
+    // EC5
+    const Eb=11600,fmd=15.36;
+    const Wreqb=r1(Melu*1e6/fmd/1000);const Ireqb=r1((5*qels*1.6*1000*Math.pow(Lc*1000,4))/(384*Eb*fadm)/10000);
+    const okb=PB_DATA.filter(p=>p.Wy>=Wreqb&&p.Iy>=Ireqb);
+    const pB=okb.length?okb.reduce((a,b)=>a.Iy<b.Iy?a:b):null;
+    return{sn,qv,G,Q,Lc,fadm,qels,qelu,Mels,Melu,Relu,Wreq,Ireq,pM,fM,tW,tF,Wreqb,Ireqb,pB};
+  },[geo,L,ea,ht,pe,nb,gb,gi,gs,gv,qe,niIdx,viIdx,alt]);
+
+  // ── 3D ──
+  useEffect(()=>{
+    if(!view3D||!mountRef.current)return;
+    const el=mountRef.current;const W=el.clientWidth,H=el.clientHeight;if(W<10||H<10)return;
+    if(scRef.current.renderer){scRef.current.renderer.dispose()}el.innerHTML='';
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.012);
+    const camera=new THREE.PerspectiveCamera(42,W/H,.1,200);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';
+    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    const sun=new THREE.DirectionalLight(0xfff5e8,1.15);sun.position.set(20,32,14);sun.castShadow=true;
+    sun.shadow.mapSize.set(4096,4096);sun.shadow.camera.near=.5;sun.shadow.camera.far=120;
+    sun.shadow.camera.left=-50;sun.shadow.camera.right=50;sun.shadow.camera.top=50;sun.shadow.camera.bottom=-50;
+    sun.shadow.bias=-.0003;scene.add(sun);
+    const skyCh=new THREE.DirectionalLight(0xc8dcff,.28);skyCh.position.set(0,20,-5);scene.add(skyCh);
+    const fillCh=new THREE.DirectionalLight(0xe8f0ff,.22);fillCh.position.set(-18,10,-12);scene.add(fillCh);
+    // Ground+grid
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(160,160),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2,specular:0x222018}));
+    floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
+    const g1=new THREE.GridHelper(160,32,0xa89880,0xb8aa98);g1.position.y=.004;scene.add(g1);
+    const g2=new THREE.GridHelper(160,160,0xb8aa98,0xc0b4a4);g2.position.y=.002;scene.add(g2);
+    // Build structure
+    const GRP=new THREE.Group();
+    const tanA=Math.tan(pe*Math.PI/180);
+    const nF=Math.max(2,Math.min(7,Math.round(L/ea)+1));
+    const totZ=(nF-1)*ea,z0=-totZ/2;
+    const CP=0x9a2030,CT=0x8a3848,CN=0xa86808,CF=0x2a1018;
+    const addBeam=(col,ax,ay,az,bx,by,bz,tw,td)=>{
+      const cx=(ax+bx)/2,cy=(ay+by)/2,cz=(az+bz)/2;
+      const dx=bx-ax,dy=by-ay,dz=bz-az;const len=Math.sqrt(dx*dx+dy*dy+dz*dz);if(len<.001)return;
+      const g=new THREE.BoxGeometry(tw,len,td);
+      const m=new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:col,shininess:55,specular:new THREE.Color(col).multiplyScalar(.18)}));
+      m.castShadow=true;m.receiveShadow=true;
+      const axis=new THREE.Vector3(dx/len,dy/len,dz/len);
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis);
+      m.position.set(cx,cy,cz);GRP.add(m);
+    };
+    const addBox=(col,w,h,d,x,y,z)=>{
+      const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshPhongMaterial({color:col,shininess:55}));
+      m.position.set(x,y,z);m.castShadow=true;m.receiveShadow=true;GRP.add(m);
+    };
+    const addCouv=(x0,y0,x1,y1,z0c,z1c)=>{
+      const col=couv==='veg'?0x1a9a6a:couv==='bac'?0xb0bcc8:0x0d1e42;
+      const v=new Float32Array([x0,y0,z0c,x1,y1,z0c,x1,y1,z1c,x0,y0,z0c,x1,y1,z1c,x0,y0,z1c]);
+      const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(v,3));g.computeVertexNormals();
+      const m=new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:col,side:THREE.DoubleSide,transparent:true,opacity:.82,shininess:5}));
+      m.receiveShadow=true;GRP.add(m);
+      if(couv==='veg'){
+        // Grass
+        const stX=Math.max(3,Math.ceil(Math.abs(x1-x0)*3));const stZ=Math.max(3,Math.ceil(Math.abs(z1c-z0c)*1.2));
+        const mG=[0x1d8a50,0x27a662,0x106a38].map(c=>new THREE.MeshLambertMaterial({color:c}));
+        for(let si=0;si<=stX;si++){const t=si/stX,gx=x0+t*(x1-x0),gy=y0+t*(y1-y0);
+          for(let sz=0;sz<=stZ;sz++){if(Math.random()>.5)continue;const gz=z0c+(sz/stZ)*(z1c-z0c);
+            const hg=.09+Math.random()*.14;const blade=new THREE.Mesh(new THREE.CylinderGeometry(.003,.01,hg,3),mG[Math.floor(Math.random()*3)]);
+            blade.position.set(gx+(Math.random()-.5)*.1,gy+hg/2,gz+(Math.random()-.5)*.1);GRP.add(blade);
+        }}
+      }
+    };
+
+    if(geo==='portique'||geo==='plate'){
+      const ridgeH=geo==='portique'?ht+tanA*(L/2):ht;
+      for(let fi=0;fi<nF;fi++){const z=z0+fi*ea;
+        addBeam(CP,-L/2,0,z,-L/2,ht,z,.22,.20);addBeam(CP,L/2,0,z,L/2,ht,z,.22,.20);
+        addBox(CF,.5,.04,.5,-L/2,.02,z);addBox(CF,.5,.04,.5,L/2,.02,z);
+        if(geo==='portique'){addBeam(CT,-L/2,ht,z,0,ridgeH,z,.18,.18);addBeam(CT,L/2,ht,z,0,ridgeH,z,.18,.18)}
+        else addBeam(CT,-L/2,ht,z,L/2,ht,z,.18,.18);
+      }
+      if(geo==='portique'){
+        for(let i=1;i<=nb;i++){const t=i/(nb+1);
+          addBeam(CN,-L/2+t*(L/2),ht+t*(ridgeH-ht),z0,-L/2+t*(L/2),ht+t*(ridgeH-ht),z0+totZ,.14,.14);
+          addBeam(CN,t*(L/2),ridgeH-t*(ridgeH-ht),z0,t*(L/2),ridgeH-t*(ridgeH-ht),z0+totZ,.14,.14);
+        }
+        addBeam(CN,0,ridgeH,z0,0,ridgeH,z0+totZ,.17,.17);
+        addCouv(-L/2,ht,0,ridgeH,z0,z0+totZ);addCouv(0,ridgeH,L/2,ht,z0,z0+totZ);
+      } else {
+        for(let i=0;i<=nb;i++)addBeam(CN,-L/2+(i/nb)*L,ht+.16,z0,-L/2+(i/nb)*L,ht+.16,z0+totZ,.14,.14);
+        addCouv(-L/2,ht+.22,L/2,ht+.22,z0,z0+totZ);
+      }
+    } else if(geo==='ferme'){
+      const fH=Math.max(tanA*(L/2),1);
+      for(let fi=0;fi<nF;fi++){const z=z0+fi*ea;
+        addBox(CF,.35,.08,1,-L/2,.04,z);addBox(CF,.35,.08,1,L/2,.04,z);
+        addBeam(CT,-L/2,0,z,L/2,0,z,.10,.10);
+        addBeam(CP,-L/2,0,z,0,fH,z,.14,.14);addBeam(CP,L/2,0,z,0,fH,z,.14,.14);
+        for(let i=1;i<=nb;i++){const t=i/(nb+1),bx=-L/2+t*L,ty=t<=.5?t*2*fH:(1-t)*2*fH;
+          if(ty>.08)addBeam(CT,bx,0,z,bx,ty,z,.08,.08);
+        }
+      }
+      for(let i=0;i<=nb;i++){const t=i/nb,bx=-L/2+t*L,py=t<=.5?t*2*fH:(1-t)*2*fH;addBeam(CN,bx,py,z0,bx,py,z0+totZ,.12,.12)}
+      addCouv(-L/2,0,0,fH,z0,z0+totZ);addCouv(0,fH,L/2,0,z0,z0+totZ);
+    } else if(geo==='panne'){
+      const pts=[];for(let i=0;i<=nb;i++){const t=i/nb,d=Math.abs(t-.5)*2;pts.push({px:-L/2+t*L,py:ht+d*tanA*(L/2)})}
+      for(let fi=0;fi<nF;fi++){const z=z0+fi*ea;
+        pts.forEach(({px,py})=>{addBeam(CP,px,0,z,px,py,z,.18,.18);addBox(CF,.38,.04,.38,px,.02,z)})
+      }
+      for(let i=0;i<nb;i++)addCouv(pts[i].px,pts[i].py,pts[i+1].px,pts[i+1].py,z0,z0+totZ);
+    }
+    scene.add(GRP);
+    // Camera
+    const camTgt={x:0,y:ht/2,z:0};const camD=Math.max(L,totZ)*1.7+7;
+    const rot={t:35,p:25};const zm={v:camD};const pan2={x:0,y:0};
+    let dr=null;
+    const onD=e=>{dr={x:e.clientX,y:e.clientY,t:rot.t,p:rot.p,btn:e.button}};
+    const onU=()=>{dr=null};
+    const onM=e=>{if(!dr)return;if(dr.btn===2||dr.btn===1){const t2=rot.t*Math.PI/180;pan2.x-=(e.clientX-dr.x)*.022*Math.cos(t2);pan2.y+=(e.clientY-dr.y)*.022;dr.x=e.clientX;dr.y=e.clientY}
+      else{rot.t=dr.t-(e.clientX-dr.x)*.32;rot.p=Math.max(-80,Math.min(80,dr.p+(e.clientY-dr.y)*.26))}};
+    const onWh=e=>{e.preventDefault();zm.v=Math.max(2,Math.min(90,zm.v+e.deltaY*.012))};
+    renderer.domElement.addEventListener('mousedown',onD);renderer.domElement.addEventListener('mouseup',onU);
+    renderer.domElement.addEventListener('mouseleave',onU);renderer.domElement.addEventListener('mousemove',onM);
+    renderer.domElement.addEventListener('wheel',onWh,{passive:false});renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+    let raf;const anim=()=>{raf=requestAnimationFrame(anim);
+      const t2=rot.t*Math.PI/180,ph=rot.p*Math.PI/180;
+      camera.position.set(camTgt.x+pan2.x+zm.v*Math.cos(ph)*Math.sin(t2),camTgt.y+pan2.y+zm.v*Math.sin(ph),camTgt.z+zm.v*Math.cos(ph)*Math.cos(t2));
+      camera.lookAt(camTgt.x+pan2.x,camTgt.y+pan2.y,camTgt.z);renderer.render(scene,camera)};anim();
+    scRef.current={renderer,raf};
+    const onR=()=>{const w=el.clientWidth,h=el.clientHeight;if(w>0&&h>0){camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}};
+    window.addEventListener('resize',onR);
+    return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onR);renderer.dispose();el.innerHTML='';scRef.current={}};
+  },[view3D,geo,L,ea,ht,pe,nb,couv]);
+
+  const GEO_LIST=[{id:'portique',l:'Portique',i:'⛩'},{id:'ferme',l:'Ferme',i:'△'},{id:'panne',l:'Pannes',i:'⫠'},{id:'plate',l:'Plate',i:'▬'}];
+  const COUV_LIST=[{id:'veg',l:'Végétalisé',c:'14,146,104'},{id:'bac',l:'Bac acier',c:'100,120,140'},{id:'pv',l:'PV solaire',c:'13,30,66'}];
+  const InputRow=({label,value,onChange,unit,min=0,max=99999,step=.1})=><div style={{marginBottom:5}}>
+    <div style={{fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2,display:'flex',justifyContent:'space-between'}}><span>{label}</span><span style={{color:'var(--t3)',fontWeight:400}}>{unit}</span></div>
+    <input type="number" value={value} min={min} max={max} step={step} onChange={e=>onChange(Number(e.target.value))}
+      onKeyDown={e=>e.stopPropagation()}
+      style={{width:'100%',padding:'4px 6px',borderRadius:6,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontFamily:'JetBrains Mono,monospace',fontWeight:700,textAlign:'right',outline:'none',boxSizing:'border-box'}}/>
+  </div>;
+  const pctBar=(v,label)=>{const c=v>90?'#c43040':v>70?'#c47a10':'#0e9268';return<div style={{marginBottom:4}}>
+    <div style={{display:'flex',justifyContent:'space-between',fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2}}><span>{label}</span><span style={{color:c}}>{v}%</span></div>
+    <div style={{height:4,background:'var(--crd)',borderRadius:2,overflow:'hidden'}}><div style={{height:'100%',width:Math.min(100,v)+'%',background:c,borderRadius:2,transition:'width .3s'}}/></div>
+  </div>};
+
+  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
+    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:8,background:'var(--pnl)',borderBottom:'1px solid var(--bd)'}}>
+      <button onClick={onBack} style={{padding:'4px 12px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Retour</button>
+      <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#0e9268,#066040)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:900}}>K</div>
+      <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
+      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <span style={{fontSize:12,fontWeight:600,color:'#0e9268'}}>⛩ Charpente</span>
+      <div style={{flex:1}}/>
+      <button onClick={()=>setShowRes(v=>!v)} style={{padding:'4px 12px',borderRadius:6,border:'1px solid rgba(196,50,74,.2)',background:showRes?'rgba(196,50,74,.1)':'rgba(196,50,74,.04)',color:'#c4324a',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{showRes?'↩ Vue':'📊 Résultats'}</button>
+      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 12px',borderRadius:6,border:'1px solid '+(view3D?'rgba(14,146,104,.4)':'rgba(14,146,104,.2)'),background:view3D?'rgba(14,146,104,.15)':'rgba(14,146,104,.05)',color:'#0e9268',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{view3D?'↩ Schéma':'🧊 3D'}</button>
+    </div>
+    <div style={{display:'flex',flex:1,minHeight:0}}>
+      {/* Panel */}
+      <div style={{width:255,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',overflowY:'auto',padding:8}}>
+        {/* Géométrie */}
+        <div style={{padding:8,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5,background:'linear-gradient(135deg,rgba(196,50,74,.08),rgba(196,50,74,.02))'}}>
+          <div style={{fontSize:9,fontWeight:700,color:'#c4324a',marginBottom:6}}>⛩ Géométrie</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:3,marginBottom:6}}>
+            {GEO_LIST.map(g=><button key={g.id} onClick={()=>setGeo(g.id)}
+              style={{padding:'6px 2px',fontSize:8,fontWeight:700,borderRadius:6,border:'1.5px solid '+(geo===g.id?'rgba(196,50,74,.3)':'var(--bd)'),
+                background:geo===g.id?'rgba(196,50,74,.08)':'var(--inp)',color:geo===g.id?'#c4324a':'var(--t2)',cursor:'pointer',fontFamily:'inherit',textAlign:'center',lineHeight:1.3}}>
+              <div style={{fontSize:14}}>{g.i}</div>{g.l}</button>)}
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+            <InputRow label="Portée L" value={L} onChange={setL} unit="m" step={.5} min={3} max={30}/>
+            <InputRow label="Entraxe" value={ea} onChange={setEa} unit="m" step={.25} min={1} max={8}/>
+            <InputRow label="Hauteur" value={ht} onChange={setHt} unit="m" step={.25} min={2} max={15}/>
+            <InputRow label="Pente" value={pe} onChange={setPe} unit="°" step={1} min={0} max={45}/>
+          </div>
+          <InputRow label="Nb pannes/travée" value={nb} onChange={setNb} unit="u" step={1} min={1} max={10}/>
+        </div>
+        {/* Couverture */}
+        <div style={{padding:8,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5,background:'linear-gradient(135deg,rgba(14,146,104,.08),rgba(14,146,104,.02))'}}>
+          <div style={{fontSize:9,fontWeight:700,color:'#0e9268',marginBottom:6}}>🌿 Couverture</div>
+          <div style={{display:'flex',gap:3,marginBottom:6}}>
+            {COUV_LIST.map(cv=><button key={cv.id} onClick={()=>setCouv(cv.id)}
+              style={{flex:1,padding:'5px 3px',fontSize:8,fontWeight:700,borderRadius:6,border:'1.5px solid '+(couv===cv.id?`rgba(${cv.c},.4)`:'var(--bd)'),
+                background:couv===cv.id?`rgba(${cv.c},.1)`:'var(--inp)',color:couv===cv.id?`rgb(${cv.c})`:'var(--t2)',cursor:'pointer',fontFamily:'inherit',textAlign:'center'}}>{cv.l}</button>)}
+          </div>
+          {couv==='veg'&&<>
+            <div style={{fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2}}>Poids substrat: {gv} kN/m²</div>
+            <input type="range" min={.5} max={6} step={.1} value={gv} onChange={e=>setGv(Number(e.target.value))} style={{width:'100%',accentColor:'#0e9268'}}/>
+            <div style={{fontSize:7,color:'#0e9268',fontWeight:700,marginTop:2}}>{gv<2?'Extensive':gv<3?'Semi-intensive':'Intensive'}</div>
+          </>}
+        </div>
+        {/* Charges */}
+        <div style={{padding:8,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
+          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:6}}>📐 Charges</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+            <InputRow label="Bac+isol (gb)" value={gb} onChange={setGb} unit="kN/m²" step={.01}/>
+            <InputRow label="Inst. (gi)" value={gi} onChange={setGi} unit="kN/m²" step={.01}/>
+            <InputRow label="Suspente (gs)" value={gs} onChange={setGs} unit="kN/m²" step={.01}/>
+            <InputRow label="Exploitation" value={qe} onChange={setQe} unit="kN/m²" step={.1}/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:5}}>
+            <div>
+              <div style={{fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2}}>Zone neige</div>
+              <select value={niIdx} onChange={e=>setNiIdx(Number(e.target.value))} style={{width:'100%',padding:'4px',borderRadius:5,border:'1.5px solid var(--bd)',background:'var(--inp)',fontSize:9,fontFamily:'inherit',color:'var(--t1)'}}>
+                {NZ_DATA.map((z,i)=><option key={i} value={i}>{z.id} — {z.l}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2}}>Zone vent</div>
+              <select value={viIdx} onChange={e=>setViIdx(Number(e.target.value))} style={{width:'100%',padding:'4px',borderRadius:5,border:'1.5px solid var(--bd)',background:'var(--inp)',fontSize:9,fontFamily:'inherit',color:'var(--t1)'}}>
+                {VZ_DATA.map((z,i)=><option key={i} value={i}>Zone {z.id} — {z.l}</option>)}
+              </select>
+            </div>
+          </div>
+          <InputRow label="Altitude" value={alt} onChange={setAlt} unit="m" step={50} min={0} max={3000}/>
+        </div>
+      </div>
+      {/* Viewport or Results */}
+      {showRes?<div style={{flex:1,overflowY:'auto',padding:20,background:'var(--bg)'}}>
+        <div style={{maxWidth:700,margin:'0 auto'}}>
+          <div style={{fontSize:16,fontWeight:800,color:'var(--t1)',marginBottom:16}}>Résultats dimensionnement</div>
+          {/* Charges summary */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10,marginBottom:20}}>
+            {[{l:'G (perm.)',v:calc.G+' kN/m²',c:'#c4324a'},{l:'Q (var.)',v:calc.Q+' kN/m²',c:'#d97706'},{l:'q ELU',v:calc.qelu+' kN/m',c:'#c4324a'},{l:'M ELU',v:calc.Melu+' kN.m',c:'#7e4faa'}].map((s,i)=>
+              <div key={i} style={{padding:12,borderRadius:12,background:'var(--crd)',border:'1px solid var(--bd)',textAlign:'center'}}>
+                <div style={{fontSize:8,color:'var(--t3)',fontWeight:600,marginBottom:4}}>{s.l}</div>
+                <div style={{fontSize:16,fontWeight:800,color:s.c,fontFamily:'JetBrains Mono,monospace'}}>{s.v}</div>
+              </div>)}
+          </div>
+          {/* Steel EC3 */}
+          <div style={{padding:14,borderRadius:12,border:'1.5px solid rgba(196,50,74,.15)',background:'rgba(196,50,74,.03)',marginBottom:12}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#c4324a',marginBottom:8}}>🔩 Acier S235 — EC3</div>
+            {calc.pM?<>
+              <div style={{fontSize:14,fontWeight:800,color:'var(--t1)',marginBottom:6}}>{calc.pM.n} <span style={{fontSize:10,color:'var(--t3)'}}>{calc.pM.kg} kg/m</span></div>
+              {pctBar(calc.tW||0,'Résistance (W)')}
+              {pctBar(calc.tF||0,'Flèche (f)')}
+              <div style={{fontSize:9,color:'var(--t3)',marginTop:4}}>W requis: {calc.Wreq} cm³ — I requis: {calc.Ireq} cm⁴ — Flèche adm: {calc.fadm} mm</div>
+            </>:<div style={{color:'#ef4444',fontSize:11,fontWeight:600}}>Aucun profil adapté — portée trop grande</div>}
+          </div>
+          {/* Wood EC5 */}
+          <div style={{padding:14,borderRadius:12,border:'1.5px solid rgba(14,146,104,.15)',background:'rgba(14,146,104,.03)',marginBottom:12}}>
+            <div style={{fontSize:12,fontWeight:700,color:'#0e9268',marginBottom:8}}>🪵 Bois GL24h — EC5</div>
+            {calc.pB?<>
+              <div style={{fontSize:14,fontWeight:800,color:'var(--t1)',marginBottom:6}}>{calc.pB.n} <span style={{fontSize:10,color:'var(--t3)'}}>{calc.pB.kg} kg/m</span></div>
+              <div style={{fontSize:9,color:'var(--t3)'}}>W requis: {calc.Wreqb} cm³ — I requis: {calc.Ireqb} cm⁴</div>
+            </>:<div style={{color:'#ef4444',fontSize:11,fontWeight:600}}>Aucun profil adapté</div>}
+          </div>
+        </div>
+      </div>
+      :<div style={{flex:1,position:'relative'}}>
+        {view3D?<div ref={mountRef} style={{width:'100%',height:'100%',background:'#ddd4c8'}}/>
+        :<svg viewBox={`${-L/2-1} ${-1} ${L+2} ${ht+5}`} style={{width:'100%',height:'100%',background:'#f4ece5',transform:'scaleY(-1)'}}>
+          {/* 2D Schema */}
+          <line x1={-L/2} y1={0} x2={L/2} y2={0} stroke="#c8b8a0" strokeWidth=".03"/>
+          {/* Columns */}
+          <rect x={-L/2-.1} y={0} width={.2} height={ht} fill="#9a2030" opacity={.7}/>
+          <rect x={L/2-.1} y={0} width={.2} height={ht} fill="#9a2030" opacity={.7}/>
+          {geo==='portique'&&<><line x1={-L/2} y1={ht} x2={0} y2={ht+Math.tan(pe*Math.PI/180)*(L/2)} stroke="#8a3848" strokeWidth=".08"/>
+            <line x1={L/2} y1={ht} x2={0} y2={ht+Math.tan(pe*Math.PI/180)*(L/2)} stroke="#8a3848" strokeWidth=".08"/></>}
+          {geo==='plate'&&<line x1={-L/2} y1={ht} x2={L/2} y2={ht} stroke="#8a3848" strokeWidth=".08"/>}
+          {/* Dims */}
+          <text x={0} y={-.3} textAnchor="middle" fill="#c4324a" fontSize=".3" fontWeight="700" style={{transform:'scaleY(-1)'}}>{L}m</text>
+          <text x={-L/2-.3} y={ht/2} textAnchor="middle" fill="#c4324a" fontSize=".25" style={{transform:'scaleY(-1)'}}>{ht}m</text>
+        </svg>}
+        {/* Info overlay */}
+        <div style={{position:'absolute',top:12,right:12,zIndex:10,background:'rgba(244,236,229,.95)',backdropFilter:'blur(8px)',borderRadius:10,padding:'8px 12px',border:'1px solid rgba(14,146,104,.12)',fontSize:9}}>
+          <div style={{fontWeight:700,color:'#0e9268',marginBottom:2}}>{GEO_LIST.find(g=>g.id===geo)?.l} — {COUV_LIST.find(cv=>cv.id===couv)?.l}</div>
+          <div style={{color:'var(--t2)'}}>L={L}m · H={ht}m · ea={ea}m · {pe}°</div>
+          <div style={{color:'var(--t2)'}}>G={calc.G} · Q={calc.Q} kN/m²</div>
+          {calc.pM&&<div style={{color:'#c4324a',fontWeight:600}}>Acier: {calc.pM.n}</div>}
+          {calc.pB&&<div style={{color:'#0e9268',fontWeight:600}}>Bois: {calc.pB.n}</div>}
+        </div>
+      </div>}
+    </div>
+  </div>;
+}
+
+
 function PlanMasse({zones,setZones,activeZoneIdx,setActiveZoneIdx,pxPerMm,onClose,ZONE_COLORS,RAL_COLORS,ralIdx}){
   const svgRef=useRef();
   const[vb,setVb]=useState({x:-8,y:-8,w:30,h:22});
@@ -9715,19 +10603,30 @@ function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ra
     if(!zones.length||!chain||!chain.length||!mountRef.current)return;
     try{
     const W=mountRef.current.clientWidth,H=mountRef.current.clientHeight;
-    const scene=new THREE.Scene();scene.background=new THREE.Color(0x1a1a2a);
-    const camera=new THREE.PerspectiveCamera(45,W/H,0.01,500);
-    const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
+    scene.fog=new THREE.FogExp2(0xddd4c8,.008);
+    const camera=new THREE.PerspectiveCamera(42,W/H,0.01,500);
+    const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
     renderer.domElement.style.pointerEvents='auto';renderer.domElement.style.cursor='grab';
 
-    scene.add(new THREE.AmbientLight(0xffffff,0.5));
-    const sun=new THREE.DirectionalLight(0xffffff,0.8);sun.position.set(3,4,5);scene.add(sun);
-    const fill=new THREE.DirectionalLight(0x8888ff,0.3);fill.position.set(-2,2,-3);scene.add(fill);
+    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    const sun=new THREE.DirectionalLight(0xfff5e8,1.15);sun.position.set(20,32,14);sun.castShadow=true;
+    sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.near=.5;sun.shadow.camera.far=80;
+    sun.shadow.camera.left=-20;sun.shadow.camera.right=20;sun.shadow.camera.top=20;sun.shadow.camera.bottom=-20;
+    sun.shadow.bias=-.0003;scene.add(sun);
+    const skyFc=new THREE.DirectionalLight(0xc8dcff,.28);skyFc.position.set(0,20,-5);scene.add(skyFc);
+    const fill=new THREE.DirectionalLight(0xe8f0ff,.22);fill.position.set(-18,10,-12);scene.add(fill);
+    // Ground + grid
+    const floorFc=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
+    floorFc.rotation.x=-Math.PI/2;floorFc.position.y=0;floorFc.receiveShadow=true;scene.add(floorFc);
+    const g1Fc=new THREE.GridHelper(60,12,0xa89880,0xb8aa98);g1Fc.position.y=.003;scene.add(g1Fc);
+    const g2Fc=new THREE.GridHelper(60,60,0xb8aa98,0xc0b4a4);g2Fc.position.y=.001;scene.add(g2Fc);
 
-    const ground=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshStandardMaterial({color:0x222233,roughness:.95}));
-    ground.rotation.x=-Math.PI/2;ground.position.y=-.01;scene.add(ground);
+
 
     // Centroid
     let sx=0,sz=0;chain.forEach(c=>{sx+=(c.x1+c.x2)/2;sz+=(c.y1+c.y2)/2});
