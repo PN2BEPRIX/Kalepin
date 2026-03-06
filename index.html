@@ -9608,522 +9608,596 @@ function CarrelageApp({onBack,user}){
 // MODULE ÉTANCHÉITÉ
 // ═══════════════════════════════════════════════════════════════
 function EtancheiteApp({onBack,user}){
-  // ── Polygon roof shape ──
-  const defPoly=[[0,0],[20,0],[20,15],[0,15]];// meters
-  const[roofPts,setRoofPts]=useState(defPoly);
-  const[drawMode,setDrawMode]=useState(null);// null, 'roof', 'edicule'
-  const[drawPts,setDrawPts]=useState([]);
-  // ── Édicules (raised structures on roof) ──
-  const mkEdic=(pts,name='Édicule')=>({id:Date.now()+Math.random(),name,pts,h:2500,type:'ventelles',hasLant:false,lantW:1200,lantL:1200});
-  const[edicules,setEdicules]=useState([]);
-  const[selEdic,setSelEdic]=useState(null);
-  // ── Lanterneaux (on roof, not on edicules) ──
-  const mkLant=()=>({id:Date.now()+Math.random(),x:5,y:5,w:1.2,l:1.2});
-  const[lanterneaux,setLanterneaux]=useState([mkLant()]);
-  // ── EP ──
-  const mkEP=()=>({id:Date.now()+Math.random(),x:0,y:0});
-  const[eps,setEps]=useState([{id:1,x:0,y:7.5},{id:2,x:20,y:7.5}]);
-  const[epDiam,setEpDiam]=useState(100);
-  // ── Acrotère & complexe ──
-  const[acroH,setAcroH]=useState(300);
-  const[relH,setRelH]=useState(150);
-  const[couvertW,setCouvertW]=useState(400);
-  const[couvertType,setCouvertType]=useState('alu');
-  const[complexType,setComplexType]=useState('bicouche');
-  const[isolType,setIsolType]=useState('pir');
-  const[isolEp,setIsolEp]=useState(120);
-  const[pvActive,setPvActive]=useState(true);
-  const[pentePerc,setPentePerc]=useState(1.5);
-  // ── View ──
-  const[view3D,setView3D]=useState(false);
-  const[dragPt,setDragPt]=useState(null);// {type:'roof'|'edic'|'lant'|'ep', idx, edicId?}
-  const[panState,setPanState]=useState({x:0,y:0});
-  const[zoomSvg,setZoomSvg]=useState(1);
-  const svgRef=useRef(null);
-  const mountRef=useRef(null);const scRef=useRef({});
+  // ═══════════════════════════════════════════
+  // BIBLIOTHÈQUE DE PRESTATIONS
+  // ═══════════════════════════════════════════
+  const PRESTA_LIB=[
+    // COMPLEXE NEUF
+    {id:'pv',cat:'Complexe',label:'Pare-vapeur',unit:'m²',prix:4.5,auto:s=>s.nette},
+    {id:'isol_pu',cat:'Complexe',label:'Isolant polyuréthane incl. relevés',unit:'m²',prix:28,auto:s=>s.nette},
+    {id:'isol_pir',cat:'Complexe',label:'Isolant PIR incl. relevés',unit:'m²',prix:32,auto:s=>s.nette},
+    {id:'isol_ldr',cat:'Complexe',label:'Isolant laine de roche',unit:'m²',prix:18,auto:s=>s.nette},
+    {id:'eth_bi',cat:'Complexe',label:'Étanchéité bi-couche élastomère',unit:'m²',prix:35,auto:s=>s.nette},
+    {id:'eth_mono',cat:'Complexe',label:'Étanchéité mono-couche',unit:'m²',prix:22,auto:s=>s.nette},
+    {id:'eth_pvc',cat:'Complexe',label:'Étanchéité PVC soudé',unit:'m²',prix:28,auto:s=>s.nette},
+    {id:'eth_epdm',cat:'Complexe',label:'Étanchéité EPDM',unit:'m²',prix:40,auto:s=>s.nette},
+    {id:'releve',cat:'Complexe',label:'Relevés d\'étanchéité',unit:'ml',prix:42,auto:s=>s.peri},
+    {id:'veg',cat:'Complexe',label:'Végétalisation extensive',unit:'m²',prix:65,auto:s=>s.nette},
+    {id:'gravillon',cat:'Complexe',label:'Protection gravillon roulé',unit:'m²',prix:9,auto:s=>s.nette},
+    // COUVERTURE
+    {id:'couv_acier',cat:'Couvertures',label:'Couvertines acier laqué',unit:'ml',prix:55,auto:s=>s.peri},
+    {id:'couv_alu',cat:'Couvertures',label:'Couvertines aluminium',unit:'ml',prix:68,auto:s=>s.peri},
+    {id:'couv_zinc',cat:'Couvertures',label:'Couvertines zinc naturel',unit:'ml',prix:88,auto:s=>s.peri},
+    {id:'adapt_rive',cat:'Couvertures',label:'Adaptation rive complexe végétalisé existant',unit:'ml',prix:38,auto:null},
+    // DÉMOLITION / RETRAIT
+    {id:'ret_veg',cat:'Démolition',label:'Retrait complexe étanchéité végétalisé',unit:'m²',prix:20,auto:s=>s.nette},
+    {id:'ret_grav',cat:'Démolition',label:'Retrait complexe étanchéité gravillonné',unit:'m²',prix:13,auto:s=>s.nette},
+    {id:'ret_eth',cat:'Démolition',label:'Retrait complexe étanchéité existante',unit:'m²',prix:11,auto:s=>s.nette},
+    {id:'curage',cat:'Démolition',label:'Curage de chape',unit:'m²',prix:9,auto:null},
+    {id:'decouv_plat',cat:'Démolition',label:'Découpe et adaptation platelage',unit:'ml',prix:28,auto:null},
+    {id:'demol_socle',cat:'Démolition',label:'Démolition socles BA incl. remise en état',unit:'u',prix:420,auto:null},
+    {id:'ferm_tremie_ex',cat:'Démolition',label:'Fermeture trémie existante dans dalle BA',unit:'u',prix:750,auto:null},
+    {id:'suppr_gaines',cat:'Démolition',label:'Suppression matériels et gaines (ff)',unit:'ff',prix:1500,auto:null},
+    {id:'remise_etat',cat:'Démolition',label:'Remise en état toiture terrasse',unit:'m²',prix:48,auto:null},
+    // TRÉMIES / PERCEMENTS
+    {id:'ouv_bac',cat:'Trémies',label:'Ouverture trémie dans toiture bac sec',unit:'u',prix:420,auto:null},
+    {id:'ouv_ba',cat:'Trémies',label:'Ouverture trémie dans dalle BA',unit:'u',prix:950,auto:null},
+    {id:'chevetre',cat:'Trémies',label:'Fourniture et pose de chevêtres',unit:'u',prix:480,auto:null},
+    {id:'reprise_tremie',cat:'Trémies',label:'Reprise étanchéité au droit de la trémie',unit:'u',prix:320,auto:null},
+    {id:'reprise_trav',cat:'Trémies',label:'Reprise étanchéité au droit traversée existante',unit:'u',prix:195,auto:null},
+    // ÉMERGENCES
+    {id:'gaine_bbc',cat:'Émergences',label:'Gaine maçonnée bloc béton cellulaire ep15cm',unit:'m²',prix:95,auto:null},
+    {id:'alleg_bbc',cat:'Émergences',label:'Allège maçonnée bloc béton cellulaire ep15cm',unit:'m²',prix:82,auto:null},
+    {id:'ite_ext',cat:'Émergences',label:'ITE sur allège ou gaine extérieure',unit:'m²',prix:105,auto:null},
+    {id:'toit_asc',cat:'Émergences',label:'Toiture gaine ascenseur (complexe complet)',unit:'u',prix:3200,auto:null},
+    {id:'adapt_veg_lant',cat:'Émergences',label:'Adaptation végétalisation autour lanterneau/gaine CVC',unit:'u',prix:380,auto:null},
+    // EP / DEP
+    {id:'eep',cat:'EP / DEP',label:'EEP (entrée eaux pluviales)',unit:'u',prix:240,auto:s=>s.eps},
+    {id:'dep_neuf',cat:'EP / DEP',label:'DEP neuf',unit:'ml',prix:48,auto:null},
+    {id:'dep_raccord',cat:'EP / DEP',label:'DEP incl. raccord sur DEP existante',unit:'u',prix:420,auto:null},
+    {id:'siphon',cat:'EP / DEP',label:'Siphon de sol',unit:'u',prix:165,auto:null},
+    // DIVERS
+    {id:'esc_galva',cat:'Divers',label:'Escalier acier galvanisé',unit:'ff',prix:5500,auto:null},
+    {id:'modif_esc',cat:'Divers',label:'Modification escalier de secours',unit:'ff',prix:2500,auto:null},
+    {id:'saut_loup',cat:'Divers',label:'Saut de loup',unit:'u',prix:950,auto:null},
+    {id:'lanterneau',cat:'Divers',label:'Lanterneau (fourniture et pose)',unit:'u',prix:1800,auto:s=>s.lants},
+    {id:'lant_edic',cat:'Divers',label:'Lanterneau sur édicule',unit:'u',prix:2200,auto:null},
+  ];
+  const CATS=[...new Set(PRESTA_LIB.map(p=>p.cat))];
 
-  // ── Geometry helpers ──
-  const polyArea=(pts)=>{let a=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;a+=pts[i][0]*pts[j][1]-pts[j][0]*pts[i][1]}return Math.abs(a/2)};
-  const polyPerimeter=(pts)=>{let p=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;const dx=pts[j][0]-pts[i][0],dy=pts[j][1]-pts[i][1];p+=Math.sqrt(dx*dx+dy*dy)}return p};
-  const polyCentroid=(pts)=>{let cx=0,cy=0;pts.forEach(p=>{cx+=p[0];cy+=p[1]});return[cx/pts.length,cy/pts.length]};
-  const polyBounds=(pts)=>{let mn=[Infinity,Infinity],mx=[-Infinity,-Infinity];pts.forEach(p=>{mn[0]=Math.min(mn[0],p[0]);mn[1]=Math.min(mn[1],p[1]);mx[0]=Math.max(mx[0],p[0]);mx[1]=Math.max(mx[1],p[1])});return{min:mn,max:mx,w:mx[0]-mn[0],h:mx[1]-mn[1]}};
-
-  // ── Derived calcs ──
-  const surfToit=polyArea(roofPts);
-  const periToit=polyPerimeter(roofPts);
-  const surfEdic=edicules.reduce((s,e)=>s+polyArea(e.pts),0);
-  const surfLant=lanterneaux.reduce((s,l)=>s+l.w*l.l,0);
-  const edicLant=edicules.filter(e=>e.hasLant).reduce((s,e)=>s+e.lantW/1000*e.lantL/1000,0);
-  const surfNette=surfToit-surfEdic-surfLant;
-  const surfReleve=periToit*(relH/1000);
-  const surfCouvertine=periToit*(couvertW/1000);
-  const ISOL_PRIX={pir:28,pu:22,ldr:15,xps:20};
-  const COMPLEX_PRIX={mono:18,bicouche:28,pvc:22,epdm:32};
-  const COUV_PRIX={alu:35,zinc:55,acier:28};
-  const prixTotal=(surfNette*COMPLEX_PRIX[complexType])+(surfNette*ISOL_PRIX[isolType])+(pvActive?surfNette*3.5:0)
-    +(surfReleve*42)+(surfCouvertine*COUV_PRIX[couvertType])+(lanterneaux.length*850)+(edicLant>0?edicules.filter(e=>e.hasLant).length*1200:0)
-    +(eps.length*220)+(edicules.length*2500);
+  // ═══════════════════════════════════════════
+  // GÉOMÉTRIE
+  // ═══════════════════════════════════════════
+  const polyArea=pts=>{let a=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;a+=pts[i][0]*pts[j][1]-pts[j][0]*pts[i][1]}return Math.abs(a/2)};
+  const polyPeri=pts=>{let p=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;const dx=pts[j][0]-pts[i][0],dy=pts[j][1]-pts[i][1];p+=Math.sqrt(dx*dx+dy*dy)}return p};
+  const polyCtr=pts=>{let cx=0,cy=0;pts.forEach(p=>{cx+=p[0];cy+=p[1]});return[cx/pts.length,cy/pts.length]};
+  const polyBnds=pts=>{let mn=[Infinity,Infinity],mx=[-Infinity,-Infinity];pts.forEach(p=>{mn[0]=Math.min(mn[0],p[0]);mn[1]=Math.min(mn[1],p[1]);mx[0]=Math.max(mx[0],p[0]);mx[1]=Math.max(mx[1],p[1])});return{min:mn,max:mx,w:mx[0]-mn[0],h:mx[1]-mn[1]}};
   const r2=v=>Math.round(v*100)/100;
+  const r0=v=>Math.round(v);
 
-  // ── SVG interaction ──
-  const svgCoord=(e)=>{
+  const mkZone=(n,i)=>({
+    id:Date.now()+Math.random()+i,
+    name:n||('Zone '+(i+1)),
+    roofPts:[[0,0],[12,0],[12,8],[0,8]],
+    edicules:[],lanterneaux:[],eps:[{id:'e1',x:0,y:4},{id:'e2',x:12,y:4}],
+    surfManual:null,periManual:null,
+    acroH:300,relH:150,couvertW:400,
+    prestations:{},
+  });
+
+  const [zones,setZones]=useState([mkZone('Toiture principale',0)]);
+  const [activeId,setActiveId]=useState(null);
+  const [tab,setTab]=useState('plan');
+  const [drawMode,setDrawMode]=useState(null);
+  const [drawPts,setDrawPts]=useState([]);
+  const [dragPt,setDragPt]=useState(null);
+  const [selEdic,setSelEdic]=useState(null);
+  const [view3D,setView3D]=useState(false);
+  const svgRef=useRef(null);
+  const mountRef=useRef(null);
+  const scRef=useRef({});
+  const lastPt=useRef(null);
+  const [editZoneName,setEditZoneName]=useState(null);
+
+  const az=zones.find(z=>z.id===activeId)||zones[0];
+  const setAz=patch=>setZones(zs=>zs.map(z=>z.id===az.id?{...z,...patch}:z));
+  const setPresta=(zid,pid,patch)=>setZones(zs=>zs.map(z=>z.id===zid?{...z,prestations:{...z.prestations,[pid]:{...z.prestations[pid],...patch}}}:z));
+
+  const zStats=z=>{
+    const surf=z.surfManual!=null?z.surfManual:polyArea(z.roofPts);
+    const peri=z.periManual!=null?z.periManual:polyPeri(z.roofPts);
+    const surfEdic=z.edicules.reduce((s,e)=>s+polyArea(e.pts),0);
+    const surfLant=z.lanterneaux.reduce((s,l)=>s+l.w*l.l,0);
+    return{surf,peri,nette:Math.max(0,surf-surfEdic-surfLant),eps:z.eps.length,lants:z.lanterneaux.length+z.edicules.filter(e=>e.hasLant).length,surfEdic,surfLant};
+  };
+
+  const lineItem=(z,p)=>{
+    const cfg=z.prestations[p.id]||{};
+    if(!cfg.enabled)return null;
+    const st=zStats(z);
+    const autoQ=p.auto?p.auto(st):null;
+    const qty=cfg.qtyOverride!=null?cfg.qtyOverride:(autoQ||0);
+    const prix=cfg.prixOverride!=null?cfg.prixOverride:p.prix;
+    return{label:p.label,cat:p.cat,unit:p.unit,qty,prix,total:qty*prix,auto:autoQ!=null};
+  };
+
+  const zoneTotal=z=>PRESTA_LIB.reduce((s,p)=>{const li=lineItem(z,p);return s+(li?li.total:0);},0);
+  const grandTotal=zones.reduce((s,z)=>s+zoneTotal(z),0);
+
+  // ═══════════════════════════════════════════
+  // SVG INTERACTION
+  // ═══════════════════════════════════════════
+  const svgCoord=e=>{
     const svg=svgRef.current;if(!svg)return[0,0];
     const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
-    const ctm=svg.getScreenCTM();if(!ctm)return[0,0];
-    const svgPt=pt.matrixTransform(ctm.inverse());
-    return[Math.round(svgPt.x*10)/10,Math.round(svgPt.y*10)/10];
+    const inv=svg.getScreenCTM()?.inverse();if(!inv)return[0,0];
+    const sp=pt.matrixTransform(inv);
+    return[Math.round(sp.x*10)/10,Math.round(sp.y*10)/10];
   };
-  const lastSvgPt=useRef(null);
-  const handleSvgMouseMove=(e)=>{
+
+  const handleMM=e=>{
     if(!dragPt)return;
     const[x,y]=svgCoord(e);
-    if(dragPt.type==='roof')setRoofPts(ps=>ps.map((p,i)=>i===dragPt.idx?[x,y]:p));
-    else if(dragPt.type==='lant')setLanterneaux(ls=>ls.map((l,i)=>i===dragPt.idx?{...l,x,y}:l));
-    else if(dragPt.type==='lant_resize'){
-      setLanterneaux(ls=>ls.map((l,i)=>{if(i!==dragPt.idx)return l;
-        const nw=Math.max(.3,Math.abs(x-l.x)*2),nl=Math.max(.3,Math.abs(y-l.y)*2);
-        return{...l,w:Math.round(nw*10)/10,l:Math.round(nl*10)/10}}));
-    }
-    else if(dragPt.type==='ep')setEps(es=>es.map((ep2,i)=>i===dragPt.idx?{...ep2,x,y}:ep2));
-    else if(dragPt.type==='edic_pt'){
-      setEdicules(es=>es.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map((p,i)=>i===dragPt.idx?[x,y]:p)}:ed));
-    } else if(dragPt.type==='edic_move'){
-      if(!lastSvgPt.current)lastSvgPt.current=[x,y];
-      const dx2=x-lastSvgPt.current[0],dy2=y-lastSvgPt.current[1];
-      lastSvgPt.current=[x,y];
-      setEdicules(es=>es.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map(p=>[p[0]+dx2,p[1]+dy2])}:ed));
+    if(dragPt.type==='roof')setAz({roofPts:az.roofPts.map((p,i)=>i===dragPt.idx?[x,y]:p)});
+    else if(dragPt.type==='lant')setAz({lanterneaux:az.lanterneaux.map((l,i)=>i===dragPt.idx?{...l,x,y}:l)});
+    else if(dragPt.type==='lant_r'){setAz({lanterneaux:az.lanterneaux.map((l,i)=>{if(i!==dragPt.idx)return l;return{...l,w:Math.max(.3,Math.abs(x-l.x)*2),l:Math.max(.3,Math.abs(y-l.y)*2)}})});}
+    else if(dragPt.type==='ep')setAz({eps:az.eps.map((ep,i)=>i===dragPt.idx?{...ep,x,y}:ep)});
+    else if(dragPt.type==='edic_pt')setAz({edicules:az.edicules.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map((p,i)=>i===dragPt.idx?[x,y]:p)}:ed)});
+    else if(dragPt.type==='edic_mv'){
+      if(!lastPt.current)lastPt.current=[x,y];
+      const dx=x-lastPt.current[0],dy=y-lastPt.current[1];lastPt.current=[x,y];
+      setAz({edicules:az.edicules.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map(p=>[p[0]+dx,p[1]+dy])}:ed)});
     }
   };
-  const handleSvgMouseUp=()=>{setDragPt(null);lastSvgPt.current=null};
-
-  const handleSvgClick=(e)=>{
+  const handleMU=()=>{setDragPt(null);lastPt.current=null;};
+  const handleClick=e=>{
+    if(!drawMode)return;
+    const[x,y]=svgCoord(e);
+    const np=[...drawPts,[x,y]];
+    const close=np.length>=3&&Math.hypot(np[0][0]-x,np[0][1]-y)<.8;
     if(drawMode==='roof'){
-      const[x,y]=svgCoord(e);
-      const np=[...drawPts,[x,y]];
-      if(np.length>=3&&Math.hypot(np[0][0]-x,np[0][1]-y)<.8){
-        setRoofPts(np.slice(0,-1));setDrawMode(null);setDrawPts([]);
-      } else setDrawPts(np);
-    } else if(drawMode==='edicule'){
-      const[x,y]=svgCoord(e);
-      const np=[...drawPts,[x,y]];
-      if(np.length>=3&&Math.hypot(np[0][0]-x,np[0][1]-y)<.8){
-        setEdicules(es=>[...es,mkEdic(np.slice(0,-1),'Édicule '+(es.length+1))]);
+      if(close){setAz({roofPts:np.slice(0,-1)});setDrawMode(null);setDrawPts([]);}
+      else setDrawPts(np);
+    } else if(drawMode==='edic'){
+      if(close){
+        const id=Date.now();
+        setAz({edicules:[...az.edicules,{id,name:'Édicule '+(az.edicules.length+1),pts:np.slice(0,-1),h:2500,type:'ventelles',hasLant:false,lantW:1200,lantL:1200}]});
         setDrawMode(null);setDrawPts([]);
       } else setDrawPts(np);
     }
   };
-
-  const handleSvgDblClick=(e)=>{
-    if(drawMode==='roof'&&drawPts.length>=3){setRoofPts(drawPts);setDrawMode(null);setDrawPts([])}
-    else if(drawMode==='edicule'&&drawPts.length>=3){
-      setEdicules(es=>[...es,mkEdic(drawPts,'Édicule '+(es.length+1))]);setDrawMode(null);setDrawPts([]);
+  const handleDbl=()=>{
+    if(drawMode==='roof'&&drawPts.length>=3){setAz({roofPts:drawPts});setDrawMode(null);setDrawPts([]);}
+    else if(drawMode==='edic'&&drawPts.length>=3){
+      const id=Date.now();
+      setAz({edicules:[...az.edicules,{id,name:'Édicule '+(az.edicules.length+1),pts:drawPts,h:2500,type:'ventelles',hasLant:false,lantW:1200,lantL:1200}]});
+      setDrawMode(null);setDrawPts([]);
     }
   };
 
-  // ── 3D ──
+  // ═══════════════════════════════════════════
+  // 3D
+  // ═══════════════════════════════════════════
   useEffect(()=>{
     if(!view3D||!mountRef.current)return;
-    const el=mountRef.current;const W=el.clientWidth,H=el.clientHeight;if(W<10||H<10)return;
-    if(scRef.current.renderer){scRef.current.renderer.dispose()}el.innerHTML='';
+    const el=mountRef.current;const W=el.clientWidth,H=el.clientHeight;if(W<10)return;
+    if(scRef.current.renderer)scRef.current.renderer.dispose();el.innerHTML='';
     const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);
-    scene.fog=new THREE.FogExp2(0xddd4c8,.006);
-    const camera=new THREE.PerspectiveCamera(42,W/H,.01,300);
-    const renderer=new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(W,H);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-    renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
-    el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';
-    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
-    const sun=new THREE.DirectionalLight(0xfff5e8,1.1);sun.position.set(20,30,14);sun.castShadow=true;
-    sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.near=.5;sun.shadow.camera.far=120;
-    sun.shadow.camera.left=-40;sun.shadow.camera.right=40;sun.shadow.camera.top=40;sun.shadow.camera.bottom=-40;
-    sun.shadow.bias=-.0003;scene.add(sun);
-    const skyL=new THREE.DirectionalLight(0xc8dcff,.28);skyL.position.set(0,20,-5);scene.add(skyL);
-    const fillL=new THREE.DirectionalLight(0xe8f0ff,.22);fillL.position.set(-18,10,-12);scene.add(fillL);
-    // Ground
-    const flr=new THREE.Mesh(new THREE.PlaneGeometry(120,120),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
+    scene.fog=new THREE.FogExp2(0xddd4c8,.005);
+    const cam=new THREE.PerspectiveCamera(42,W/H,.01,300);
+    const rend=new THREE.WebGLRenderer({antialias:true});
+    rend.setSize(W,H);rend.setPixelRatio(Math.min(devicePixelRatio,2));
+    rend.shadowMap.enabled=true;rend.toneMapping=THREE.ACESFilmicToneMapping;rend.toneMappingExposure=1.05;
+    el.appendChild(rend.domElement);rend.domElement.style.cursor='grab';
+    scene.add(new THREE.AmbientLight(0xffe8d8,.6));
+    const sun=new THREE.DirectionalLight(0xfff5e8,1.1);sun.position.set(20,30,15);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);scene.add(sun);
+    const skyL=new THREE.DirectionalLight(0xc8dcff,.25);skyL.position.set(-15,20,-10);scene.add(skyL);
+    const flr=new THREE.Mesh(new THREE.PlaneGeometry(150,150),new THREE.MeshPhongMaterial({color:0xc8b8a0}));
     flr.rotation.x=-Math.PI/2;flr.receiveShadow=true;scene.add(flr);
-    const gr1=new THREE.GridHelper(120,24,0xa89880,0xb8aa98);gr1.position.y=.003;scene.add(gr1);
-    const gr2=new THREE.GridHelper(120,120,0xb8aa98,0xc0b4a4);gr2.position.y=.001;scene.add(gr2);
+    const gr=new THREE.GridHelper(150,30,0xa89880,0xb8aa98);gr.position.y=.003;scene.add(gr);
 
-    // Center
-    const ct=polyCentroid(roofPts);
-    const ROOF_Y=3;// roof at 3m height
-    const slabH=.15+isolEp/1000;
-
-    // ── Roof slab (extruded polygon) ──
-    // Shape in XY plane, then rotated -PI/2 around X → X stays, Y→-Z, Z→Y
-    // So shape Y must be negated: -(p[1]-ct[1]) so world Z = p[1]-ct[1]
-    const shape=new THREE.Shape();
-    roofPts.forEach((p,i)=>{
-      const sx=p[0]-ct[0],sy=-(p[1]-ct[1]);
-      if(i===0)shape.moveTo(sx,sy);else shape.lineTo(sx,sy);
-    });
-    shape.closePath();
-    // Cut out edicules (same negation)
-    edicules.forEach(ed=>{
-      const hole=new THREE.Path();
-      ed.pts.forEach((p,i)=>{const hx=p[0]-ct[0],hy=-(p[1]-ct[1]);if(i===0)hole.moveTo(hx,hy);else hole.lineTo(hx,hy)});
-      hole.closePath();shape.holes.push(hole);
-    });
-    // Cut out lanterneaux
-    lanterneaux.forEach(la=>{
-      const hx=la.x-ct[0],hy=-(la.y-ct[1]);
-      const hole=new THREE.Path();
-      hole.moveTo(hx-la.w/2,hy-la.l/2);
-      hole.lineTo(hx+la.w/2,hy-la.l/2);
-      hole.lineTo(hx+la.w/2,hy+la.l/2);
-      hole.lineTo(hx-la.w/2,hy+la.l/2);
-      hole.closePath();shape.holes.push(hole);
-    });
-
-    const memColor=complexType==='pvc'?0xd0d0d0:complexType==='epdm'?0x333333:0x555555;
-    // Slab
-    const geo=new THREE.ExtrudeGeometry(shape,{depth:slabH,bevelEnabled:false});
-    const slabMesh=new THREE.Mesh(geo,new THREE.MeshPhongMaterial({color:0x888888,shininess:10}));
-    slabMesh.rotation.x=-Math.PI/2;slabMesh.position.y=ROOF_Y;slabMesh.castShadow=true;slabMesh.receiveShadow=true;scene.add(slabMesh);
-    // Membrane top
-    const memGeo=new THREE.ExtrudeGeometry(shape,{depth:.02,bevelEnabled:false});
-    const memMesh=new THREE.Mesh(memGeo,new THREE.MeshPhongMaterial({color:memColor,shininess:30}));
-    memMesh.rotation.x=-Math.PI/2;memMesh.position.y=ROOF_Y+slabH;scene.add(memMesh);
-
-    // ── Acrotères (walls along perimeter) ──
-    const acMat=new THREE.MeshPhongMaterial({color:0xb8b0a0,shininess:5});
-    const acHm=acroH/1000,acT=.15;
-    for(let i=0;i<roofPts.length;i++){
-      const j=(i+1)%roofPts.length;
-      const ax=roofPts[i][0]-ct[0],az=roofPts[i][1]-ct[1];
-      const bx=roofPts[j][0]-ct[0],bz=roofPts[j][1]-ct[1];
-      const dx=bx-ax,dz=bz-az,len=Math.sqrt(dx*dx+dz*dz);if(len<.01)continue;
-      const mx=(ax+bx)/2,mz=(az+bz)/2;
-      const angle=Math.atan2(dz,dx);
-      const wall=new THREE.Mesh(new THREE.BoxGeometry(len,acHm,acT),acMat);
-      wall.position.set(mx,ROOF_Y+slabH+acHm/2,mz);
-      wall.rotation.y=-angle;wall.castShadow=true;scene.add(wall);
-      // Couvertine on top
-      const cvMat=new THREE.MeshPhongMaterial({color:couvertType==='zinc'?0xaab8c0:couvertType==='alu'?0xc0c0c8:0x8a8a90,shininess:60,specular:0x444444});
-      const cv=new THREE.Mesh(new THREE.BoxGeometry(len+.05,.015,couvertW/1000),cvMat);
-      cv.position.set(mx,ROOF_Y+slabH+acHm+.008,mz);
-      cv.rotation.y=-angle;scene.add(cv);
-    }
-
-    // ── Édicules ──
-    edicules.forEach(ed=>{
-      const eShape=new THREE.Shape();
-      ed.pts.forEach((p,i)=>{const ex=p[0]-ct[0],ey=-(p[1]-ct[1]);if(i===0)eShape.moveTo(ex,ey);else eShape.lineTo(ex,ey)});
-      eShape.closePath();
-      const eH=ed.h/1000;
-      // Walls
-      for(let i=0;i<ed.pts.length;i++){
-        const j2=(i+1)%ed.pts.length;
-        const ax2=ed.pts[i][0]-ct[0],az2=ed.pts[i][1]-ct[1];
-        const bx2=ed.pts[j2][0]-ct[0],bz2=ed.pts[j2][1]-ct[1];
-        const dx2=bx2-ax2,dz2=bz2-az2,len2=Math.sqrt(dx2*dx2+dz2*dz2);if(len2<.01)continue;
-        const mx2=(ax2+bx2)/2,mz2=(az2+bz2)/2;
-        const angle2=Math.atan2(dz2,dx2);
-        if(ed.type==='ventelles'){
-          // Ventelles: horizontal slats
-          const nSlats=Math.max(3,Math.floor(eH/.15));
-          const slatMat=new THREE.MeshPhongMaterial({color:0x606060,shininess:40});
-          for(let s=0;s<nSlats;s++){
-            const sy=ROOF_Y+slabH+.1+s*(eH/nSlats);
-            const slat=new THREE.Mesh(new THREE.BoxGeometry(len2,.04,.06),slatMat);
-            slat.position.set(mx2,sy,mz2);slat.rotation.y=-angle2;slat.castShadow=true;scene.add(slat);
-          }
-          // Frame posts at corners
-          const frameMat=new THREE.MeshPhongMaterial({color:0x444444,shininess:30});
-          [ed.pts[i],ed.pts[j2]].forEach(pp=>{
-            const post=new THREE.Mesh(new THREE.BoxGeometry(.06,eH,.06),frameMat);
-            post.position.set(pp[0]-ct[0],ROOF_Y+slabH+eH/2,pp[1]-ct[1]);post.castShadow=true;scene.add(post);
-          });
-        } else {
-          // Cassette: solid wall
-          const wallMat=new THREE.MeshPhongMaterial({color:0x8a8a90,shininess:20});
-          const w=new THREE.Mesh(new THREE.BoxGeometry(len2,eH,.08),wallMat);
-          w.position.set(mx2,ROOF_Y+slabH+eH/2,mz2);w.rotation.y=-angle2;w.castShadow=true;scene.add(w);
-        }
-      }
-      // Roof of edicule
-      const eroofGeo=new THREE.ExtrudeGeometry(eShape,{depth:.08,bevelEnabled:false});
-      const eroofMesh=new THREE.Mesh(eroofGeo,new THREE.MeshPhongMaterial({color:0x666666,shininess:20}));
-      eroofMesh.rotation.x=-Math.PI/2;eroofMesh.position.y=ROOF_Y+slabH+eH;eroofMesh.castShadow=true;scene.add(eroofMesh);
-      // Lanterneau on edicule
-      if(ed.hasLant){
-        const ect=polyCentroid(ed.pts);
-        const glMat=new THREE.MeshPhongMaterial({color:0x88bbdd,transparent:true,opacity:.45,shininess:120,specular:0x8888ff});
-        const gl=new THREE.Mesh(new THREE.BoxGeometry(ed.lantW/1000,.06,ed.lantL/1000),glMat);
-        gl.position.set(ect[0]-ct[0],ROOF_Y+slabH+eH+.12,ect[1]-ct[1]);gl.castShadow=true;scene.add(gl);
-      }
-    });
-
-    // ── Lanterneaux (on roof) ──
-    const glMat=new THREE.MeshPhongMaterial({color:0x88bbdd,transparent:true,opacity:.45,shininess:120,specular:0x8888ff});
-    const frMat=new THREE.MeshPhongMaterial({color:0x505050,shininess:40});
-    lanterneaux.forEach(la=>{
-      const lx=la.x-ct[0],lz=la.y-ct[1];
-      const gl=new THREE.Mesh(new THREE.BoxGeometry(la.w,.06,la.l),glMat);
-      gl.position.set(lx,ROOF_Y+slabH+.08,lz);gl.castShadow=true;scene.add(gl);
-      // Frame
-      const ft=.035;
-      [[lx,lz-la.l/2,la.w+ft*2,ft],[lx,lz+la.l/2,la.w+ft*2,ft]].forEach(([fx,fz,fw,fd])=>{
-        const f=new THREE.Mesh(new THREE.BoxGeometry(fw,.04,fd),frMat);f.position.set(fx,ROOF_Y+slabH+.07,fz);scene.add(f)});
-      [[lx-la.w/2,lz,ft,la.l],[lx+la.w/2,lz,ft,la.l]].forEach(([fx,fz,fw,fd])=>{
-        const f=new THREE.Mesh(new THREE.BoxGeometry(fw,.04,fd),frMat);f.position.set(fx,ROOF_Y+slabH+.07,fz);scene.add(f)});
-    });
-
-    // ── EP pipes ──
-    const pipeMat=new THREE.MeshPhongMaterial({color:0x606060,shininess:30});
-    eps.forEach(ep=>{
-      const px=ep.x-ct[0],pz=ep.y-ct[1];
-      const pipe=new THREE.Mesh(new THREE.CylinderGeometry(epDiam/2000,epDiam/2000,ROOF_Y+.5,8),pipeMat);
-      pipe.position.set(px,(ROOF_Y+.5)/2,pz);pipe.castShadow=true;scene.add(pipe);
-      const collar=new THREE.Mesh(new THREE.CylinderGeometry(epDiam/1500,epDiam/1500,.04,8),new THREE.MeshPhongMaterial({color:0x444444}));
-      collar.position.set(px,ROOF_Y+slabH+.02,pz);scene.add(collar);
-    });
-
-    // Support pillars at corners
-    const pilMat=new THREE.MeshPhongMaterial({color:0x888880,shininess:5});
-    roofPts.forEach((p,i)=>{
-      if(i%Math.max(1,Math.floor(roofPts.length/4))===0){
-        const pil=new THREE.Mesh(new THREE.BoxGeometry(.3,ROOF_Y,.3),pilMat);
-        pil.position.set(p[0]-ct[0],ROOF_Y/2,p[1]-ct[1]);pil.castShadow=true;scene.add(pil);
-      }
+    // Draw all zones stacked or side by side
+    let offsetX=0;
+    zones.forEach(z=>{
+      const ct=polyCtr(z.roofPts);const ROOF_Y=3;const slabH=.15;
+      const shape=new THREE.Shape();
+      z.roofPts.forEach((p,i)=>{const sx=p[0]-ct[0]+offsetX,sy=-(p[1]-ct[1]);i===0?shape.moveTo(sx,sy):shape.lineTo(sx,sy)});
+      shape.closePath();
+      z.edicules.forEach(ed=>{const h=new THREE.Path();ed.pts.forEach((p,i)=>{const hx=p[0]-ct[0]+offsetX,hy=-(p[1]-ct[1]);i===0?h.moveTo(hx,hy):h.lineTo(hx,hy)});h.closePath();shape.holes.push(h)});
+      z.lanterneaux.forEach(la=>{const h=new THREE.Path();const hx=la.x-ct[0]+offsetX,hy=-(la.y-ct[1]);h.moveTo(hx-la.w/2,hy-la.l/2);h.lineTo(hx+la.w/2,hy-la.l/2);h.lineTo(hx+la.w/2,hy+la.l/2);h.lineTo(hx-la.w/2,hy+la.l/2);h.closePath();shape.holes.push(h)});
+      const geo=new THREE.ExtrudeGeometry(shape,{depth:slabH,bevelEnabled:false});
+      const mat=new THREE.MeshStandardMaterial({color:0x444444,roughness:.9,metalness:.05});
+      const slab=new THREE.Mesh(geo,mat);slab.rotation.x=-Math.PI/2;slab.position.y=ROOF_Y;slab.castShadow=true;slab.receiveShadow=true;scene.add(slab);
+      // Acrotere walls
+      const bnds=polyBnds(z.roofPts);const acH=z.acroH/1000;
+      [[bnds.min[0],bnds.min[1],bnds.max[0],bnds.min[1]],[bnds.max[0],bnds.min[1],bnds.max[0],bnds.max[1]],[bnds.max[0],bnds.max[1],bnds.min[0],bnds.max[1]],[bnds.min[0],bnds.max[1],bnds.min[0],bnds.min[1]]].forEach(([x1,y1,x2,y2])=>{
+        const len=Math.sqrt((x2-x1)**2+(y2-y1)**2);if(len<.01)return;
+        const wx=(x1+x2)/2-ct[0]+offsetX,wz=(y1+y2)/2-ct[1];
+        const ang=Math.atan2(y2-y1,x2-x1);
+        const acroGeo=new THREE.BoxGeometry(len,.15+acH,.18);
+        const acroM=new THREE.Mesh(acroGeo,new THREE.MeshStandardMaterial({color:0x888888,roughness:.9}));
+        acroM.position.set(wx,ROOF_Y+slabH+(.15+acH)/2,-wz);acroM.rotation.y=-ang;scene.add(acroM);
+      });
+      // Edicules
+      z.edicules.forEach(ed=>{
+        const ec=polyCtr(ed.pts);const eb=polyBnds(ed.pts);
+        const edGeo=new THREE.BoxGeometry(eb.w,ed.h/1000,eb.h);
+        const edM=new THREE.Mesh(edGeo,new THREE.MeshStandardMaterial({color:0x999090,roughness:.85}));
+        edM.position.set(ec[0]-ct[0]+offsetX,ROOF_Y+slabH+ed.h/2000,-(ec[1]-ct[1]));edM.castShadow=true;scene.add(edM);
+      });
+      // Lanterneaux
+      z.lanterneaux.forEach(la=>{
+        const lantGeo=new THREE.BoxGeometry(la.w,.5,la.l);
+        const lantM=new THREE.Mesh(lantGeo,new THREE.MeshStandardMaterial({color:0x88bbcc,metalness:.3,roughness:.3,transparent:true,opacity:.7}));
+        lantM.position.set(la.x-ct[0]+offsetX,ROOF_Y+slabH+.25,-(la.y-ct[1]));lantM.castShadow=true;scene.add(lantM);
+      });
+      const bnds2=polyBnds(z.roofPts);
+      offsetX+=bnds2.w+5;
     });
 
     // Camera
-    const bnd=polyBounds(roofPts);
-    const span=Math.max(bnd.w,bnd.h)*2;
-    const rot={x:-.35,y:.4};const zm={v:Math.max(span,8)};const pan={x:0,y:0};
-    const tgt=new THREE.Vector3(0,ROOF_Y,0);let dr=null;
+    const tgt=new THREE.Vector3(offsetX/2-3,3,0);
+    const rot={x:-.5,y:.4};const zm={v:25};const pan={x:0,y:0};
+    let dr=null;
     const onD=e=>{dr={x:e.clientX,y:e.clientY,rx:rot.x,ry:rot.y,btn:e.button}};
     const onU=()=>{dr=null};
-    const onM=e=>{if(!dr)return;if(dr.btn===2||dr.btn===1){pan.x+=(e.clientX-dr.x)*.005;pan.y-=(e.clientY-dr.y)*.005;dr.x=e.clientX;dr.y=e.clientY}else{rot.y=dr.ry+(e.clientX-dr.x)*.005;rot.x=Math.max(-1.4,Math.min(.2,dr.rx+(e.clientY-dr.y)*.005))}};
-    const onWh=e=>{e.preventDefault();zm.v=Math.max(3,Math.min(80,zm.v*(1+e.deltaY*.001)))};
-    renderer.domElement.addEventListener('mousedown',onD);renderer.domElement.addEventListener('mouseup',onU);
-    renderer.domElement.addEventListener('mouseleave',onU);renderer.domElement.addEventListener('mousemove',onM);
-    renderer.domElement.addEventListener('wheel',onWh,{passive:false});renderer.domElement.addEventListener('contextmenu',e=>e.preventDefault());
-    let raf;const anim=()=>{raf=requestAnimationFrame(anim);
-      camera.position.set(tgt.x+zm.v*Math.sin(rot.y)*Math.cos(rot.x)+pan.x,tgt.y+zm.v*Math.sin(-rot.x)+pan.y,tgt.z+zm.v*Math.cos(rot.y)*Math.cos(rot.x));
-      camera.lookAt(tgt.x+pan.x,tgt.y+pan.y,tgt.z);renderer.render(scene,camera)};anim();
-    scRef.current={renderer,raf};
-    const onR=()=>{const w=el.clientWidth,h=el.clientHeight;if(w>0&&h>0){camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h)}};
-    window.addEventListener('resize',onR);
-    return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',onR);renderer.dispose();el.innerHTML='';scRef.current={}};
-  },[view3D,roofPts,edicules,lanterneaux,eps,acroH,couvertW,couvertType,complexType,isolEp,epDiam,relH,pvActive]);
+    const onM=e=>{if(!dr)return;if(dr.btn===2||dr.btn===1){pan.x+=(e.clientX-dr.x)*.005;pan.y-=(e.clientY-dr.y)*.005;dr.x=e.clientX;dr.y=e.clientY;}else{rot.y=dr.ry+(e.clientX-dr.x)*.005;rot.x=Math.max(-1.4,Math.min(.2,dr.rx+(e.clientY-dr.y)*.005))}};
+    const onW=e=>{e.preventDefault();zm.v=Math.max(3,Math.min(100,zm.v*(1+e.deltaY*.001)))};
+    rend.domElement.addEventListener('mousedown',onD);rend.domElement.addEventListener('mouseup',onU);
+    rend.domElement.addEventListener('mouseleave',onU);rend.domElement.addEventListener('mousemove',onM);
+    rend.domElement.addEventListener('wheel',onW,{passive:false});rend.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+    let raf;const anim=()=>{raf=requestAnimationFrame(anim);cam.position.set(tgt.x+zm.v*Math.sin(rot.y)*Math.cos(rot.x)+pan.x,tgt.y+zm.v*Math.sin(-rot.x)+pan.y,tgt.z+zm.v*Math.cos(rot.y)*Math.cos(rot.x));cam.lookAt(tgt.x+pan.x,tgt.y+pan.y,tgt.z);rend.render(scene,cam)};anim();
+    scRef.current={renderer:rend,raf};
+    return()=>{cancelAnimationFrame(raf);rend.dispose();el.innerHTML='';scRef.current={}};
+  },[view3D,zones]);
 
-  const InputRow=({label,value,onChange,unit,min=0,max=99999,step=1})=><div style={{marginBottom:5}}>
-    <div style={{fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2,display:'flex',justifyContent:'space-between'}}><span>{label}</span><span style={{color:'var(--t3)',fontWeight:400}}>{unit}</span></div>
+  // ═══════════════════════════════════════════
+  // UI HELPERS
+  // ═══════════════════════════════════════════
+  const InputN=({label,value,onChange,unit,min=0,max=99999,step=1,small})=><div style={{marginBottom:small?3:5}}>
+    {label&&<div style={{fontSize:8,fontWeight:600,color:'var(--t2)',marginBottom:2,display:'flex',justifyContent:'space-between'}}><span>{label}</span><span style={{color:'var(--t3)'}}>{unit}</span></div>}
     <input type="number" value={value} min={min} max={max} step={step} onChange={e=>onChange(Number(e.target.value))}
       onKeyDown={e=>e.stopPropagation()}
-      style={{width:'100%',padding:'4px 6px',borderRadius:6,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontFamily:'JetBrains Mono,monospace',fontWeight:700,textAlign:'right',outline:'none',boxSizing:'border-box'}}/>
+      style={{width:'100%',padding:small?'3px 5px':'4px 7px',borderRadius:6,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontFamily:'JetBrains Mono,monospace',fontWeight:700,textAlign:'right',outline:'none',boxSizing:'border-box'}}/>
   </div>;
 
-  // SVG viewBox
-  const bnd=polyBounds(roofPts.length>=3?roofPts:defPoly);
+  const st=zStats(az);
+  const bnd=polyBnds(az.roofPts.length>=3?az.roofPts:[[0,0],[10,0],[10,8],[0,8]]);
   const pad=3;const vb=`${bnd.min[0]-pad} ${bnd.min[1]-pad} ${bnd.w+pad*2} ${bnd.h+pad*2}`;
 
-  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
-    {/* Header */}
-    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:8,background:'var(--pnl)',borderBottom:'1px solid var(--bd)'}}>
+  // ═══════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════
+  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)',fontFamily:'DM Sans,sans-serif'}}>
+
+    {/* ── HEADER ── */}
+    <div style={{height:44,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:8,background:'var(--pnl)',borderBottom:'1px solid var(--bd)'}}>
       <button onClick={onBack} style={{padding:'4px 12px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Retour</button>
-      <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#7e4faa,#5a3080)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:900}}>K</div>
-      <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
+      <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#7e4faa,#5a3080)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:900}}>K</div>
+      <span style={{fontSize:13,fontWeight:800,color:'var(--t1)'}}>Étanchéité</span>
       <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      <span style={{fontSize:12,fontWeight:600,color:'#7e4faa'}}>🏗 Étanchéité</span>
-      <div style={{flex:1}}/>
-      {drawMode&&<span style={{fontSize:10,fontWeight:700,color:'#c4324a',padding:'3px 10px',borderRadius:6,background:'rgba(196,50,74,.08)',border:'1px solid rgba(196,50,74,.2)'}}>
-        ✏ {drawMode==='roof'?'Tracé toiture':'Tracé édicule'} — cliquez pour poser des points · double-clic pour fermer
-        <button onClick={()=>{setDrawMode(null);setDrawPts([])}} style={{marginLeft:8,color:'#c4324a',fontWeight:700,background:'none',border:'none',cursor:'pointer',fontFamily:'inherit'}}>✕ Annuler</button>
-      </span>}
-      <button onClick={()=>{setDrawMode('roof');setDrawPts([])}} style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(126,79,170,.2)',background:drawMode==='roof'?'rgba(126,79,170,.15)':'rgba(126,79,170,.05)',color:'#7e4faa',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>✏ Toiture</button>
-      <button onClick={()=>{setDrawMode('edicule');setDrawPts([])}} style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(14,146,104,.2)',background:drawMode==='edicule'?'rgba(14,146,104,.15)':'rgba(14,146,104,.05)',color:'#0e9268',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>🏢 Édicule</button>
-      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 12px',borderRadius:6,border:'1px solid '+(view3D?'rgba(126,79,170,.4)':'rgba(126,79,170,.2)'),background:view3D?'rgba(126,79,170,.15)':'rgba(126,79,170,.05)',color:'#7e4faa',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{view3D?'↩ 2D':'🧊 3D'}</button>
+      {/* Zone selector */}
+      <div style={{display:'flex',gap:4,alignItems:'center',flex:1,overflowX:'auto'}}>
+        {zones.map((z,i)=><button key={z.id} onClick={()=>{setActiveId(z.id);setSelEdic(null);}}
+          style={{padding:'3px 10px',borderRadius:6,border:'1.5px solid '+(az.id===z.id?'rgba(126,79,170,.4)':'var(--bd)'),
+            background:az.id===z.id?'rgba(126,79,170,.1)':'var(--crd)',color:az.id===z.id?'#7e4faa':'var(--t2)',
+            fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
+          {z.name} <span style={{opacity:.5,fontWeight:400}}>{r2(zStats(z).nette)}m²</span>
+        </button>)}
+        <button onClick={()=>{const z=mkZone(null,zones.length);setZones(zs=>[...zs,z]);setActiveId(z.id);}}
+          style={{padding:'3px 10px',borderRadius:6,border:'1px dashed rgba(126,79,170,.3)',background:'none',color:'#7e4faa',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>+ Zone</button>
+      </div>
+      {/* Tabs */}
+      <div style={{display:'flex',gap:2,background:'rgba(42,14,20,.05)',borderRadius:8,padding:2}}>
+        {[['plan','📐 Plan'],['presta','✅ Prestations'],['devis','📋 Devis']].map(([k,l])=>
+          <button key={k} onClick={()=>setTab(k)} style={{padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:700,border:'none',cursor:'pointer',fontFamily:'inherit',
+            background:tab===k?'rgba(126,79,170,.2)':'transparent',color:tab===k?'#7e4faa':'var(--t2)'}}>{l}</button>)}
+      </div>
+      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 10px',borderRadius:6,border:'1px solid '+(view3D?'rgba(126,79,170,.4)':'var(--bd)'),background:view3D?'rgba(126,79,170,.12)':'var(--crd)',color:'#7e4faa',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>{view3D?'↩ 2D':'🧊 3D'}</button>
     </div>
+
     <div style={{display:'flex',flex:1,minHeight:0}}>
-      {/* Panel */}
-      <div style={{width:250,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',overflowY:'auto',padding:7}}>
+
+      {/* ── PANNEAU GAUCHE ── */}
+      <div style={{width:220,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',overflowY:'auto',padding:8}}>
+
+        {/* Zone name + delete */}
+        <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:8}}>
+          {editZoneName===az.id
+            ?<input autoFocus value={az.name} onChange={e=>setAz({name:e.target.value})} onBlur={()=>setEditZoneName(null)} onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')setEditZoneName(null)}}
+              style={{flex:1,padding:'3px 7px',borderRadius:6,border:'1.5px solid rgba(126,79,170,.4)',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontWeight:700,outline:'none'}}/>
+            :<div onClick={()=>setEditZoneName(az.id)} style={{flex:1,fontSize:11,fontWeight:800,color:'var(--t1)',cursor:'text',padding:'3px 4px',borderRadius:5,border:'1px solid transparent'}}
+              title="Cliquer pour renommer">{az.name}</div>}
+          {zones.length>1&&<button onClick={()=>{const ni=zones.findIndex(z=>z.id!==az.id);setZones(zs=>zs.filter(z=>z.id!==az.id));setActiveId(zones[ni]?.id||null)}}
+            style={{color:'#ef4444',fontSize:10,cursor:'pointer',padding:'2px 5px',borderRadius:4,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.05)',fontFamily:'inherit'}}>✕</button>}
+        </div>
+
+        {/* Métrés zone */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid rgba(126,79,170,.15)',background:'rgba(126,79,170,.04)',marginBottom:6}}>
+          <div style={{fontSize:8,fontWeight:700,color:'#7e4faa',marginBottom:5}}>📐 Surfaces & périmètres</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginBottom:4}}>
+            <InputN label="Surface (m²)" value={az.surfManual??r2(st.surf)} onChange={v=>setAz({surfManual:v>0?v:null})} step={0.1}/>
+            <InputN label="Périmètre (ml)" value={az.periManual??r2(st.peri)} onChange={v=>setAz({periManual:v>0?v:null})} step={0.1}/>
+          </div>
+          <div style={{fontSize:8,color:'var(--t3)',lineHeight:1.7}}>
+            Brute : <b style={{color:'var(--t1)'}}>{r2(st.surf)} m²</b><br/>
+            Édicules : <b style={{color:'var(--t1)'}}>-{r2(st.surfEdic)} m²</b><br/>
+            Lanterneaux : <b style={{color:'var(--t1)'}}>-{r2(st.surfLant)} m²</b><br/>
+            <b style={{color:'#7e4faa',fontSize:9}}>Nette : {r2(st.nette)} m²</b>
+          </div>
+          {(az.surfManual!=null||az.periManual!=null)&&<button onClick={()=>setAz({surfManual:null,periManual:null})}
+            style={{marginTop:4,width:'100%',padding:'2px',borderRadius:4,border:'1px dashed var(--bd)',background:'none',color:'var(--t3)',fontSize:7,cursor:'pointer',fontFamily:'inherit'}}>↩ Recalculer depuis tracé</button>}
+        </div>
+
         {/* Complexe */}
-        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5,background:'linear-gradient(135deg,rgba(126,79,170,.06),rgba(126,79,170,.02))'}}>
-          <div style={{fontSize:9,fontWeight:700,color:'#7e4faa',marginBottom:5}}>🔧 Complexe</div>
-          <div style={{display:'flex',gap:2,marginBottom:5}}>
-            {[{id:'bicouche',l:'Bic.'},{id:'mono',l:'Mono'},{id:'pvc',l:'PVC'},{id:'epdm',l:'EPDM'}].map(t=>
-              <button key={t.id} onClick={()=>setComplexType(t.id)}
-                style={{flex:1,padding:'3px 1px',fontSize:8,fontWeight:700,borderRadius:5,border:'1.5px solid '+(complexType===t.id?'rgba(126,79,170,.4)':'var(--bd)'),
-                  background:complexType===t.id?'rgba(126,79,170,.1)':'var(--inp)',color:complexType===t.id?'#7e4faa':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
-          </div>
-          <div style={{display:'flex',gap:2,marginBottom:5}}>
-            {[{id:'pir',l:'PIR'},{id:'pu',l:'PU'},{id:'ldr',l:'LdR'},{id:'xps',l:'XPS'}].map(t=>
-              <button key={t.id} onClick={()=>setIsolType(t.id)}
-                style={{flex:1,padding:'3px 1px',fontSize:8,fontWeight:700,borderRadius:5,border:'1.5px solid '+(isolType===t.id?'rgba(14,146,104,.4)':'var(--bd)'),
-                  background:isolType===t.id?'rgba(14,146,104,.1)':'var(--inp)',color:isolType===t.id?'#0e9268':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
-          </div>
-          <InputRow label="Ép. isolant" value={isolEp} onChange={setIsolEp} unit="mm" step={10} min={40} max={300}/>
-          <label style={{display:'flex',alignItems:'center',gap:5,fontSize:9,color:'var(--t2)',cursor:'pointer'}}>
-            <input type="checkbox" checked={pvActive} onChange={e=>setPvActive(e.target.checked)}/> Pare-vapeur</label>
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:6}}>
+          <div style={{fontSize:8,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🔧 Paramètres</div>
+          <InputN label="H acrotère" value={az.acroH} onChange={v=>setAz({acroH:v})} unit="mm" min={100} max={1200}/>
+          <InputN label="H relevé étanchéité" value={az.relH} onChange={v=>setAz({relH:v})} unit="mm" min={100} max={500}/>
+          <InputN label="Développé couvertine" value={az.couvertW} onChange={v=>setAz({couvertW:v})} unit="mm" min={200} max={800}/>
         </div>
-        {/* Acrotère */}
-        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
-          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🧱 Acrotère & Relevé</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4}}>
-            <InputRow label="H acrotère" value={acroH} onChange={setAcroH} unit="mm" min={100} max={1200}/>
-            <InputRow label="H relevé" value={relH} onChange={setRelH} unit="mm" min={100} max={500}/>
-          </div>
-        </div>
-        {/* Couvertine */}
-        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
-          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🔩 Couvertines</div>
-          <div style={{display:'flex',gap:2,marginBottom:5}}>
-            {[{id:'alu',l:'Alu'},{id:'zinc',l:'Zinc'},{id:'acier',l:'Acier'}].map(t=>
-              <button key={t.id} onClick={()=>setCouvertType(t.id)}
-                style={{flex:1,padding:'3px 2px',fontSize:8,fontWeight:700,borderRadius:5,border:'1.5px solid '+(couvertType===t.id?'rgba(14,165,233,.4)':'var(--bd)'),
-                  background:couvertType===t.id?'rgba(14,165,233,.1)':'var(--inp)',color:couvertType===t.id?'#0ea5e9':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
-          </div>
-          <InputRow label="Développé" value={couvertW} onChange={setCouvertW} unit="mm" min={200} max={800}/>
-        </div>
+
         {/* Édicules */}
-        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5,background:'linear-gradient(135deg,rgba(14,146,104,.06),rgba(14,146,104,.02))'}}>
-          <div style={{fontSize:9,fontWeight:700,color:'#0e9268',marginBottom:5}}>🏢 Édicules ({edicules.length})</div>
-          {edicules.map((ed,i)=><div key={ed.id} style={{padding:6,borderRadius:7,border:'1px solid '+(selEdic===ed.id?'rgba(14,146,104,.4)':'var(--bd)'),background:selEdic===ed.id?'rgba(14,146,104,.06)':'var(--crd)',marginBottom:4,cursor:'pointer'}}
+        <div style={{padding:7,borderRadius:9,border:'1px solid rgba(14,146,104,.15)',background:'rgba(14,146,104,.03)',marginBottom:6}}>
+          <div style={{fontSize:8,fontWeight:700,color:'#0e9268',marginBottom:5}}>🏢 Édicules ({az.edicules.length})</div>
+          {az.edicules.map(ed=><div key={ed.id} style={{padding:5,borderRadius:6,border:'1px solid '+(selEdic===ed.id?'rgba(14,146,104,.35)':'var(--bd)'),background:selEdic===ed.id?'rgba(14,146,104,.06)':'var(--crd)',marginBottom:3,cursor:'pointer'}}
             onClick={()=>setSelEdic(ed.id===selEdic?null:ed.id)}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:3}}>
-              <span style={{fontSize:9,fontWeight:700,color:'var(--t1)'}}>{ed.name}</span>
-              <button onClick={e=>{e.stopPropagation();setEdicules(es=>es.filter(x=>x.id!==ed.id))}} style={{fontSize:8,color:'#ef4444',fontFamily:'inherit',cursor:'pointer'}}>✕</button>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <span style={{fontSize:8,fontWeight:700,color:'var(--t1)'}}>{ed.name}</span>
+              <button onClick={e=>{e.stopPropagation();setAz({edicules:az.edicules.filter(x=>x.id!==ed.id)});if(selEdic===ed.id)setSelEdic(null)}}
+                style={{fontSize:8,color:'#ef4444',cursor:'pointer',background:'none',border:'none',fontFamily:'inherit'}}>✕</button>
             </div>
-            {selEdic===ed.id&&<>
-              <InputRow label="Hauteur" value={ed.h} onChange={v=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,h:v}:x))} unit="mm" min={500} max={5000}/>
-              <div style={{display:'flex',gap:2,marginBottom:4}}>
-                {['ventelles','cassette'].map(t=><button key={t} onClick={()=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,type:t}:x))}
-                  style={{flex:1,padding:'3px 2px',fontSize:8,fontWeight:700,borderRadius:5,
-                    border:'1.5px solid '+(ed.type===t?'rgba(14,146,104,.4)':'var(--bd)'),
-                    background:ed.type===t?'rgba(14,146,104,.1)':'var(--inp)',
-                    color:ed.type===t?'#0e9268':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t==='ventelles'?'Ventelles':'Cassette'}</button>)}
-              </div>
-              <label style={{display:'flex',alignItems:'center',gap:5,fontSize:8,color:'var(--t2)',cursor:'pointer'}}>
-                <input type="checkbox" checked={ed.hasLant} onChange={e=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,hasLant:e.target.checked}:x))}/> Lanterneau dessus</label>
-              {ed.hasLant&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginTop:4}}>
-                <InputRow label="Lant. L" value={ed.lantW} onChange={v=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,lantW:v}:x))} unit="mm"/>
-                <InputRow label="Lant. l" value={ed.lantL} onChange={v=>setEdicules(es=>es.map(x=>x.id===ed.id?{...x,lantL:v}:x))} unit="mm"/>
+            {selEdic===ed.id&&<div style={{marginTop:4}}>
+              <InputN label="Hauteur" value={ed.h} onChange={v=>setAz({edicules:az.edicules.map(x=>x.id===ed.id?{...x,h:v}:x)})} unit="mm" min={500} max={6000} small/>
+              <label style={{display:'flex',alignItems:'center',gap:4,fontSize:7.5,color:'var(--t2)',cursor:'pointer',marginTop:3}}>
+                <input type="checkbox" checked={ed.hasLant} onChange={e=>setAz({edicules:az.edicules.map(x=>x.id===ed.id?{...x,hasLant:e.target.checked}:x)})}/> Lanterneau sur édicule</label>
+              {ed.hasLant&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3,marginTop:3}}>
+                <InputN label="L (mm)" value={ed.lantW} onChange={v=>setAz({edicules:az.edicules.map(x=>x.id===ed.id?{...x,lantW:v}:x)})} small/>
+                <InputN label="l (mm)" value={ed.lantL} onChange={v=>setAz({edicules:az.edicules.map(x=>x.id===ed.id?{...x,lantL:v}:x)})} small/>
               </div>}
-              <div style={{fontSize:7,color:'var(--t3)',marginTop:3}}>{r2(polyArea(ed.pts))} m² · {ed.pts.length} pts</div>
-            </>}
+              <div style={{fontSize:7,color:'var(--t3)',marginTop:2}}>{r2(polyArea(ed.pts))} m² · {r2(polyPeri(ed.pts))} ml</div>
+            </div>}
           </div>)}
-          <div style={{display:'flex',gap:3}}>
-            <button onClick={()=>{const ct2=polyCentroid(roofPts);const w2=2,l2=2;
-              setEdicules(es=>[...es,mkEdic([[ct2[0]-w2/2,ct2[1]-l2/2],[ct2[0]+w2/2,ct2[1]-l2/2],[ct2[0]+w2/2,ct2[1]+l2/2],[ct2[0]-w2/2,ct2[1]+l2/2]],'Édicule '+(es.length+1))])}}
-              style={{flex:1,padding:'5px',borderRadius:6,border:'1px dashed rgba(14,146,104,.3)',background:'none',color:'#0e9268',fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Rectangle</button>
-            <button onClick={()=>{setDrawMode('edicule');setDrawPts([])}}
-              style={{flex:1,padding:'5px',borderRadius:6,border:'1px dashed rgba(14,146,104,.3)',background:'none',color:'#0e9268',fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>✏ Polygone</button>
+          <div style={{display:'flex',gap:3,marginTop:2}}>
+            <button onClick={()=>{const c=polyCtr(az.roofPts);const id=Date.now();setAz({edicules:[...az.edicules,{id,name:'Édicule '+(az.edicules.length+1),pts:[[c[0]-2,c[1]-1.5],[c[0]+2,c[1]-1.5],[c[0]+2,c[1]+1.5],[c[0]-2,c[1]+1.5]],h:2500,type:'ventelles',hasLant:false,lantW:1200,lantL:1200}]})}}
+              style={{flex:1,padding:'4px',borderRadius:5,border:'1px dashed rgba(14,146,104,.3)',background:'none',color:'#0e9268',fontSize:7.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Rect.</button>
+            <button onClick={()=>{setDrawMode('edic');setDrawPts([])}}
+              style={{flex:1,padding:'4px',borderRadius:5,border:'1px dashed rgba(14,146,104,.3)',background:drawMode==='edic'?'rgba(14,146,104,.1)':'none',color:'#0e9268',fontSize:7.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>✏ Poly</button>
           </div>
         </div>
-        {/* Lanterneaux + EP */}
-        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
-          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>💡 Lanterneaux ({lanterneaux.length})</div>
-          {lanterneaux.map((la,i)=><div key={la.id} style={{display:'flex',gap:3,alignItems:'center',marginBottom:3}}>
-            <span style={{fontSize:8,color:'var(--t3)',width:16}}>#{i+1}</span>
-            <input type="number" value={la.w} step={.1} min={.3} max={5} onChange={e=>setLanterneaux(ls=>ls.map(x=>x.id===la.id?{...x,w:Number(e.target.value)}:x))}
-              style={{flex:1,padding:'2px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:9,fontFamily:'monospace',textAlign:'right'}}/>
+
+        {/* Lanterneaux */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:6}}>
+          <div style={{fontSize:8,fontWeight:700,color:'var(--t1)',marginBottom:5}}>💡 Lanterneaux ({az.lanterneaux.length})</div>
+          {az.lanterneaux.map((la,i)=><div key={la.id} style={{display:'flex',gap:3,alignItems:'center',marginBottom:3}}>
+            <span style={{fontSize:7.5,color:'var(--t3)',flexShrink:0}}>#{i+1}</span>
+            <input type="number" value={la.w} step={.1} min={.3} max={6} onChange={e=>setAz({lanterneaux:az.lanterneaux.map(x=>x.id===la.id?{...x,w:+e.target.value}:x)})}
+              style={{flex:1,padding:'2px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:8,fontFamily:'monospace',textAlign:'right',color:'var(--t1)'}}/>
             <span style={{fontSize:7,color:'var(--t3)'}}>×</span>
-            <input type="number" value={la.l} step={.1} min={.3} max={5} onChange={e=>setLanterneaux(ls=>ls.map(x=>x.id===la.id?{...x,l:Number(e.target.value)}:x))}
-              style={{flex:1,padding:'2px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:9,fontFamily:'monospace',textAlign:'right'}}/>
-            <button onClick={()=>setLanterneaux(ls=>ls.filter(x=>x.id!==la.id))} style={{fontSize:8,color:'#ef4444',cursor:'pointer'}}>✕</button>
+            <input type="number" value={la.l} step={.1} min={.3} max={6} onChange={e=>setAz({lanterneaux:az.lanterneaux.map(x=>x.id===la.id?{...x,l:+e.target.value}:x)})}
+              style={{flex:1,padding:'2px 4px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:8,fontFamily:'monospace',textAlign:'right',color:'var(--t1)'}}/>
+            <span style={{fontSize:7,color:'var(--t3)'}}>m</span>
+            <button onClick={()=>setAz({lanterneaux:az.lanterneaux.filter(x=>x.id!==la.id)})} style={{fontSize:8,color:'#ef4444',cursor:'pointer',background:'none',border:'none'}}>✕</button>
           </div>)}
-          <button onClick={()=>{const c2=polyCentroid(roofPts);setLanterneaux(ls=>[...ls,{...mkLant(),x:c2[0]+(Math.random()-.5)*3,y:c2[1]+(Math.random()-.5)*3}])}}
-            style={{width:'100%',padding:4,borderRadius:5,border:'1px dashed var(--bd)',background:'none',color:'var(--t2)',fontSize:8,cursor:'pointer',fontFamily:'inherit'}}>+ Lanterneau</button>
+          <button onClick={()=>{const c=polyCtr(az.roofPts);setAz({lanterneaux:[...az.lanterneaux,{id:Date.now(),x:c[0]+(Math.random()-.5)*3,y:c[1]+(Math.random()-.5)*2,w:1.2,l:1.2}]})}}
+            style={{width:'100%',padding:'3px',borderRadius:5,border:'1px dashed var(--bd)',background:'none',color:'var(--t2)',fontSize:7.5,cursor:'pointer',fontFamily:'inherit'}}>+ Lanterneau</button>
         </div>
-        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
-          <div style={{fontSize:9,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🔽 EP ({eps.length})</div>
-          <InputRow label="Diamètre" value={epDiam} onChange={setEpDiam} unit="mm" min={50} max={200}/>
-          <button onClick={()=>{const p=roofPts[eps.length%roofPts.length];setEps(es=>[...es,{id:Date.now(),x:p[0],y:p[1]}])}}
-            style={{width:'100%',padding:4,borderRadius:5,border:'1px dashed var(--bd)',background:'none',color:'var(--t2)',fontSize:8,cursor:'pointer',fontFamily:'inherit'}}>+ Descente EP</button>
+
+        {/* EP */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:6}}>
+          <div style={{fontSize:8,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🔽 EP ({az.eps.length})</div>
+          <button onClick={()=>{const p=az.roofPts[az.eps.length%az.roofPts.length];setAz({eps:[...az.eps,{id:Date.now(),x:p[0],y:p[1]}]})}}
+            style={{width:'100%',padding:'3px',borderRadius:5,border:'1px dashed var(--bd)',background:'none',color:'var(--t2)',fontSize:7.5,cursor:'pointer',fontFamily:'inherit'}}>+ Descente EP</button>
+          {az.eps.length>0&&<button onClick={()=>setAz({eps:az.eps.slice(0,-1)})}
+            style={{width:'100%',padding:'3px',borderRadius:5,border:'none',background:'none',color:'#ef4444',fontSize:7.5,cursor:'pointer',fontFamily:'inherit',marginTop:2}}>- Retirer une EP</button>}
         </div>
-        {/* Métrés */}
-        <div style={{padding:7,borderRadius:9,border:'1px solid rgba(126,79,170,.15)',background:'rgba(126,79,170,.03)',marginBottom:5}}>
-          <div style={{fontSize:9,fontWeight:700,color:'#7e4faa',marginBottom:5}}>📊 Métrés</div>
-          <div style={{fontSize:8,color:'var(--t2)',lineHeight:1.8}}>
-            Surface toiture: <strong>{r2(surfToit)} m²</strong><br/>
-            Surface nette: <strong>{r2(surfNette)} m²</strong><br/>
-            Périmètre: <strong>{r2(periToit)} ml</strong><br/>
-            Relevé: <strong>{r2(surfReleve)} m²</strong><br/>
-            Couvertines: <strong>{r2(surfCouvertine)} m²</strong><br/>
-            Édicules: <strong>{edicules.length}u · {r2(surfEdic)} m²</strong><br/>
-            Lanterneaux: <strong>{lanterneaux.length}u · {r2(surfLant+edicLant)} m²</strong><br/>
-            EP: <strong>{eps.length}u · Ø{epDiam}</strong>
-          </div>
-          <div style={{fontWeight:700,color:'#c4324a',fontSize:10,marginTop:4,borderTop:'1px solid var(--bd)',paddingTop:4}}>
-            Total: {Math.round(prixTotal).toLocaleString('fr-FR')} €HT
-          </div>
+
+        {/* Total zone */}
+        <div style={{padding:8,borderRadius:9,border:'1px solid rgba(196,50,74,.2)',background:'rgba(196,50,74,.04)'}}>
+          <div style={{fontSize:8,color:'var(--t2)',marginBottom:2}}>Total zone</div>
+          <div style={{fontSize:14,fontWeight:800,color:'#c4324a'}}>{r0(zoneTotal(az)).toLocaleString('fr-FR')} €HT</div>
+          <div style={{fontSize:8,color:'var(--t3)',marginTop:2}}>Grand total : {r0(grandTotal).toLocaleString('fr-FR')} €HT</div>
         </div>
       </div>
-      {/* Viewport */}
-      <div style={{flex:1,position:'relative',overflow:'hidden',minWidth:0}}>
-        {view3D?<div ref={mountRef} style={{width:'100%',height:'100%',background:'#ddd4c8'}}/>
-        :<svg ref={svgRef} viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{width:'100%',height:'100%',background:'#f4ece5',cursor:drawMode?'crosshair':dragPt?'grabbing':'default'}}
-          onClick={handleSvgClick} onDoubleClick={handleSvgDblClick} onMouseMove={handleSvgMouseMove} onMouseUp={handleSvgMouseUp} onMouseLeave={handleSvgMouseUp} onContextMenu={e=>e.preventDefault()}>
-          <defs>
-            <pattern id="et-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
-          </defs>
-          <rect x={bnd.min[0]-pad} y={bnd.min[1]-pad} width={bnd.w+pad*2} height={bnd.h+pad*2} fill="url(#et-grid)"/>
-          {/* Roof polygon */}
-          <polygon points={roofPts.map(p=>p.join(',')).join(' ')} fill="rgba(126,79,170,.06)" stroke="#7e4faa" strokeWidth=".04"/>
-          {/* Acrotère lines (thicker) */}
-          <polygon points={roofPts.map(p=>p.join(',')).join(' ')} fill="none" stroke="#c4324a" strokeWidth=".12" strokeOpacity=".25"/>
-          {/* Roof point handles */}
-          {!drawMode&&roofPts.map((p,i)=><circle key={'rp'+i} cx={p[0]} cy={p[1]} r=".2" fill="#7e4faa" stroke="#fff" strokeWidth=".05" style={{cursor:'grab'}}
-            onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'roof',idx:i})}}
-            onContextMenu={e=>{e.preventDefault();e.stopPropagation();if(roofPts.length>3)setRoofPts(ps=>ps.filter((_,j)=>j!==i))}}/>)}
-          {/* Midpoint markers to add points */}
-          {!drawMode&&roofPts.map((p,i)=>{const j=(i+1)%roofPts.length;const mx2=(p[0]+roofPts[j][0])/2,my2=(p[1]+roofPts[j][1])/2;
-            return<circle key={'mp'+i} cx={mx2} cy={my2} r=".14" fill="none" stroke="#7e4faa" strokeWidth=".03" strokeDasharray=".05,.05" style={{cursor:'pointer'}}
-              onClick={e=>{e.stopPropagation();setRoofPts(ps=>[...ps.slice(0,i+1),[mx2,my2],...ps.slice(i+1)])}}><title>+ ajouter un point</title></circle>})}
-          {/* Dimensions along edges */}
-          {roofPts.map((p,i)=>{const j=(i+1)%roofPts.length;const mx=(p[0]+roofPts[j][0])/2,my=(p[1]+roofPts[j][1])/2;
-            const dx=roofPts[j][0]-p[0],dy=roofPts[j][1]-p[1],len=Math.sqrt(dx*dx+dy*dy);
-            return<text key={'d'+i} x={mx} y={my-.2} textAnchor="middle" fill="#7e4faa" fontSize=".22" fontWeight="700">{r2(len)}m</text>})}
-          {/* Édicules */}
-          {edicules.map(ed=><g key={ed.id}>
-            <polygon points={ed.pts.map(p=>p.join(',')).join(' ')} fill={ed.type==='ventelles'?'rgba(14,146,104,.12)':'rgba(100,100,110,.12)'} stroke={selEdic===ed.id?(ed.type==='ventelles'?'#0e9268':'#666'):(ed.type==='ventelles'?'#0e9268':'#999')} strokeWidth={selEdic===ed.id?'.08':'.05'} strokeDasharray={ed.type==='ventelles'?'.15,.1':'none'}
-              style={{cursor:'move'}} onClick={e=>{e.stopPropagation();setSelEdic(ed.id)}}
-              onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'edic_move',edicId:ed.id,startPts:ed.pts.map(p=>[...p])})}}/>
-            {/* Ventelles pattern */}
-            {ed.type==='ventelles'&&ed.pts.length>=2&&(()=>{const eb=polyBounds(ed.pts);const nLines=Math.floor(eb.h/.3);
-              return Array.from({length:nLines}).map((_,li)=>{const y2=eb.min[1]+.15+(li*(eb.h-.3)/Math.max(1,nLines-1));
-                return<line key={li} x1={eb.min[0]+.1} y1={y2} x2={eb.max[0]-.1} y2={y2} stroke="#0e9268" strokeWidth=".03" opacity=".4"/>})})()}
-            <text x={polyCentroid(ed.pts)[0]} y={polyCentroid(ed.pts)[1]+.1} textAnchor="middle" fill={ed.type==='ventelles'?'#0e9268':'#666'} fontSize=".2" fontWeight="700" style={{pointerEvents:'none'}}>{ed.name}</text>
-            {/* Corner handles when selected */}
-            {selEdic===ed.id&&ed.pts.map((ep,ei)=><circle key={'ep'+ei} cx={ep[0]} cy={ep[1]} r=".15" fill={ed.type==='ventelles'?'#0e9268':'#666'} stroke="#fff" strokeWidth=".04" style={{cursor:'grab'}}
-              onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'edic_pt',edicId:ed.id,idx:ei})}}/>)}
-            {/* Lanterneau on edicule */}
-            {ed.hasLant&&(()=>{const ec=polyCentroid(ed.pts);return<rect x={ec[0]-ed.lantW/2000} y={ec[1]-ed.lantL/2000} width={ed.lantW/1000} height={ed.lantL/1000} fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".03" rx=".03"/>})()}
-          </g>)}
-          {/* Lanterneaux on roof */}
-          {lanterneaux.map((la,i)=><g key={la.id}>
-            <rect x={la.x-la.w/2} y={la.y-la.l/2} width={la.w} height={la.l} fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".03" rx=".04"
-              style={{cursor:'move'}} onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'lant',idx:i})}}/>
-            <text x={la.x} y={la.y+.05} textAnchor="middle" fill="#0ea5e9" fontSize=".16" fontWeight="600" style={{pointerEvents:'none'}}>L{i+1}</text>
-            {/* Resize corners */}
-            <circle cx={la.x+la.w/2} cy={la.y+la.l/2} r=".1" fill="#0ea5e9" stroke="#fff" strokeWidth=".03" style={{cursor:'se-resize'}}
-              onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'lant_resize',idx:i})}}/>
-            {/* Dims */}
-            <text x={la.x} y={la.y-la.l/2-.1} textAnchor="middle" fill="#0ea5e9" fontSize=".13" opacity=".7">{la.w}×{la.l}m</text>
-          </g>)}
-          {/* EP markers */}
-          {eps.map((ep,i)=><g key={ep.id}>
-            <circle cx={ep.x} cy={ep.y} r={epDiam/1500} fill="rgba(14,146,104,.3)" stroke="#0e9268" strokeWidth=".03"
-              style={{cursor:'grab'}} onMouseDown={e=>{e.stopPropagation();setDragPt({type:'ep',idx:i})}}/>
-            <text x={ep.x} y={ep.y+.05} textAnchor="middle" fill="#0e9268" fontSize=".14" fontWeight="600">EP{i+1}</text>
-          </g>)}
-          {/* Drawing preview */}
-          {drawMode&&drawPts.length>0&&<>
-            <polyline points={drawPts.map(p=>p.join(',')).join(' ')} fill="none" stroke={drawMode==='roof'?'#7e4faa':'#0e9268'} strokeWidth=".05" strokeDasharray=".15,.1"/>
-            {drawPts.map((p,i)=><circle key={i} cx={p[0]} cy={p[1]} r=".12" fill={drawMode==='roof'?'#7e4faa':'#0e9268'}/>)}
-          </>}
-          {/* Surface label */}
-          {(()=>{const c2=polyCentroid(roofPts);return<text x={c2[0]} y={c2[1]} textAnchor="middle" fill="#7e4faa" fontSize=".35" fontWeight="800" opacity=".3">{r2(surfToit)} m²</text>})()}
-        </svg>}
+
+      {/* ── ZONE PRINCIPALE ── */}
+      <div style={{flex:1,display:'flex',flexDirection:'column',minWidth:0,minHeight:0}}>
+
+        {/* ──── TAB : PLAN ──── */}
+        {tab==='plan'&&<>
+          {drawMode&&<div style={{padding:'5px 14px',background:'rgba(196,50,74,.06)',borderBottom:'1px solid rgba(196,50,74,.15)',display:'flex',alignItems:'center',gap:8,fontSize:10,color:'#c4324a',fontWeight:600}}>
+            ✏ {drawMode==='roof'?'Tracé toiture':'Tracé édicule'} — cliquez pour poser des points · double-clic pour fermer
+            <button onClick={()=>{setDrawMode(null);setDrawPts([])}} style={{color:'#c4324a',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700}}>✕ Annuler</button>
+          </div>}
+          <div style={{padding:'4px 10px',background:'var(--pnl)',borderBottom:'1px solid var(--bd)',display:'flex',gap:6,alignItems:'center'}}>
+            <button onClick={()=>{setDrawMode('roof');setDrawPts([])}} style={{padding:'3px 10px',borderRadius:5,border:'1px solid rgba(126,79,170,.25)',background:drawMode==='roof'?'rgba(126,79,170,.12)':'var(--crd)',color:'#7e4faa',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>✏ Toiture</button>
+            <span style={{fontSize:8,color:'var(--t3)'}}>Clic droit sur un point = supprimer · milieu de côté = insérer</span>
+          </div>
+          {view3D
+            ?<div ref={mountRef} style={{flex:1,background:'#ddd4c8'}}/>
+            :<svg ref={svgRef} viewBox={vb} preserveAspectRatio="xMidYMid meet"
+              style={{flex:1,background:'#f4ece5',cursor:drawMode?'crosshair':dragPt?'grabbing':'default'}}
+              onClick={handleClick} onDoubleClick={handleDbl} onMouseMove={handleMM} onMouseUp={handleMU} onMouseLeave={handleMU} onContextMenu={e=>e.preventDefault()}>
+              <defs>
+                <pattern id="et-grd" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
+                <pattern id="et-grd5" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="none" stroke="rgba(42,14,20,.07)" strokeWidth=".02"/></pattern>
+              </defs>
+              <rect x={bnd.min[0]-pad} y={bnd.min[1]-pad} width={bnd.w+pad*2} height={bnd.h+pad*2} fill="url(#et-grd)"/>
+              <rect x={bnd.min[0]-pad} y={bnd.min[1]-pad} width={bnd.w+pad*2} height={bnd.h+pad*2} fill="url(#et-grd5)"/>
+              {/* Toiture */}
+              <polygon points={az.roofPts.map(p=>p.join(',')).join(' ')} fill="rgba(126,79,170,.07)" stroke="#7e4faa" strokeWidth=".05"/>
+              {/* Dimensions */}
+              {az.roofPts.map((p,i)=>{const j=(i+1)%az.roofPts.length;const mx=(p[0]+az.roofPts[j][0])/2,my=(p[1]+az.roofPts[j][1])/2;const dx=az.roofPts[j][0]-p[0],dy=az.roofPts[j][1]-p[1];const len=Math.sqrt(dx*dx+dy*dy);return<text key={'d'+i} x={mx} y={my-.22} textAnchor="middle" fill="#7e4faa" fontSize=".22" fontWeight="700">{r2(len)}m</text>})}
+              {/* Handles toiture */}
+              {!drawMode&&az.roofPts.map((p,i)=><circle key={'rp'+i} cx={p[0]} cy={p[1]} r=".22" fill="#7e4faa" stroke="#fff" strokeWidth=".06" style={{cursor:'grab'}}
+                onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'roof',idx:i})}}
+                onContextMenu={e=>{e.preventDefault();e.stopPropagation();if(az.roofPts.length>3)setAz({roofPts:az.roofPts.filter((_,j2)=>j2!==i)})}}/>)}
+              {/* Midpoints */}
+              {!drawMode&&az.roofPts.map((p,i)=>{const j=(i+1)%az.roofPts.length;const mx=(p[0]+az.roofPts[j][0])/2,my=(p[1]+az.roofPts[j][1])/2;return<circle key={'mp'+i} cx={mx} cy={my} r=".14" fill="none" stroke="#7e4faa" strokeWidth=".04" strokeDasharray=".06,.06" style={{cursor:'pointer'}} onClick={e=>{e.stopPropagation();setAz({roofPts:[...az.roofPts.slice(0,i+1),[mx,my],...az.roofPts.slice(i+1)]})}}/> })}
+              {/* Édicules */}
+              {az.edicules.map(ed=><g key={ed.id}>
+                <polygon points={ed.pts.map(p=>p.join(',')).join(' ')} fill="rgba(14,146,104,.1)" stroke={selEdic===ed.id?'#0e9268':'rgba(14,146,104,.5)'} strokeWidth={selEdic===ed.id?'.07':'.04'} style={{cursor:'move'}}
+                  onClick={e=>{e.stopPropagation();setSelEdic(ed.id)}}
+                  onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'edic_mv',edicId:ed.id})}}/>
+                <text x={polyCtr(ed.pts)[0]} y={polyCtr(ed.pts)[1]+.08} textAnchor="middle" fill="#0e9268" fontSize=".2" fontWeight="700" style={{pointerEvents:'none'}}>{ed.name}</text>
+                {selEdic===ed.id&&ed.pts.map((ep,ei)=><circle key={'ep'+ei} cx={ep[0]} cy={ep[1]} r=".14" fill="#0e9268" stroke="#fff" strokeWidth=".04" style={{cursor:'grab'}}
+                  onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'edic_pt',edicId:ed.id,idx:ei})}}/>)}
+                {ed.hasLant&&(()=>{const ec=polyCtr(ed.pts);return<rect x={ec[0]-ed.lantW/2000} y={ec[1]-ed.lantL/2000} width={ed.lantW/1000} height={ed.lantL/1000} fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".03" rx=".03"/>})()}
+              </g>)}
+              {/* Lanterneaux */}
+              {az.lanterneaux.map((la,i)=><g key={la.id}>
+                <rect x={la.x-la.w/2} y={la.y-la.l/2} width={la.w} height={la.l} fill="rgba(14,165,233,.12)" stroke="#0ea5e9" strokeWidth=".04" rx=".04" style={{cursor:'move'}}
+                  onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'lant',idx:i})}}/>
+                <text x={la.x} y={la.y+.06} textAnchor="middle" fill="#0ea5e9" fontSize=".17" fontWeight="600" style={{pointerEvents:'none'}}>L{i+1} {la.w}×{la.l}m</text>
+                <circle cx={la.x+la.w/2} cy={la.y+la.l/2} r=".1" fill="#0ea5e9" stroke="#fff" strokeWidth=".03" style={{cursor:'se-resize'}}
+                  onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'lant_r',idx:i})}}/>
+              </g>)}
+              {/* EP */}
+              {az.eps.map((ep,i)=><g key={ep.id}>
+                <circle cx={ep.x} cy={ep.y} r=".28" fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".06" style={{cursor:'grab'}}
+                  onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'ep',idx:i})}}
+                  onContextMenu={e=>{e.preventDefault();e.stopPropagation();setAz({eps:az.eps.filter((_,j2)=>j2!==i)})}}/>
+                <text x={ep.x} y={ep.y+.07} textAnchor="middle" fill="#0ea5e9" fontSize=".18" fontWeight="700" style={{pointerEvents:'none'}}>EP{i+1}</text>
+              </g>)}
+              {/* Draw preview */}
+              {drawMode&&drawPts.length>0&&<>
+                <polyline points={drawPts.map(p=>p.join(',')).join(' ')} fill="none" stroke="#c4324a" strokeWidth=".06" strokeDasharray=".15,.1"/>
+                {drawPts.map((p,i)=><circle key={'dp'+i} cx={p[0]} cy={p[1]} r=".15" fill="#c4324a"/>)}
+              </>}
+              {/* Area label */}
+              {(()=>{const c=polyCtr(az.roofPts);return<text x={c[0]} y={c[1]} textAnchor="middle" fill="#7e4faa" fontSize=".45" fontWeight="800" opacity=".2">{r2(st.nette)} m²</text>})()}
+            </svg>}
+        </>}
+
+        {/* ──── TAB : PRESTATIONS ──── */}
+        {tab==='presta'&&<div style={{flex:1,overflowY:'auto',padding:16}}>
+          <div style={{marginBottom:12,display:'flex',alignItems:'center',gap:10}}>
+            <div style={{fontSize:13,fontWeight:800,color:'var(--t1)'}}>{az.name}</div>
+            <div style={{fontSize:11,color:'var(--t3)'}}>Surface nette : <b style={{color:'var(--t1)'}}>{r2(st.nette)} m²</b> · Périmètre : <b style={{color:'var(--t1)'}}>{r2(st.peri)} ml</b> · EP : <b style={{color:'var(--t1)'}}>{st.eps}</b></div>
+            <div style={{flex:1}}/>
+            <button onClick={()=>{const all={};PRESTA_LIB.forEach(p=>{all[p.id]={enabled:false}});setAz({prestations:all})}}
+              style={{padding:'3px 10px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',fontSize:9,cursor:'pointer',fontFamily:'inherit'}}>Tout décocher</button>
+          </div>
+          {CATS.map(cat=>{
+            const items=PRESTA_LIB.filter(p=>p.cat===cat);
+            return<div key={cat} style={{marginBottom:14}}>
+              <div style={{fontSize:10,fontWeight:800,color:'var(--t2)',borderBottom:'1px solid var(--bd)',paddingBottom:5,marginBottom:6,display:'flex',alignItems:'center',gap:6}}>
+                <span style={{flex:1}}>{cat}</span>
+                <button onClick={()=>{const patch={};items.forEach(p=>{patch[p.id]={...az.prestations[p.id],enabled:true}});setAz({prestations:{...az.prestations,...patch}})}}
+                  style={{fontSize:8,padding:'2px 7px',borderRadius:4,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',cursor:'pointer',fontFamily:'inherit'}}>Tout cocher</button>
+              </div>
+              <div style={{display:'flex',flexDirection:'column',gap:3}}>
+                {items.map(p=>{
+                  const cfg=az.prestations[p.id]||{};
+                  const enabled=!!cfg.enabled;
+                  const autoQ=p.auto?p.auto(st):null;
+                  const qty=cfg.qtyOverride!=null?cfg.qtyOverride:(autoQ||0);
+                  const prix=cfg.prixOverride!=null?cfg.prixOverride:p.prix;
+                  const total=qty*prix;
+                  return<div key={p.id} style={{display:'grid',gridTemplateColumns:'22px 1fr 80px 55px 65px 70px',gap:6,alignItems:'center',padding:'5px 8px',borderRadius:8,border:'1px solid '+(enabled?'rgba(126,79,170,.2)':'var(--bd)'),background:enabled?'rgba(126,79,170,.04)':'var(--crd)',opacity:enabled?1:.65}}>
+                    <input type="checkbox" checked={enabled} onChange={e=>setPresta(az.id,p.id,{enabled:e.target.checked})} style={{cursor:'pointer'}}/>
+                    <span style={{fontSize:10,color:'var(--t1)',fontWeight:enabled?600:400}}>{p.label}</span>
+                    <div style={{display:'flex',alignItems:'center',gap:2}}>
+                      <input type="number" value={qty} min={0} step={p.unit==='m²'||p.unit==='ml'?0.1:1}
+                        onChange={e=>setPresta(az.id,p.id,{qtyOverride:+e.target.value,enabled:true})}
+                        onKeyDown={e=>e.stopPropagation()}
+                        style={{width:'100%',padding:'2px 4px',borderRadius:5,border:'1px solid '+(cfg.qtyOverride!=null?'rgba(245,158,11,.5)':'var(--bd)'),background:'var(--inp)',color:'var(--t1)',fontSize:9,fontFamily:'monospace',textAlign:'right'}}/>
+                      {cfg.qtyOverride!=null&&autoQ!=null&&<button title="Recalculer auto" onClick={()=>setPresta(az.id,p.id,{qtyOverride:null})} style={{fontSize:8,color:'#f59e0b',cursor:'pointer',background:'none',border:'none',padding:0}}>↩</button>}
+                    </div>
+                    <span style={{fontSize:8,color:'var(--t3)',textAlign:'center'}}>{p.unit}</span>
+                    <div style={{display:'flex',alignItems:'center',gap:1}}>
+                      <input type="number" value={prix} min={0} step={0.5}
+                        onChange={e=>setPresta(az.id,p.id,{prixOverride:+e.target.value,enabled:true})}
+                        onKeyDown={e=>e.stopPropagation()}
+                        style={{width:'100%',padding:'2px 4px',borderRadius:5,border:'1px solid '+(cfg.prixOverride!=null?'rgba(14,165,233,.5)':'var(--bd)'),background:'var(--inp)',color:'var(--t1)',fontSize:9,fontFamily:'monospace',textAlign:'right'}}/>
+                      {cfg.prixOverride!=null&&<button title="Prix par défaut" onClick={()=>setPresta(az.id,p.id,{prixOverride:null})} style={{fontSize:8,color:'#0ea5e9',cursor:'pointer',background:'none',border:'none',padding:0}}>↩</button>}
+                    </div>
+                    <span style={{fontSize:10,fontWeight:700,color:enabled?'#7e4faa':'var(--t3)',textAlign:'right'}}>{enabled?r0(total).toLocaleString('fr-FR')+' €':''}</span>
+                  </div>;
+                })}
+              </div>
+            </div>;
+          })}
+        </div>}
+
+        {/* ──── TAB : DEVIS ──── */}
+        {tab==='devis'&&<div style={{flex:1,overflowY:'auto',padding:16}}>
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:16}}>
+            <div style={{fontSize:16,fontWeight:800,color:'var(--t1)'}}>📋 Récapitulatif devis étanchéité</div>
+            <div style={{flex:1}}/>
+            <div style={{fontSize:13,fontWeight:800,color:'#7e4faa'}}>Total : {r0(grandTotal).toLocaleString('fr-FR')} €HT</div>
+          </div>
+          {zones.map(z=>{
+            const items=PRESTA_LIB.map(p=>lineItem(z,p)).filter(Boolean);
+            if(items.length===0)return<div key={z.id} style={{marginBottom:10,padding:'8px 12px',borderRadius:8,border:'1px dashed var(--bd)',color:'var(--t3)',fontSize:10}}>
+              {z.name} — aucune prestation sélectionnée
+            </div>;
+            const cats=[...new Set(items.map(i=>i.cat))];
+            const zt=zoneTotal(z);
+            return<div key={z.id} style={{marginBottom:20,border:'1px solid var(--bd)',borderRadius:12,overflow:'hidden'}}>
+              <div style={{padding:'10px 14px',background:'linear-gradient(90deg,rgba(126,79,170,.08),rgba(126,79,170,.02))',borderBottom:'1px solid var(--bd)',display:'flex',alignItems:'center',gap:8}}>
+                <div style={{fontSize:13,fontWeight:800,color:'#7e4faa'}}>{z.name}</div>
+                <div style={{fontSize:10,color:'var(--t3)'}}>Surface nette : {r2(zStats(z).nette)} m² · Périmètre : {r2(zStats(z).peri)} ml</div>
+                <div style={{flex:1}}/>
+                <div style={{fontSize:13,fontWeight:800,color:'#c4324a'}}>{r0(zt).toLocaleString('fr-FR')} €HT</div>
+              </div>
+              <table style={{width:'100%',borderCollapse:'collapse'}}>
+                <thead>
+                  <tr style={{background:'rgba(42,14,20,.03)'}}>
+                    <th style={{padding:'6px 10px',textAlign:'left',fontSize:9,fontWeight:700,color:'var(--t3)',borderBottom:'1px solid var(--bd)'}}>DÉSIGNATION</th>
+                    <th style={{padding:'6px 10px',textAlign:'right',fontSize:9,fontWeight:700,color:'var(--t3)',borderBottom:'1px solid var(--bd)'}}>QTÉ</th>
+                    <th style={{padding:'6px 10px',textAlign:'center',fontSize:9,fontWeight:700,color:'var(--t3)',borderBottom:'1px solid var(--bd)'}}>U</th>
+                    <th style={{padding:'6px 10px',textAlign:'right',fontSize:9,fontWeight:700,color:'var(--t3)',borderBottom:'1px solid var(--bd)'}}>P.U. €HT</th>
+                    <th style={{padding:'6px 10px',textAlign:'right',fontSize:9,fontWeight:700,color:'var(--t3)',borderBottom:'1px solid var(--bd)'}}>TOTAL €HT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cats.map(cat=>{
+                    const rows=items.filter(i=>i.cat===cat);
+                    const catTotal=rows.reduce((s,r)=>s+r.total,0);
+                    return[
+                      <tr key={'ch'+cat}><td colSpan={5} style={{padding:'8px 10px 3px',fontSize:8.5,fontWeight:800,color:'var(--t2)',background:'rgba(42,14,20,.02)',borderTop:'1px solid var(--bd)'}}>{cat.toUpperCase()}</td></tr>,
+                      ...rows.map((row,ri)=><tr key={cat+ri} style={{borderBottom:'1px solid rgba(42,14,20,.04)'}}>
+                        <td style={{padding:'5px 10px',fontSize:10,color:'var(--t1)'}}>{row.label}</td>
+                        <td style={{padding:'5px 10px',textAlign:'right',fontSize:10,fontFamily:'monospace',fontWeight:600,color:'var(--t1)'}}>{r2(row.qty)}</td>
+                        <td style={{padding:'5px 10px',textAlign:'center',fontSize:9,color:'var(--t3)'}}>{row.unit}</td>
+                        <td style={{padding:'5px 10px',textAlign:'right',fontSize:10,fontFamily:'monospace',color:'var(--t2)'}}>{row.prix.toFixed(2)}</td>
+                        <td style={{padding:'5px 10px',textAlign:'right',fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#7e4faa'}}>{r0(row.total).toLocaleString('fr-FR')}</td>
+                      </tr>),
+                      <tr key={'cf'+cat} style={{background:'rgba(126,79,170,.03)'}}>
+                        <td colSpan={4} style={{padding:'4px 10px',textAlign:'right',fontSize:9,fontWeight:700,color:'var(--t3)'}}>Sous-total {cat}</td>
+                        <td style={{padding:'4px 10px',textAlign:'right',fontSize:10,fontWeight:800,color:'#7e4faa',borderTop:'1px solid rgba(126,79,170,.15)'}}>{r0(catTotal).toLocaleString('fr-FR')} €</td>
+                      </tr>
+                    ];
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{background:'rgba(196,50,74,.05)'}}>
+                    <td colSpan={4} style={{padding:'8px 10px',textAlign:'right',fontSize:11,fontWeight:800,color:'var(--t1)',borderTop:'2px solid rgba(196,50,74,.2)'}}>TOTAL {z.name.toUpperCase()}</td>
+                    <td style={{padding:'8px 10px',textAlign:'right',fontSize:12,fontWeight:900,color:'#c4324a',borderTop:'2px solid rgba(196,50,74,.2)'}}>{r0(zt).toLocaleString('fr-FR')} €HT</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>;
+          })}
+          {/* Grand total */}
+          <div style={{padding:'14px 20px',borderRadius:12,background:'linear-gradient(135deg,rgba(196,50,74,.08),rgba(196,50,74,.03))',border:'1px solid rgba(196,50,74,.2)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:800,color:'var(--t1)'}}>TOTAL GÉNÉRAL ÉTANCHÉITÉ</div>
+              <div style={{fontSize:9,color:'var(--t3)',marginTop:2}}>{zones.length} zone{zones.length>1?'s':''} · TVA non comprise</div>
+            </div>
+            <div>
+              <div style={{fontSize:20,fontWeight:900,color:'#c4324a'}}>{r0(grandTotal).toLocaleString('fr-FR')} €HT</div>
+              <div style={{fontSize:10,color:'var(--t3)',textAlign:'right'}}>{r0(grandTotal*1.2).toLocaleString('fr-FR')} €TTC (20%)</div>
+            </div>
+          </div>
+        </div>}
+
       </div>
     </div>
   </div>;
 }
+
 
 
 // ═══════════════════════════════════════════════════════════════
