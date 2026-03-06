@@ -3516,9 +3516,9 @@ async function cloudProjectDuplicate(projectId){
 function makeQRDataURL(text,sizeMM){
   if(typeof qrcode==='undefined')return null;
   try{
-    const qr=qrcode(0,'L');qr.addData(text);qr.make();
+    const qr=qrcode(0,'M');qr.addData(text);qr.make();
     const mod=qr.getModuleCount();
-    const cell=Math.max(2,Math.floor(sizeMM*3.78/mod));
+    const cell=Math.max(3,Math.floor(sizeMM*3.78/mod));
     const cv=document.createElement('canvas');cv.width=cv.height=mod*cell;
     const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
     cx.fillStyle='#000';
@@ -3532,27 +3532,29 @@ function ViewerApp({viewId}){
   const[data,setData]=useState(null);const[err,setErr]=useState(null);const[loading,setLoading]=useState(true);
   const[showWall,setShowWall]=useState(true);
   useEffect(()=>{
-    // Read supabase config from URL params (embedded in QR link) or fallback to localStorage
-    const params=new URLSearchParams(window.location.search);
-    const cfgFromUrl={url:params.get('s_url')||'',key:params.get('s_key')||''};
-    const cfg=(cfgFromUrl.url&&cfgFromUrl.key)?cfgFromUrl:getSupaConfig();
+    // Use hardcoded SUPA_DEFAULTS — no need to pass credentials in QR URL anymore
+    const cfg=getSupaConfig();
     supaFetch(viewId,cfg).then(d=>{
       if(d){setData(d)}else{setErr('Projet introuvable')}
       setLoading(false);
     });
   },[viewId]);
-  if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#eee3da',color:'#fff',fontFamily:'DM Sans'}}>
-    <div style={{textAlign:'center'}}><div style={{fontSize:32,marginBottom:12}}>⏳</div><div>Chargement du projet 3D...</div></div></div>;
-  if(err||!data)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#eee3da',color:'#fff',fontFamily:'DM Sans'}}>
-    <div style={{textAlign:'center'}}><div style={{fontSize:32,marginBottom:12}}>⚠️</div><div>{err||'Erreur'}</div>
-      <a href={window.location.pathname} style={{color:'#8b5cf6',marginTop:16,display:'block'}}>← Retour au Kalepin</a></div></div>;
+  if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f',color:'rgba(255,255,255,.7)',fontFamily:'DM Sans'}}>
+    <div style={{textAlign:'center'}}>
+      <div style={{fontSize:36,marginBottom:12,opacity:.5}}>⬛</div>
+      <div style={{fontSize:12,letterSpacing:'.08em',opacity:.5}}>Chargement…</div>
+    </div></div>;
+  if(err||!data)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f',color:'rgba(255,255,255,.5)',fontFamily:'DM Sans'}}>
+    <div style={{textAlign:'center'}}>
+      <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+      <div style={{fontSize:12}}>Lien invalide ou expiré</div>
+    </div></div>;
   const zone=JSON.parse(data.zone_json);const calc=JSON.parse(data.calc_json);
   return<div style={{width:'100vw',height:'100vh',position:'relative'}}>
     <Facade3D zone={zone} calc={calc} ralColor={data.ral_color||'#383E42'} ralFinish={data.ral_finish||'mat'}
-      showWall={showWall} onToggle={k=>{if(k==='wall')setShowWall(v=>!v);}} onClose={()=>window.location.href=window.location.pathname} hideBack={true}/>
-    <div style={{position:'absolute',top:16,left:16,zIndex:100,background:'rgba(0,0,0,.7)',padding:'10px 16px',borderRadius:12,color:'#fff',fontFamily:'DM Sans'}}>
-      <div style={{fontSize:14,fontWeight:700}}>{data.project_name}</div>
-      <div style={{fontSize:11,opacity:.7}}>{data.zone_name} — {zone.L/1000}×{zone.H/1000}m</div>
+      showWall={showWall} onToggle={k=>{if(k==='wall')setShowWall(v=>!v);}} onClose={()=>{}} hideBack={true}/>
+    <div style={{position:'absolute',bottom:14,right:16,zIndex:100,opacity:.25,pointerEvents:'none',userSelect:'none',fontFamily:'DM Sans',fontSize:10,fontWeight:700,color:'#fff',letterSpacing:'.12em'}}>
+      KALEPIN
     </div>
   </div>;
 }
@@ -4904,9 +4906,8 @@ function App({user,profile,signOut,subStatus}){
                 ral_color:RAL_COLORS[zq.ralIdx??ralIdx]?.hex||'#383E42',ral_finish:RAL_COLORS[zq.ralIdx??ralIdx]?.finish||'mat'};
               const uid=await supaUpload(viewData);
               if(uid){
-                const sConf=getSupaConfig();
-                const viewUrl=viewerBase+'?view='+uid+'&s_url='+encodeURIComponent(sConf.url)+'&s_key='+encodeURIComponent(sConf.key);
-                const qrImg=makeQRDataURL(viewUrl,18);
+                const viewUrl=viewerBase+'?view='+uid;
+                const qrImg=makeQRDataURL(viewUrl,25);
                 if(qrImg){
                   doc.addImage(qrImg,'PNG',qxOff,PH-23,18,18);
                   doc.setFontSize(3);doc.setTextColor(120);
@@ -7184,9 +7185,13 @@ function App({user,profile,signOut,subStatus}){
               className="w-full px-3 py-2 rounded-lg text-sm mn" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t1)'}} onKeyDown={e=>e.stopPropagation()}/>
           </div>
           <div>
-            <label className="text-[10px] font-bold mb-1 block" style={{color:'var(--t2)'}}>URL viewer (optionnel, défaut = URL actuelle)</label>
-            <input type="text" defaultValue={supaConf.viewerUrl||''} id="supa-viewer" placeholder={window.location.origin+window.location.pathname}
+            <label className="text-[10px] font-bold mb-1 block" style={{color:'var(--t2)'}}>URL publique du viewer (obligatoire pour QR)</label>
+            <input type="text" defaultValue={supaConf.viewerUrl||''} id="supa-viewer" placeholder="https://monsite.com/kalepin.html"
               className="w-full px-3 py-2 rounded-lg text-sm mn" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t1)'}} onKeyDown={e=>e.stopPropagation()}/>
+            {(!supaConf.viewerUrl&&(window.location.protocol==='file:'||window.location.hostname==='localhost'))&&
+              <div style={{marginTop:4,padding:'5px 8px',borderRadius:6,background:'rgba(196,122,16,.12)',border:'1px solid rgba(196,122,16,.3)',fontSize:9,color:'#c47a10'}}>
+                ⚠️ L'app tourne en local — les QR codes ne fonctionneront pas sans une URL publique hébergée (GitHub Pages, Netlify…)
+              </div>}
           </div>
         </div>
         <div className="flex gap-2">
@@ -9512,14 +9517,28 @@ function EtancheiteApp({onBack,user}){
     const svgPt=pt.matrixTransform(ctm.inverse());
     return[Math.round(svgPt.x*10)/10,Math.round(svgPt.y*10)/10];
   };
+  const lastSvgPt=useRef(null);
   const handleSvgMouseMove=(e)=>{
     if(!dragPt)return;
     const[x,y]=svgCoord(e);
     if(dragPt.type==='roof')setRoofPts(ps=>ps.map((p,i)=>i===dragPt.idx?[x,y]:p));
     else if(dragPt.type==='lant')setLanterneaux(ls=>ls.map((l,i)=>i===dragPt.idx?{...l,x,y}:l));
+    else if(dragPt.type==='lant_resize'){
+      setLanterneaux(ls=>ls.map((l,i)=>{if(i!==dragPt.idx)return l;
+        const nw=Math.max(.3,Math.abs(x-l.x)*2),nl=Math.max(.3,Math.abs(y-l.y)*2);
+        return{...l,w:Math.round(nw*10)/10,l:Math.round(nl*10)/10}}));
+    }
     else if(dragPt.type==='ep')setEps(es=>es.map((ep2,i)=>i===dragPt.idx?{...ep2,x,y}:ep2));
+    else if(dragPt.type==='edic_pt'){
+      setEdicules(es=>es.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map((p,i)=>i===dragPt.idx?[x,y]:p)}:ed));
+    } else if(dragPt.type==='edic_move'){
+      if(!lastSvgPt.current)lastSvgPt.current=[x,y];
+      const dx2=x-lastSvgPt.current[0],dy2=y-lastSvgPt.current[1];
+      lastSvgPt.current=[x,y];
+      setEdicules(es=>es.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map(p=>[p[0]+dx2,p[1]+dy2])}:ed));
+    }
   };
-  const handleSvgMouseUp=()=>setDragPt(null);
+  const handleSvgMouseUp=()=>{setDragPt(null);lastSvgPt.current=null};
 
   const handleSvgClick=(e)=>{
     if(drawMode==='roof'){
@@ -9577,25 +9596,28 @@ function EtancheiteApp({onBack,user}){
     const slabH=.15+isolEp/1000;
 
     // ── Roof slab (extruded polygon) ──
+    // Shape in XY plane, then rotated -PI/2 around X → X stays, Y→-Z, Z→Y
+    // So shape Y must be negated: -(p[1]-ct[1]) so world Z = p[1]-ct[1]
     const shape=new THREE.Shape();
     roofPts.forEach((p,i)=>{
-      const x=p[0]-ct[0],z=p[1]-ct[1];
-      if(i===0)shape.moveTo(x,z);else shape.lineTo(x,z);
+      const sx=p[0]-ct[0],sy=-(p[1]-ct[1]);
+      if(i===0)shape.moveTo(sx,sy);else shape.lineTo(sx,sy);
     });
     shape.closePath();
-    // Cut out edicules
+    // Cut out edicules (same negation)
     edicules.forEach(ed=>{
       const hole=new THREE.Path();
-      ed.pts.forEach((p,i)=>{const x=p[0]-ct[0],z=p[1]-ct[1];if(i===0)hole.moveTo(x,z);else hole.lineTo(x,z)});
+      ed.pts.forEach((p,i)=>{const hx=p[0]-ct[0],hy=-(p[1]-ct[1]);if(i===0)hole.moveTo(hx,hy);else hole.lineTo(hx,hy)});
       hole.closePath();shape.holes.push(hole);
     });
     // Cut out lanterneaux
     lanterneaux.forEach(la=>{
+      const hx=la.x-ct[0],hy=-(la.y-ct[1]);
       const hole=new THREE.Path();
-      hole.moveTo(la.x-ct[0]-la.w/2,la.y-ct[1]-la.l/2);
-      hole.lineTo(la.x-ct[0]+la.w/2,la.y-ct[1]-la.l/2);
-      hole.lineTo(la.x-ct[0]+la.w/2,la.y-ct[1]+la.l/2);
-      hole.lineTo(la.x-ct[0]-la.w/2,la.y-ct[1]+la.l/2);
+      hole.moveTo(hx-la.w/2,hy-la.l/2);
+      hole.lineTo(hx+la.w/2,hy-la.l/2);
+      hole.lineTo(hx+la.w/2,hy+la.l/2);
+      hole.lineTo(hx-la.w/2,hy+la.l/2);
       hole.closePath();shape.holes.push(hole);
     });
 
@@ -9632,7 +9654,7 @@ function EtancheiteApp({onBack,user}){
     // ── Édicules ──
     edicules.forEach(ed=>{
       const eShape=new THREE.Shape();
-      ed.pts.forEach((p,i)=>{const x=p[0]-ct[0],z=p[1]-ct[1];if(i===0)eShape.moveTo(x,z);else eShape.lineTo(x,z)});
+      ed.pts.forEach((p,i)=>{const ex=p[0]-ct[0],ey=-(p[1]-ct[1]);if(i===0)eShape.moveTo(ex,ey);else eShape.lineTo(ex,ey)});
       eShape.closePath();
       const eH=ed.h/1000;
       // Walls
@@ -9829,8 +9851,13 @@ function EtancheiteApp({onBack,user}){
               <div style={{fontSize:7,color:'var(--t3)',marginTop:3}}>{r2(polyArea(ed.pts))} m² · {ed.pts.length} pts</div>
             </>}
           </div>)}
-          <button onClick={()=>{setDrawMode('edicule');setDrawPts([])}}
-            style={{width:'100%',padding:'5px',borderRadius:6,border:'1px dashed rgba(14,146,104,.3)',background:'none',color:'#0e9268',fontSize:9,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Dessiner un édicule</button>
+          <div style={{display:'flex',gap:3}}>
+            <button onClick={()=>{const ct2=polyCentroid(roofPts);const w2=2,l2=2;
+              setEdicules(es=>[...es,mkEdic([[ct2[0]-w2/2,ct2[1]-l2/2],[ct2[0]+w2/2,ct2[1]-l2/2],[ct2[0]+w2/2,ct2[1]+l2/2],[ct2[0]-w2/2,ct2[1]+l2/2]],'Édicule '+(es.length+1))])}}
+              style={{flex:1,padding:'5px',borderRadius:6,border:'1px dashed rgba(14,146,104,.3)',background:'none',color:'#0e9268',fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Rectangle</button>
+            <button onClick={()=>{setDrawMode('edicule');setDrawPts([])}}
+              style={{flex:1,padding:'5px',borderRadius:6,border:'1px dashed rgba(14,146,104,.3)',background:'none',color:'#0e9268',fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>✏ Polygone</button>
+          </div>
         </div>
         {/* Lanterneaux + EP */}
         <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
@@ -9875,7 +9902,7 @@ function EtancheiteApp({onBack,user}){
       <div style={{flex:1,position:'relative',overflow:'hidden',minWidth:0}}>
         {view3D?<div ref={mountRef} style={{width:'100%',height:'100%',background:'#ddd4c8'}}/>
         :<svg ref={svgRef} viewBox={vb} preserveAspectRatio="xMidYMid meet" style={{width:'100%',height:'100%',background:'#f4ece5',cursor:drawMode?'crosshair':dragPt?'grabbing':'default'}}
-          onClick={handleSvgClick} onDoubleClick={handleSvgDblClick} onMouseMove={handleSvgMouseMove} onMouseUp={handleSvgMouseUp} onMouseLeave={handleSvgMouseUp}>
+          onClick={handleSvgClick} onDoubleClick={handleSvgDblClick} onMouseMove={handleSvgMouseMove} onMouseUp={handleSvgMouseUp} onMouseLeave={handleSvgMouseUp} onContextMenu={e=>e.preventDefault()}>
           <defs>
             <pattern id="et-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
           </defs>
@@ -9885,29 +9912,43 @@ function EtancheiteApp({onBack,user}){
           {/* Acrotère lines (thicker) */}
           <polygon points={roofPts.map(p=>p.join(',')).join(' ')} fill="none" stroke="#c4324a" strokeWidth=".12" strokeOpacity=".25"/>
           {/* Roof point handles */}
-          {!drawMode&&roofPts.map((p,i)=><circle key={'rp'+i} cx={p[0]} cy={p[1]} r=".18" fill="#7e4faa" stroke="#fff" strokeWidth=".04" style={{cursor:'grab'}}
-            onMouseDown={e=>{e.stopPropagation();setDragPt({type:'roof',idx:i})}}/>)}
+          {!drawMode&&roofPts.map((p,i)=><circle key={'rp'+i} cx={p[0]} cy={p[1]} r=".2" fill="#7e4faa" stroke="#fff" strokeWidth=".05" style={{cursor:'grab'}}
+            onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'roof',idx:i})}}
+            onContextMenu={e=>{e.preventDefault();e.stopPropagation();if(roofPts.length>3)setRoofPts(ps=>ps.filter((_,j)=>j!==i))}}/>)}
+          {/* Midpoint markers to add points */}
+          {!drawMode&&roofPts.map((p,i)=>{const j=(i+1)%roofPts.length;const mx2=(p[0]+roofPts[j][0])/2,my2=(p[1]+roofPts[j][1])/2;
+            return<circle key={'mp'+i} cx={mx2} cy={my2} r=".14" fill="none" stroke="#7e4faa" strokeWidth=".03" strokeDasharray=".05,.05" style={{cursor:'pointer'}}
+              onClick={e=>{e.stopPropagation();setRoofPts(ps=>[...ps.slice(0,i+1),[mx2,my2],...ps.slice(i+1)])}}><title>+ ajouter un point</title></circle>})}
           {/* Dimensions along edges */}
           {roofPts.map((p,i)=>{const j=(i+1)%roofPts.length;const mx=(p[0]+roofPts[j][0])/2,my=(p[1]+roofPts[j][1])/2;
             const dx=roofPts[j][0]-p[0],dy=roofPts[j][1]-p[1],len=Math.sqrt(dx*dx+dy*dy);
             return<text key={'d'+i} x={mx} y={my-.2} textAnchor="middle" fill="#7e4faa" fontSize=".22" fontWeight="700">{r2(len)}m</text>})}
           {/* Édicules */}
           {edicules.map(ed=><g key={ed.id}>
-            <polygon points={ed.pts.map(p=>p.join(',')).join(' ')} fill={ed.type==='ventelles'?'rgba(14,146,104,.12)':'rgba(100,100,110,.12)'} stroke={ed.type==='ventelles'?'#0e9268':'#666'} strokeWidth=".05" strokeDasharray={ed.type==='ventelles'?'.15,.1':'none'}
-              style={{cursor:'pointer'}} onClick={e=>{e.stopPropagation();setSelEdic(ed.id)}}/>
+            <polygon points={ed.pts.map(p=>p.join(',')).join(' ')} fill={ed.type==='ventelles'?'rgba(14,146,104,.12)':'rgba(100,100,110,.12)'} stroke={selEdic===ed.id?(ed.type==='ventelles'?'#0e9268':'#666'):(ed.type==='ventelles'?'#0e9268':'#999')} strokeWidth={selEdic===ed.id?'.08':'.05'} strokeDasharray={ed.type==='ventelles'?'.15,.1':'none'}
+              style={{cursor:'move'}} onClick={e=>{e.stopPropagation();setSelEdic(ed.id)}}
+              onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'edic_move',edicId:ed.id,startPts:ed.pts.map(p=>[...p])})}}/>
             {/* Ventelles pattern */}
             {ed.type==='ventelles'&&ed.pts.length>=2&&(()=>{const eb=polyBounds(ed.pts);const nLines=Math.floor(eb.h/.3);
-              return Array.from({length:nLines}).map((_,li)=>{const y=eb.min[1]+.15+(li*(eb.h-.3)/Math.max(1,nLines-1));
-                return<line key={li} x1={eb.min[0]+.1} y1={y} x2={eb.max[0]-.1} y2={y} stroke="#0e9268" strokeWidth=".03" opacity=".4"/>})})()}
-            <text x={polyCentroid(ed.pts)[0]} y={polyCentroid(ed.pts)[1]+.1} textAnchor="middle" fill={ed.type==='ventelles'?'#0e9268':'#666'} fontSize=".2" fontWeight="700">{ed.name}</text>
+              return Array.from({length:nLines}).map((_,li)=>{const y2=eb.min[1]+.15+(li*(eb.h-.3)/Math.max(1,nLines-1));
+                return<line key={li} x1={eb.min[0]+.1} y1={y2} x2={eb.max[0]-.1} y2={y2} stroke="#0e9268" strokeWidth=".03" opacity=".4"/>})})()}
+            <text x={polyCentroid(ed.pts)[0]} y={polyCentroid(ed.pts)[1]+.1} textAnchor="middle" fill={ed.type==='ventelles'?'#0e9268':'#666'} fontSize=".2" fontWeight="700" style={{pointerEvents:'none'}}>{ed.name}</text>
+            {/* Corner handles when selected */}
+            {selEdic===ed.id&&ed.pts.map((ep,ei)=><circle key={'ep'+ei} cx={ep[0]} cy={ep[1]} r=".15" fill={ed.type==='ventelles'?'#0e9268':'#666'} stroke="#fff" strokeWidth=".04" style={{cursor:'grab'}}
+              onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'edic_pt',edicId:ed.id,idx:ei})}}/>)}
             {/* Lanterneau on edicule */}
             {ed.hasLant&&(()=>{const ec=polyCentroid(ed.pts);return<rect x={ec[0]-ed.lantW/2000} y={ec[1]-ed.lantL/2000} width={ed.lantW/1000} height={ed.lantL/1000} fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".03" rx=".03"/>})()}
           </g>)}
           {/* Lanterneaux on roof */}
           {lanterneaux.map((la,i)=><g key={la.id}>
             <rect x={la.x-la.w/2} y={la.y-la.l/2} width={la.w} height={la.l} fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".03" rx=".04"
-              style={{cursor:'grab'}} onMouseDown={e=>{e.stopPropagation();setDragPt({type:'lant',idx:i})}}/>
-            <text x={la.x} y={la.y+.05} textAnchor="middle" fill="#0ea5e9" fontSize=".16" fontWeight="600">L{i+1}</text>
+              style={{cursor:'move'}} onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'lant',idx:i})}}/>
+            <text x={la.x} y={la.y+.05} textAnchor="middle" fill="#0ea5e9" fontSize=".16" fontWeight="600" style={{pointerEvents:'none'}}>L{i+1}</text>
+            {/* Resize corners */}
+            <circle cx={la.x+la.w/2} cy={la.y+la.l/2} r=".1" fill="#0ea5e9" stroke="#fff" strokeWidth=".03" style={{cursor:'se-resize'}}
+              onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'lant_resize',idx:i})}}/>
+            {/* Dims */}
+            <text x={la.x} y={la.y-la.l/2-.1} textAnchor="middle" fill="#0ea5e9" fontSize=".13" opacity=".7">{la.w}×{la.l}m</text>
           </g>)}
           {/* EP markers */}
           {eps.map((ep,i)=><g key={ep.id}>
