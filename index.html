@@ -960,25 +960,27 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
       });
     }
 
-    // ── Bavette (drip edge at bottom) ──
+    // ── Bavette (drip edge at bottom) — posée sur le sol, visible ──
     const bavH=0.04,bavD=0.06;
     const bavGeo=new THREE.BoxGeometry(Lm+0.02,bavH,bavD);
     const bavMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.85),metalness:0.5,roughness:0.4});
     const bav=new THREE.Mesh(bavGeo,bavMat);
-    bav.position.set(0,-bavH/2,bavD/2-0.01);scene.add(bav);
+    // Centre y=bavH/2 → bavette de y=0 à y=bavH, posée sur le sol, pas enfoncée
+    bav.position.set(0,bavH/2,bavD/2-0.01);scene.add(bav);
     const lipGeo=new THREE.BoxGeometry(Lm+0.02,0.012,0.025);
     const lip=new THREE.Mesh(lipGeo,bavMat);
-    lip.position.set(0,-bavH-0.005,bavD/2+0.005);lip.rotation.x=0.3;scene.add(lip);
+    lip.position.set(0,0.005,bavD/2+0.005);lip.rotation.x=0.3;scene.add(lip);
 
     // ── Couvertine (coping at top) ──
     const covH=0.035,covD=0.08;
     const covGeo=new THREE.BoxGeometry(Lm+0.04,covH,covD);
     const covMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.9),metalness:0.5,roughness:0.35});
     const cov=new THREE.Mesh(covGeo,covMat);
-    cov.position.set(0,Hm/2+covH/2,covD/2-0.02);scene.add(cov);
+    // Haut de la façade = Hm (bas au sol y=0), couvertine posée dessus
+    cov.position.set(0,Hm+covH/2,covD/2-0.02);scene.add(cov);
     const covLipGeo=new THREE.BoxGeometry(Lm+0.04,0.008,covD+0.02);
     const covLip=new THREE.Mesh(covLipGeo,covMat);
-    covLip.position.set(0,Hm/2+covH+0.003,covD/2-0.02);scene.add(covLip);
+    covLip.position.set(0,Hm+covH+0.003,covD/2-0.02);scene.add(covLip);
 
     // Refs pour toggle visibilité sans recréer la scène
     sceneRef.current={scene,camera,renderer,ossGroup,insulGroup,scaffGroup,facadeGroup};
@@ -2049,6 +2051,8 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
   const[sortField,setSortField]=useState('date');
   const[sortDir,setSortDir]=useState('desc');
   const[subModal,setSubModal]=useState(null);// {user} — modal de gestion abonnement
+  const[gateInput,setGateInput]=useState('');const[gateSaving,setGateSaving]=useState(false);const[gateMsg,setGateMsg]=useState(null);const[gateCurrent,setGateCurrent]=useState('…');
+  useEffect(()=>{fetchGateCode().then(c=>setGateCurrent(c||'kalepin2025 (défaut)'));},[]);
 
   const loadUsers=async()=>{
     setLoadingUsers(true);
@@ -2145,7 +2149,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         try{const r=await fetch(SUPA.url+'/rest/v1/rpc/is_admin',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA.key,'Authorization':'Bearer '+s.access_token},body:'{}'});const d=await r.text();console.log('is_admin() →',r.status,d);alert('is_admin() → HTTP '+r.status+' : '+d)}catch(e){console.log('is_admin() ERROR',e);alert('is_admin() ERROR: '+e.message)}
       }} style={{padding:'5px 10px',borderRadius:8,border:'1px solid rgba(245,158,11,.3)',background:'rgba(245,158,11,.08)',color:'#f59e0b',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit',marginRight:6}}>🔧 Test RLS</button>
       <div style={{display:'flex',gap:2,background:'rgba(42,14,20,.05)',borderRadius:10,padding:3}}>
-        {[{k:'overview',ic:'📊',l:'Vue d\'ensemble'},{k:'users',ic:'👥',l:'Utilisateurs'},{k:'pending',ic:'⏳',l:`Approbations${pending?' ('+pending+')':''}`},{k:'abonnements',ic:'💳',l:'Abonnements'},{k:'stats',ic:'📈',l:'Statistiques'}].map(t=>(
+        {[{k:'overview',ic:'📊',l:'Vue d\'ensemble'},{k:'users',ic:'👥',l:'Utilisateurs'},{k:'pending',ic:'⏳',l:`Approbations${pending?' ('+pending+')':''}`},{k:'abonnements',ic:'💳',l:'Abonnements'},{k:'stats',ic:'📈',l:'Statistiques'},{k:'acces',ic:'🔑',l:'Code d\'accès'}].map(t=>(
           <button key={t.k} onClick={()=>setTab(t.k)} style={{padding:'7px 14px',borderRadius:8,fontSize:11,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .15s',
             background:tab===t.k?'rgba(196,50,74,.25)':'transparent',color:tab===t.k?'#2a0e14':'#a86878'}}>
             {t.ic} {t.l}
@@ -2595,7 +2599,45 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
 
     </div>
 
-    {/* ══ MODAL GESTION ABONNEMENT ══ */}
+      {tab==='acces'&&<div style={{maxWidth:480}}>
+        <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>🔑 Code d'accès au site</div>
+        <div style={{fontSize:11,color:'var(--t3)',marginBottom:20,lineHeight:1.6}}>
+          Ce code est demandé à toute personne qui accède au site sans QR code.<br/>
+          Il est stocké dans Supabase et s'applique immédiatement à tous les visiteurs.
+        </div>
+        <div style={{padding:'14px 16px',borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)',marginBottom:16,display:'flex',alignItems:'center',gap:10}}>
+          <span style={{fontSize:10,color:'var(--t3)',flexShrink:0}}>Code actuel :</span>
+          <code style={{fontSize:13,fontWeight:700,color:'var(--bl)',fontFamily:'JetBrains Mono,monospace',letterSpacing:'.08em'}}>{gateCurrent}</code>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <input
+            type="text"
+            value={gateInput}
+            onChange={e=>setGateInput(e.target.value)}
+            onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'&&gateInput.trim().length>=4)saveCode()}}
+            placeholder="Nouveau code (min. 4 caractères)"
+            style={{flex:1,padding:'10px 14px',borderRadius:9,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:13,fontFamily:'DM Sans,monospace',outline:'none',letterSpacing:'.05em'}}
+          />
+          <button
+            onClick={async()=>{
+              if(gateInput.trim().length<4){setGateMsg({ok:false,txt:'Minimum 4 caractères'});return}
+              setGateSaving(true);setGateMsg(null);
+              const ok=await saveGateCode(gateInput.trim());
+              if(ok){setGateCurrent(gateInput.trim());setGateInput('');setGateMsg({ok:true,txt:'Code mis à jour ✓'});}
+              else{setGateMsg({ok:false,txt:'Erreur — vérifiez les droits Supabase'});}
+              setGateSaving(false);
+            }}
+            disabled={gateSaving||gateInput.trim().length<4}
+            style={{padding:'10px 20px',borderRadius:9,border:'none',background:'var(--bl)',color:'#fff',fontSize:12,fontWeight:700,cursor:gateSaving?'wait':'pointer',fontFamily:'inherit',opacity:gateInput.trim().length<4?.4:1,transition:'opacity .15s'}}
+          >{gateSaving?'…':'Enregistrer'}</button>
+        </div>
+        {gateMsg&&<div style={{marginTop:10,padding:'7px 12px',borderRadius:7,fontSize:11,background:gateMsg.ok?'rgba(16,185,129,.08)':'rgba(239,68,68,.08)',border:`1px solid ${gateMsg.ok?'rgba(16,185,129,.2)':'rgba(239,68,68,.2)'}`,color:gateMsg.ok?'#10b981':'#ef4444'}}>{gateMsg.txt}</div>}
+        <div style={{marginTop:20,padding:'12px 14px',borderRadius:8,background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)',fontSize:10,color:'#b07040',lineHeight:1.7}}>
+          ⚠️ <strong>Note :</strong> Si Supabase est inaccessible lors du chargement, le code de secours <code style={{fontFamily:'monospace'}}>kalepin2025</code> est utilisé automatiquement.
+        </div>
+      </div>}
+
+      {/* ══ MODAL GESTION ABONNEMENT ══ */}
     {subModal&&<SubManageModal
       user={subModal.user}
       currentSub={subModal.sub}
@@ -2785,7 +2827,13 @@ function AuthGate({children}){
   const[subStatus,setSubStatus]=useState(null);
   const[mode,setMode]=useState('gate');
   const[gateCode,setGateCode]=useState('');const[gateErr,setGateErr]=useState(false);
-  const ACCESS_CODE='kalepin2025';// ← changer ici pour modifier le code d'accès
+  const[gateLoading,setGateLoading]=useState(true);const[remoteCode,setRemoteCode]=useState(null);
+  const ACCESS_CODE='kalepin2025';// fallback si Supabase inaccessible
+  useEffect(()=>{fetchGateCode().then(c=>{setRemoteCode(c);setGateLoading(false)});},[]);
+  const checkGate=()=>{
+    const correct=remoteCode||ACCESS_CODE;
+    if(gateCode===correct){setMode('login')}else{setGateErr(true);setGateCode('')}
+  };
   const[email,setEmail]=useState('');const[password,setPassword]=useState('');const[name,setName]=useState('');
   const[showPwd,setShowPwd]=useState(false);
   const[error,setError]=useState('');const[info,setInfo]=useState('');const[submitting,setSubmitting]=useState(false);
@@ -2940,22 +2988,26 @@ function AuthGate({children}){
   if(mode==='gate')return<div style={{position:'fixed',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'#0e0a0b',fontFamily:'DM Sans,sans-serif'}}>
     <div style={{textAlign:'center',width:'100%',maxWidth:320,padding:'0 24px'}}>
       <div style={{width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:900,color:'#fff',margin:'0 auto 32px',boxShadow:'0 8px 32px rgba(196,50,74,.4)',fontStyle:'italic'}}>K</div>
-      <input
-        type="password"
-        value={gateCode}
-        onChange={e=>{setGateCode(e.target.value);setGateErr(false)}}
-        onKeyDown={e=>{if(e.key==='Enter'){e.stopPropagation();if(gateCode===ACCESS_CODE){setMode('login')}else{setGateErr(true);setGateCode('')}}}}
-        placeholder="Code d'accès"
-        autoFocus
-        style={{width:'100%',padding:'12px 16px',borderRadius:10,border:`1.5px solid ${gateErr?'rgba(196,50,74,.6)':'rgba(255,255,255,.08)'}`,background:'rgba(255,255,255,.04)',color:'#fff',fontSize:14,fontFamily:'DM Sans,monospace',outline:'none',textAlign:'center',letterSpacing:'.15em',transition:'border-color .2s'}}
-      />
-      {gateErr&&<div style={{marginTop:8,fontSize:11,color:'#c4324a',opacity:.8}}>Code incorrect</div>}
-      <button
-        onClick={()=>{if(gateCode===ACCESS_CODE){setMode('login')}else{setGateErr(true);setGateCode('')}}}
-        style={{marginTop:12,width:'100%',padding:'11px',borderRadius:10,border:'none',background:'rgba(196,50,74,.85)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit',letterSpacing:'.02em',boxShadow:'0 4px 20px rgba(196,50,74,.3)',transition:'background .15s'}}
-        onMouseOver={e=>e.target.style.background='rgba(196,50,74,1)'}
-        onMouseOut={e=>e.target.style.background='rgba(196,50,74,.85)'}
-      >Accéder</button>
+      {gateLoading
+        ?<div style={{fontSize:11,color:'rgba(255,255,255,.2)',letterSpacing:'.08em'}}>…</div>
+        :<>
+          <input
+            type="password"
+            value={gateCode}
+            onChange={e=>{setGateCode(e.target.value);setGateErr(false)}}
+            onKeyDown={e=>{if(e.key==='Enter'){e.stopPropagation();checkGate()}}}
+            placeholder="Code d'accès"
+            autoFocus
+            style={{width:'100%',padding:'12px 16px',borderRadius:10,border:`1.5px solid ${gateErr?'rgba(196,50,74,.6)':'rgba(255,255,255,.08)'}`,background:'rgba(255,255,255,.04)',color:'#fff',fontSize:14,fontFamily:'DM Sans,monospace',outline:'none',textAlign:'center',letterSpacing:'.15em',transition:'border-color .2s'}}
+          />
+          {gateErr&&<div style={{marginTop:8,fontSize:11,color:'#c4324a',opacity:.8}}>Code incorrect</div>}
+          <button
+            onClick={checkGate}
+            style={{marginTop:12,width:'100%',padding:'11px',borderRadius:10,border:'none',background:'rgba(196,50,74,.85)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit',letterSpacing:'.02em',boxShadow:'0 4px 20px rgba(196,50,74,.3)',transition:'background .15s'}}
+            onMouseOver={e=>e.target.style.background='rgba(196,50,74,1)'}
+            onMouseOut={e=>e.target.style.background='rgba(196,50,74,.85)'}
+          >Accéder</button>
+        </>}
     </div>
   </div>;
 
@@ -3438,6 +3490,33 @@ async function supaFetch(viewId,cfgOverride){
     if(!res.ok)return null;
     const data=await res.json();return data[0]||null;
   }catch(e){console.error('Supabase fetch:',e);return null}
+}
+
+// ── Gate code — stocké dans Supabase, lisible anonymement ──
+const GATE_MAGIC_ID='00000000-0000-0000-0000-kp_gate_code0';
+async function fetchGateCode(){
+  const cfg=getSupaConfig();if(!cfg.url||!cfg.key)return null;
+  try{
+    const res=await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__&select=zone_name&limit=1',{
+      headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key}
+    });
+    if(!res.ok)return null;
+    const d=await res.json();return d[0]?.zone_name||null;
+  }catch(e){return null}
+}
+async function saveGateCode(code){
+  const s=getAuthSession();const cfg=getSupaConfig();if(!cfg.url||!cfg.key||!s)return false;
+  try{
+    // Upsert by project_name unique
+    const res=await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__',{
+      method:'DELETE',headers:{'apikey':cfg.key,'Authorization':'Bearer '+s.access_token}
+    });
+    await fetch(cfg.url+'/rest/v1/kalepin_views',{
+      method:'POST',headers:{'Content-Type':'application/json','apikey':cfg.key,'Authorization':'Bearer '+s.access_token,'Prefer':'return=minimal'},
+      body:JSON.stringify({project_name:'__kp_gate__',zone_name:code,zone_json:'{}',calc_json:'{}'})
+    });
+    return true;
+  }catch(e){console.error('saveGateCode:',e);return false}
 }
 
 // ═══════════════════════════════════════════════════════════
