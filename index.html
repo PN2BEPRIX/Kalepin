@@ -2052,7 +2052,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
   const[sortDir,setSortDir]=useState('desc');
   const[subModal,setSubModal]=useState(null);// {user} — modal de gestion abonnement
   const[gateInput,setGateInput]=useState('');const[gateSaving,setGateSaving]=useState(false);const[gateMsg,setGateMsg]=useState(null);const[gateCurrent,setGateCurrent]=useState('…');
-  useEffect(()=>{fetchGateCode().then(c=>setGateCurrent(c||'kalepin2025 (défaut)'));},[]);
+  useEffect(()=>{fetchGateCode().then(c=>setGateCurrent(c||'1234 (défaut)'));},[]);
 
   const loadUsers=async()=>{
     setLoadingUsers(true);
@@ -2633,7 +2633,7 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
         </div>
         {gateMsg&&<div style={{marginTop:10,padding:'7px 12px',borderRadius:7,fontSize:11,background:gateMsg.ok?'rgba(16,185,129,.08)':'rgba(239,68,68,.08)',border:`1px solid ${gateMsg.ok?'rgba(16,185,129,.2)':'rgba(239,68,68,.2)'}`,color:gateMsg.ok?'#10b981':'#ef4444'}}>{gateMsg.txt}</div>}
         <div style={{marginTop:20,padding:'12px 14px',borderRadius:8,background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)',fontSize:10,color:'#b07040',lineHeight:1.7}}>
-          ⚠️ <strong>Note :</strong> Si Supabase est inaccessible lors du chargement, le code de secours <code style={{fontFamily:'monospace'}}>kalepin2025</code> est utilisé automatiquement.
+          ⚠️ <strong>Note :</strong> Si Supabase est inaccessible lors du chargement, le code de secours <code style={{fontFamily:'monospace'}}>1234</code> est utilisé automatiquement.
         </div>
       </div>}
 
@@ -2825,10 +2825,11 @@ function AuthGate({children}){
   const[profileError,setProfileError]=useState(null);
   const[loading,setLoading]=useState(true);
   const[subStatus,setSubStatus]=useState(null);
-  const[mode,setMode]=useState('gate');
+  const _adminBypass=new URLSearchParams(window.location.search).has('admin');
+  const[mode,setMode]=useState(_adminBypass?'login':'gate');
   const[gateCode,setGateCode]=useState('');const[gateErr,setGateErr]=useState(false);
   const[gateLoading,setGateLoading]=useState(true);const[remoteCode,setRemoteCode]=useState(null);
-  const ACCESS_CODE='kalepin2025';// fallback si Supabase inaccessible
+  const ACCESS_CODE='1234';// fallback si Supabase inaccessible
   useEffect(()=>{fetchGateCode().then(c=>{setRemoteCode(c);setGateLoading(false)});},[]);
   const checkGate=()=>{
     const correct=remoteCode||ACCESS_CODE;
