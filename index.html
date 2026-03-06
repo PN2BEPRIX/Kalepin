@@ -582,7 +582,8 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     const Lm=zone.L/1000,Hm=zone.H/1000,depth=0.008;// 8mm panel depth
     const zoneOuvs=zone.ouvs||[];
     const facadeGroup=new THREE.Group();
-    facadeGroup.position.set(-Lm/2,-Hm/2,0);
+    // Poser le bas de la facade au sol (y=0), centré horizontalement
+    facadeGroup.position.set(-Lm/2,0,0);
 
     // Panel material with RAL color — adapt to finish
     const baseColor=new THREE.Color(ralColor||'#383E42');
@@ -981,6 +982,9 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     // Refs pour toggle visibilité sans recréer la scène
     sceneRef.current={scene,camera,renderer,ossGroup,insulGroup,scaffGroup,facadeGroup};
 
+    // Centre la caméra sur le milieu de la façade (mi-hauteur)
+    panRef.current={x:0,y:Hm/2};
+
     // Render loop
     const animate=()=>{
       frameRef.current=requestAnimationFrame(animate);
@@ -1091,7 +1095,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     <div style={{position:'absolute',top:10,left:10,right:10,zIndex:50,display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}
       onMouseDown={e=>e.stopPropagation()} onTouchStart={e=>e.stopPropagation()}>
       <div style={{display:'flex',gap:5,padding:5,background:'rgba(12,14,28,.88)',borderRadius:10,backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)'}}>
-        {[{l:isMobile?'\u2190 2D':'\u2190 Vue 2D',fn:onClose,col:'red',hide:hideBack},{l:'Reset',fn:()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:0}}},{l:'Face',fn:()=>{rotRef.current={x:0,y:0};zoomRef.current=3}}
+        {[{l:isMobile?'\u2190 2D':'\u2190 Vue 2D',fn:onClose,col:'red',hide:hideBack},{l:'Reset',fn:()=>{rotRef.current={x:-.3,y:.4};zoomRef.current=3;panRef.current={x:0,y:(zone.H/1000)/2}}},{l:'Face',fn:()=>{rotRef.current={x:0,y:0};zoomRef.current=3}}
         ].filter(b=>!b.hide).map(b=><button key={b.l} onClick={b.fn} style={{border:'none',cursor:'pointer',padding:isMobile?'8px 10px':'7px 14px',borderRadius:7,fontSize:10,fontWeight:600,fontFamily:'DM Sans',background:b.col==='red'?'rgba(139,26,43,.45)':'rgba(40,44,65,.9)',color:b.col==='red'?'#fca5a5':'rgba(255,255,255,.65)',boxShadow:'0 0 0 1px rgba(42,14,20,.08)'}}>{b.l}</button>)}
       </div>
       <div style={{display:'flex',gap:5,padding:5,background:'rgba(12,14,28,.88)',borderRadius:10,backdropFilter:'blur(10px)',WebkitBackdropFilter:'blur(10px)'}}>
@@ -3518,7 +3522,7 @@ function makeQRDataURL(text,sizeMM){
   try{
     const qr=qrcode(0,'M');qr.addData(text);qr.make();
     const mod=qr.getModuleCount();
-    const cell=Math.max(3,Math.floor(sizeMM*3.78/mod));
+    const cell=Math.max(2,Math.floor(sizeMM*3.78/mod));
     const cv=document.createElement('canvas');cv.width=cv.height=mod*cell;
     const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
     cx.fillStyle='#000';
@@ -3532,28 +3536,27 @@ function ViewerApp({viewId}){
   const[data,setData]=useState(null);const[err,setErr]=useState(null);const[loading,setLoading]=useState(true);
   const[showWall,setShowWall]=useState(true);
   useEffect(()=>{
-    // Use hardcoded SUPA_DEFAULTS — no need to pass credentials in QR URL anymore
+    // Credentials hardcodés dans SUPA_DEFAULTS — plus besoin de les passer dans l'URL
     const cfg=getSupaConfig();
     supaFetch(viewId,cfg).then(d=>{
-      if(d){setData(d)}else{setErr('Projet introuvable')}
+      if(d){setData(d)}else{setErr('Lien invalide')}
       setLoading(false);
     });
   },[viewId]);
-  if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f',color:'rgba(255,255,255,.7)',fontFamily:'DM Sans'}}>
-    <div style={{textAlign:'center'}}>
-      <div style={{fontSize:36,marginBottom:12,opacity:.5}}>⬛</div>
-      <div style={{fontSize:12,letterSpacing:'.08em',opacity:.5}}>Chargement…</div>
+  if(loading)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f',fontFamily:'DM Sans'}}>
+    <div style={{textAlign:'center',color:'rgba(255,255,255,.4)'}}>
+      <div style={{fontSize:12,letterSpacing:'.1em'}}>Chargement…</div>
     </div></div>;
-  if(err||!data)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f',color:'rgba(255,255,255,.5)',fontFamily:'DM Sans'}}>
-    <div style={{textAlign:'center'}}>
-      <div style={{fontSize:36,marginBottom:12}}>🔒</div>
-      <div style={{fontSize:12}}>Lien invalide ou expiré</div>
+  if(err||!data)return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f',fontFamily:'DM Sans'}}>
+    <div style={{textAlign:'center',color:'rgba(255,255,255,.3)'}}>
+      <div style={{fontSize:32,marginBottom:10}}>🔒</div>
+      <div style={{fontSize:11}}>Lien invalide ou expiré</div>
     </div></div>;
   const zone=JSON.parse(data.zone_json);const calc=JSON.parse(data.calc_json);
   return<div style={{width:'100vw',height:'100vh',position:'relative'}}>
     <Facade3D zone={zone} calc={calc} ralColor={data.ral_color||'#383E42'} ralFinish={data.ral_finish||'mat'}
       showWall={showWall} onToggle={k=>{if(k==='wall')setShowWall(v=>!v);}} onClose={()=>{}} hideBack={true}/>
-    <div style={{position:'absolute',bottom:14,right:16,zIndex:100,opacity:.25,pointerEvents:'none',userSelect:'none',fontFamily:'DM Sans',fontSize:10,fontWeight:700,color:'#fff',letterSpacing:'.12em'}}>
+    <div style={{position:'absolute',bottom:12,right:14,zIndex:100,opacity:.2,pointerEvents:'none',userSelect:'none',fontFamily:'DM Sans',fontSize:9,fontWeight:700,color:'#fff',letterSpacing:'.12em'}}>
       KALEPIN
     </div>
   </div>;
@@ -4906,14 +4909,14 @@ function App({user,profile,signOut,subStatus}){
                 ral_color:RAL_COLORS[zq.ralIdx??ralIdx]?.hex||'#383E42',ral_finish:RAL_COLORS[zq.ralIdx??ralIdx]?.finish||'mat'};
               const uid=await supaUpload(viewData);
               if(uid){
-                const viewUrl=viewerBase+'?view='+uid;
+                const viewUrl=viewerBase+'?view='+uid+'&k=kp3d';
                 const qrImg=makeQRDataURL(viewUrl,25);
                 if(qrImg){
-                  doc.addImage(qrImg,'PNG',qxOff,PH-23,18,18);
+                  doc.addImage(qrImg,'PNG',qxOff,PH-26,22,22);
                   doc.setFontSize(3);doc.setTextColor(120);
-                  doc.text(zq.name,qxOff+9,PH-4,{align:'center'});
-                  doc.text('Scan -> 3D',qxOff+9,PH-1.5,{align:'center'});
-                  qxOff+=22;
+                  doc.text(zq.name,qxOff+11,PH-3,{align:'center'});
+                  doc.text('Scan -> 3D',qxOff+11,PH-1,{align:'center'});
+                  qxOff+=26;
                 }
               }
             }catch(e){console.error('QR gen:',e)}
@@ -7185,13 +7188,9 @@ function App({user,profile,signOut,subStatus}){
               className="w-full px-3 py-2 rounded-lg text-sm mn" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t1)'}} onKeyDown={e=>e.stopPropagation()}/>
           </div>
           <div>
-            <label className="text-[10px] font-bold mb-1 block" style={{color:'var(--t2)'}}>URL publique du viewer (obligatoire pour QR)</label>
-            <input type="text" defaultValue={supaConf.viewerUrl||''} id="supa-viewer" placeholder="https://monsite.com/kalepin.html"
+            <label className="text-[10px] font-bold mb-1 block" style={{color:'var(--t2)'}}>URL viewer (optionnel, défaut = URL actuelle)</label>
+            <input type="text" defaultValue={supaConf.viewerUrl||''} id="supa-viewer" placeholder={window.location.origin+window.location.pathname}
               className="w-full px-3 py-2 rounded-lg text-sm mn" style={{background:'var(--inp)',border:'1px solid var(--bd)',color:'var(--t1)'}} onKeyDown={e=>e.stopPropagation()}/>
-            {(!supaConf.viewerUrl&&(window.location.protocol==='file:'||window.location.hostname==='localhost'))&&
-              <div style={{marginTop:4,padding:'5px 8px',borderRadius:6,background:'rgba(196,122,16,.12)',border:'1px solid rgba(196,122,16,.3)',fontSize:9,color:'#c47a10'}}>
-                ⚠️ L'app tourne en local — les QR codes ne fonctionneront pas sans une URL publique hébergée (GitHub Pages, Netlify…)
-              </div>}
           </div>
         </div>
         <div className="flex gap-2">
@@ -11213,9 +11212,24 @@ function AddPC({type,onClose,onAdd}){
 
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 // Detect viewer mode from URL
-const _viewParam=new URLSearchParams(window.location.search).get('view');
+const _urlParams=new URLSearchParams(window.location.search);
+const _viewParam=_urlParams.get('view');
+const _kParam=_urlParams.get('k');
+// Token secret embarqué dans chaque QR — si présent sans ?view=, page neutre
+const _VIEWER_TOKEN='kp3d';
+const _isViewerContext=_kParam===_VIEWER_TOKEN;
+
+function NeutralPage(){
+  return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f'}}>
+    <div style={{textAlign:'center',color:'rgba(255,255,255,.2)',fontFamily:'DM Sans',userSelect:'none'}}>
+      <div style={{fontSize:48,marginBottom:16,opacity:.3}}>⬛</div>
+    </div>
+  </div>;
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
-  _viewParam?<ViewerApp viewId={_viewParam}/>:
+  _viewParam&&_isViewerContext?<ViewerApp viewId={_viewParam}/>:
+  _isViewerContext?<NeutralPage/>:
   <AuthGate>{({user,profile,signOut,subStatus})=><App user={user} profile={profile} signOut={signOut} subStatus={subStatus}/>}</AuthGate>
 );
 </script>
