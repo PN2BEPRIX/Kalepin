@@ -23,7 +23,11 @@
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
   <script>
     window.onerror=function(msg,url,line,col,err){
-      document.body.innerHTML='<div style="color:#ff6b6b;padding:20px;font-family:monospace;white-space:pre-wrap;background:#1a1a2e"><h2 style=color:#ff4444>ERREUR JS</h2>'+msg+'\nLine: '+line+' Col: '+col+'\n'+(err&&err.stack||'')+'</div>';
+      // Ignorer les erreurs cross-origin masquées (Script error. line:0) — viennent souvent de scripts tiers
+      if(!line&&!col&&msg==='Script error.')return true;
+      console.error('JS Error:',msg,'Line:',line,'Col:',col,err);
+      // N'afficher l'écran rouge que si c'est une vraie erreur dans notre code (line > 0)
+      if(line>0)document.body.innerHTML='<div style="color:#ff6b6b;padding:20px;font-family:monospace;white-space:pre-wrap;background:#1a1a2e"><h2 style=color:#ff4444>ERREUR JS</h2>'+msg+'\nLine: '+line+' Col: '+col+'\n'+(err&&err.stack||'')+'</div>';
     };
     window._jspdfReady=new Promise((resolve)=>{
       const urls=['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js','https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js','https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js'];
@@ -2053,6 +2057,16 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
   const[subModal,setSubModal]=useState(null);// {user} — modal de gestion abonnement
   const[gateInput,setGateInput]=useState('');const[gateSaving,setGateSaving]=useState(false);const[gateMsg,setGateMsg]=useState(null);const[gateCurrent,setGateCurrent]=useState('…');
   useEffect(()=>{fetchGateCode().then(c=>setGateCurrent(c||'1234 (défaut)'));},[]);
+  const doSaveGateCode=async()=>{
+    if(gateInput.trim().length<4){setGateMsg({ok:false,txt:'Minimum 4 caractères'});return;}
+    setGateSaving(true);setGateMsg(null);
+    try{
+      const ok=await saveGateCode(gateInput.trim());
+      if(ok){setGateCurrent(gateInput.trim());setGateInput('');setGateMsg({ok:true,txt:'Code mis à jour ✓'});}
+      else{setGateMsg({ok:false,txt:'Erreur Supabase — vérifiez la console (F12)'});}
+    }catch(e){setGateMsg({ok:false,txt:'Erreur : '+e.message});}
+    setGateSaving(false);
+  };
 
   const loadUsers=async()=>{
     setLoadingUsers(true);
@@ -2614,19 +2628,12 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
             type="text"
             value={gateInput}
             onChange={e=>setGateInput(e.target.value)}
-            onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'&&gateInput.trim().length>=4)saveCode()}}
+            onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')doSaveGateCode();}}
             placeholder="Nouveau code (min. 4 caractères)"
             style={{flex:1,padding:'10px 14px',borderRadius:9,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:13,fontFamily:'DM Sans,monospace',outline:'none',letterSpacing:'.05em'}}
           />
           <button
-            onClick={async()=>{
-              if(gateInput.trim().length<4){setGateMsg({ok:false,txt:'Minimum 4 caractères'});return}
-              setGateSaving(true);setGateMsg(null);
-              const ok=await saveGateCode(gateInput.trim());
-              if(ok){setGateCurrent(gateInput.trim());setGateInput('');setGateMsg({ok:true,txt:'Code mis à jour ✓'});}
-              else{setGateMsg({ok:false,txt:'Erreur — vérifiez les droits Supabase'});}
-              setGateSaving(false);
-            }}
+            onClick={doSaveGateCode}
             disabled={gateSaving||gateInput.trim().length<4}
             style={{padding:'10px 20px',borderRadius:9,border:'none',background:'var(--bl)',color:'#fff',fontSize:12,fontWeight:700,cursor:gateSaving?'wait':'pointer',fontFamily:'inherit',opacity:gateInput.trim().length<4?.4:1,transition:'opacity .15s'}}
           >{gateSaving?'…':'Enregistrer'}</button>
