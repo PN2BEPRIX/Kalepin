@@ -582,7 +582,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     const Lm=zone.L/1000,Hm=zone.H/1000,depth=0.008;// 8mm panel depth
     const zoneOuvs=zone.ouvs||[];
     const facadeGroup=new THREE.Group();
-    // Poser le bas de la facade au sol (y=0), centré horizontalement
+    // Bas de la façade posé au sol (y=0), centré horizontalement
     facadeGroup.position.set(-Lm/2,0,0);
 
     // Panel material with RAL color — adapt to finish
@@ -954,7 +954,8 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
       wallRects.forEach(wr=>{
         const w=wr.r-wr.l,h=wr.b-wr.t;if(w<0.01||h<0.01)return;
         const wm=new THREE.Mesh(new THREE.BoxGeometry(w+0.005,h+0.005,wallThick),wallMat);
-        wm.position.set(wr.l+w/2-Lm/2,Hm/2-(wr.t+h/2),wallZ);
+        // Mur en coords scène : bas façade = y=0, donc décalage +Hm/2 vs ancien système centré
+        wm.position.set(wr.l+w/2-Lm/2,Hm-(wr.t+h/2),wallZ);
         scene.add(wm);
       });
     }
@@ -964,10 +965,10 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     const bavGeo=new THREE.BoxGeometry(Lm+0.02,bavH,bavD);
     const bavMat=new THREE.MeshStandardMaterial({color:baseColor.clone().multiplyScalar(0.85),metalness:0.5,roughness:0.4});
     const bav=new THREE.Mesh(bavGeo,bavMat);
-    bav.position.set(0,-Hm/2-bavH/2,bavD/2-0.01);scene.add(bav);
+    bav.position.set(0,-bavH/2,bavD/2-0.01);scene.add(bav);
     const lipGeo=new THREE.BoxGeometry(Lm+0.02,0.012,0.025);
     const lip=new THREE.Mesh(lipGeo,bavMat);
-    lip.position.set(0,-Hm/2-bavH-0.005,bavD/2+0.005);lip.rotation.x=0.3;scene.add(lip);
+    lip.position.set(0,-bavH-0.005,bavD/2+0.005);lip.rotation.x=0.3;scene.add(lip);
 
     // ── Couvertine (coping at top) ──
     const covH=0.035,covD=0.08;
@@ -981,8 +982,7 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
 
     // Refs pour toggle visibilité sans recréer la scène
     sceneRef.current={scene,camera,renderer,ossGroup,insulGroup,scaffGroup,facadeGroup};
-
-    // Centre la caméra sur le milieu de la façade (mi-hauteur)
+    // Centrer la caméra sur la mi-hauteur de la façade
     panRef.current={x:0,y:Hm/2};
 
     // Render loop
@@ -2783,7 +2783,9 @@ function AuthGate({children}){
   const[profileError,setProfileError]=useState(null);
   const[loading,setLoading]=useState(true);
   const[subStatus,setSubStatus]=useState(null);
-  const[mode,setMode]=useState('landing');
+  const[mode,setMode]=useState('gate');
+  const[gateCode,setGateCode]=useState('');const[gateErr,setGateErr]=useState(false);
+  const ACCESS_CODE='kalepin2025';// ← changer ici pour modifier le code d'accès
   const[email,setEmail]=useState('');const[password,setPassword]=useState('');const[name,setName]=useState('');
   const[showPwd,setShowPwd]=useState(false);
   const[error,setError]=useState('');const[info,setInfo]=useState('');const[submitting,setSubmitting]=useState(false);
@@ -2933,6 +2935,29 @@ function AuthGate({children}){
   const isApproved=profile?.status==='approved'||profile?.role==='admin'||profile?.role==='superadmin';
   if(user && isApproved)return typeof children==='function'?children({user,profile,signOut:async()=>{await authSignOut();setUser(null);setProfile(null);setProfileError(null);setSubStatus(null)},subStatus}):children;
   
+
+  // ── Page de garde (code d'accès) ──
+  if(mode==='gate')return<div style={{position:'fixed',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'#0e0a0b',fontFamily:'DM Sans,sans-serif'}}>
+    <div style={{textAlign:'center',width:'100%',maxWidth:320,padding:'0 24px'}}>
+      <div style={{width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,fontWeight:900,color:'#fff',margin:'0 auto 32px',boxShadow:'0 8px 32px rgba(196,50,74,.4)',fontStyle:'italic'}}>K</div>
+      <input
+        type="password"
+        value={gateCode}
+        onChange={e=>{setGateCode(e.target.value);setGateErr(false)}}
+        onKeyDown={e=>{if(e.key==='Enter'){e.stopPropagation();if(gateCode===ACCESS_CODE){setMode('login')}else{setGateErr(true);setGateCode('')}}}}
+        placeholder="Code d'accès"
+        autoFocus
+        style={{width:'100%',padding:'12px 16px',borderRadius:10,border:`1.5px solid ${gateErr?'rgba(196,50,74,.6)':'rgba(255,255,255,.08)'}`,background:'rgba(255,255,255,.04)',color:'#fff',fontSize:14,fontFamily:'DM Sans,monospace',outline:'none',textAlign:'center',letterSpacing:'.15em',transition:'border-color .2s'}}
+      />
+      {gateErr&&<div style={{marginTop:8,fontSize:11,color:'#c4324a',opacity:.8}}>Code incorrect</div>}
+      <button
+        onClick={()=>{if(gateCode===ACCESS_CODE){setMode('login')}else{setGateErr(true);setGateCode('')}}}
+        style={{marginTop:12,width:'100%',padding:'11px',borderRadius:10,border:'none',background:'rgba(196,50,74,.85)',color:'#fff',fontSize:13,fontWeight:600,cursor:'pointer',fontFamily:'inherit',letterSpacing:'.02em',boxShadow:'0 4px 20px rgba(196,50,74,.3)',transition:'background .15s'}}
+        onMouseOver={e=>e.target.style.background='rgba(196,50,74,1)'}
+        onMouseOut={e=>e.target.style.background='rgba(196,50,74,.85)'}
+      >Accéder</button>
+    </div>
+  </div>;
 
   // ── Page de présentation (landing) ──
   const isLogin=mode==='login',isSignup=mode==='signup',isForgot=mode==='forgot',isLanding=mode==='landing';
@@ -3522,7 +3547,7 @@ function makeQRDataURL(text,sizeMM){
   try{
     const qr=qrcode(0,'M');qr.addData(text);qr.make();
     const mod=qr.getModuleCount();
-    const cell=Math.max(2,Math.floor(sizeMM*3.78/mod));
+    const cell=Math.max(3,Math.floor(sizeMM*3.78/mod));
     const cv=document.createElement('canvas');cv.width=cv.height=mod*cell;
     const cx=cv.getContext('2d');cx.fillStyle='#fff';cx.fillRect(0,0,cv.width,cv.height);
     cx.fillStyle='#000';
@@ -3536,7 +3561,6 @@ function ViewerApp({viewId}){
   const[data,setData]=useState(null);const[err,setErr]=useState(null);const[loading,setLoading]=useState(true);
   const[showWall,setShowWall]=useState(true);
   useEffect(()=>{
-    // Credentials hardcodés dans SUPA_DEFAULTS — plus besoin de les passer dans l'URL
     const cfg=getSupaConfig();
     supaFetch(viewId,cfg).then(d=>{
       if(d){setData(d)}else{setErr('Lien invalide')}
@@ -3556,9 +3580,7 @@ function ViewerApp({viewId}){
   return<div style={{width:'100vw',height:'100vh',position:'relative'}}>
     <Facade3D zone={zone} calc={calc} ralColor={data.ral_color||'#383E42'} ralFinish={data.ral_finish||'mat'}
       showWall={showWall} onToggle={k=>{if(k==='wall')setShowWall(v=>!v);}} onClose={()=>{}} hideBack={true}/>
-    <div style={{position:'absolute',bottom:12,right:14,zIndex:100,opacity:.2,pointerEvents:'none',userSelect:'none',fontFamily:'DM Sans',fontSize:9,fontWeight:700,color:'#fff',letterSpacing:'.12em'}}>
-      KALEPIN
-    </div>
+    <div style={{position:'absolute',bottom:12,right:14,zIndex:100,opacity:.2,pointerEvents:'none',userSelect:'none',fontFamily:'DM Sans',fontSize:9,fontWeight:700,color:'#fff',letterSpacing:'.12em'}}>KALEPIN</div>
   </div>;
 }
 
@@ -4915,7 +4937,7 @@ function App({user,profile,signOut,subStatus}){
                   doc.addImage(qrImg,'PNG',qxOff,PH-26,22,22);
                   doc.setFontSize(3);doc.setTextColor(120);
                   doc.text(zq.name,qxOff+11,PH-3,{align:'center'});
-                  doc.text('Scan -> 3D',qxOff+11,PH-1,{align:'center'});
+                  doc.text('Scan → 3D',qxOff+11,PH-1,{align:'center'});
                   qxOff+=26;
                 }
               }
@@ -11211,20 +11233,14 @@ function AddPC({type,onClose,onAdd}){
 }
 
 if(typeof pdfjsLib!=='undefined')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-// Detect viewer mode from URL
 const _urlParams=new URLSearchParams(window.location.search);
 const _viewParam=_urlParams.get('view');
 const _kParam=_urlParams.get('k');
-// Token secret embarqué dans chaque QR — si présent sans ?view=, page neutre
 const _VIEWER_TOKEN='kp3d';
 const _isViewerContext=_kParam===_VIEWER_TOKEN;
 
 function NeutralPage(){
-  return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#13151f'}}>
-    <div style={{textAlign:'center',color:'rgba(255,255,255,.2)',fontFamily:'DM Sans',userSelect:'none'}}>
-      <div style={{fontSize:48,marginBottom:16,opacity:.3}}>⬛</div>
-    </div>
-  </div>;
+  return<div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#0e0a0b'}}/>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(
