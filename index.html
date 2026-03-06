@@ -2055,8 +2055,10 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
   const[sortField,setSortField]=useState('date');
   const[sortDir,setSortDir]=useState('desc');
   const[subModal,setSubModal]=useState(null);// {user} — modal de gestion abonnement
-  const[gateInput,setGateInput]=useState('');const[gateSaving,setGateSaving]=useState(false);const[gateMsg,setGateMsg]=useState(null);const[gateCurrent,setGateCurrent]=useState('1234 (défaut)');const[gateEnabled,setGateEnabled]=useState(true);
-  useEffect(()=>{fetchGateCode().then(r=>{if(r){setGateCurrent(r.code||'1234 (défaut)');setGateEnabled(r.enabled!==false);}});},[]);
+  const[gateInput,setGateInput]=useState('');const[gateSaving,setGateSaving]=useState(false);const[gateMsg,setGateMsg]=useState(null);
+  const[gateCurrent,setGateCurrent]=useState(()=>{try{const c=localStorage.getItem('kp_gate_cache');return c?JSON.parse(c).code||'1234':'1234';}catch(e){return'1234';}});
+  const[gateEnabled,setGateEnabled]=useState(()=>{try{const c=localStorage.getItem('kp_gate_cache');return c?JSON.parse(c).enabled!==false:true;}catch(e){return true;}});
+  useEffect(()=>{fetchGateCode().then(r=>{if(r){setGateCurrent(r.code||'1234');setGateEnabled(r.enabled!==false);}});},[]);
   const doSaveGateCode=async(codeOverride,enabledOverride)=>{
     const code=codeOverride!==undefined?codeOverride:gateInput.trim();
     const enabled=enabledOverride!==undefined?enabledOverride:gateEnabled;
@@ -3543,7 +3545,7 @@ async function fetchGateCode(){
   try{
     const controller=new AbortController();
     const t=setTimeout(()=>controller.abort(),4000);
-    const res=await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__&select=zone_name,ral_color&order=id.desc&limit=1',{
+    const res=await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__&select=zone_name,ral_color&order=created_at.desc&limit=1',{
       headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key},
       signal:controller.signal
     });
@@ -3551,9 +3553,13 @@ async function fetchGateCode(){
     if(!res.ok)return null;
     const d=await res.json();
     if(!d[0])return null;
-    // zone_name = code, ral_color = 'on'|'off'
-    return{code:d[0].zone_name||null,enabled:d[0].ral_color!=='off'};
-  }catch(e){return null}
+    const result={code:d[0].zone_name||null,enabled:d[0].ral_color!=='off'};
+    try{localStorage.setItem('kp_gate_cache',JSON.stringify(result));}catch(e){}
+    return result;
+  }catch(e){
+    try{const c=localStorage.getItem('kp_gate_cache');if(c)return JSON.parse(c);}catch(e2){}
+    return null;
+  }
 }
 async function saveGateCode(code,enabled){
   const cfg=getSupaConfig();if(!cfg.url||!cfg.key)return false;
@@ -3564,6 +3570,7 @@ async function saveGateCode(code,enabled){
       body:JSON.stringify({project_name:'__kp_gate__',zone_name:code,ral_color:enabled?'on':'off',zone_json:'{}',calc_json:'{}'})
     });
     if(!res.ok){const t=await res.text();console.error('saveGateCode',res.status,t);return false;}
+    try{localStorage.setItem('kp_gate_cache',JSON.stringify({code,enabled}));}catch(e){}
     return true;
   }catch(e){console.error('saveGateCode:',e);return false}
 }
