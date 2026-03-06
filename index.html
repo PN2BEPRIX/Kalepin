@@ -2613,34 +2613,41 @@ function AdminApp({onBack,currentUser,isSuperAdmin}){
 
     </div>
 
-      {tab==='acces'&&<div style={{maxWidth:480}}>
-        <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>🔑 Code d'accès au site</div>
-        <div style={{fontSize:11,color:'var(--t3)',marginBottom:20,lineHeight:1.6}}>
-          Ce code est demandé à toute personne qui accède au site sans QR code.<br/>
-          Il est stocké dans Supabase et s'applique immédiatement à tous les visiteurs.
-        </div>
-        <div style={{padding:'14px 16px',borderRadius:10,background:'var(--crd)',border:'1px solid var(--bd)',marginBottom:16,display:'flex',alignItems:'center',gap:10}}>
-          <span style={{fontSize:10,color:'var(--t3)',flexShrink:0}}>Code actuel :</span>
-          <code style={{fontSize:13,fontWeight:700,color:'var(--bl)',fontFamily:'JetBrains Mono,monospace',letterSpacing:'.08em'}}>{gateCurrent}</code>
-        </div>
-        <div style={{display:'flex',gap:8}}>
-          <input
-            type="text"
-            value={gateInput}
-            onChange={e=>setGateInput(e.target.value)}
-            onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')doSaveGateCode();}}
-            placeholder="Nouveau code (min. 4 caractères)"
-            style={{flex:1,padding:'10px 14px',borderRadius:9,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:13,fontFamily:'DM Sans,monospace',outline:'none',letterSpacing:'.05em'}}
-          />
+      {tab==='acces'&&<div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'60vh'}}>
+        <div style={{width:'100%',maxWidth:400,background:'var(--pnl)',border:'1px solid var(--bd)',borderRadius:20,padding:'32px 28px',boxShadow:'0 8px 40px rgba(42,14,20,.1)'}}>
+          <div style={{textAlign:'center',marginBottom:28}}>
+            <div style={{width:52,height:52,borderRadius:14,background:'linear-gradient(135deg,rgba(196,50,74,.15),rgba(196,50,74,.05))',border:'1px solid rgba(196,50,74,.2)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,margin:'0 auto 14px'}}>🔑</div>
+            <div style={{fontSize:16,fontWeight:800,color:'var(--t1)',letterSpacing:'-.02em',marginBottom:6}}>Code d'accès au site</div>
+            <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6}}>Demandé à tout visiteur qui arrive sans QR code</div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 16px',borderRadius:12,background:'var(--crd)',border:'1px solid var(--bd)',marginBottom:24}}>
+            <span style={{fontSize:10,fontWeight:600,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.06em'}}>Code actuel</span>
+            <code style={{fontSize:16,fontWeight:800,color:'var(--bl)',fontFamily:'JetBrains Mono,monospace',letterSpacing:'.12em'}}>{gateCurrent}</code>
+          </div>
+          <div style={{marginBottom:12}}>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--t2)',marginBottom:7,textTransform:'uppercase',letterSpacing:'.06em'}}>Nouveau code</label>
+            <input
+              type="text"
+              value={gateInput}
+              onChange={e=>{setGateInput(e.target.value);setGateMsg(null);}}
+              onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')doSaveGateCode();}}
+              placeholder="Minimum 4 caractères"
+              style={{width:'100%',padding:'12px 14px',borderRadius:10,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:15,fontFamily:'JetBrains Mono,monospace',outline:'none',textAlign:'center',letterSpacing:'.1em',boxSizing:'border-box'}}
+              onFocus={e=>e.target.style.borderColor='var(--bdf)'}
+              onBlur={e=>e.target.style.borderColor='var(--bd)'}
+            />
+          </div>
           <button
             onClick={doSaveGateCode}
             disabled={gateSaving||gateInput.trim().length<4}
-            style={{padding:'10px 20px',borderRadius:9,border:'none',background:'var(--bl)',color:'#fff',fontSize:12,fontWeight:700,cursor:gateSaving?'wait':'pointer',fontFamily:'inherit',opacity:gateInput.trim().length<4?.4:1,transition:'opacity .15s'}}
-          >{gateSaving?'…':'Enregistrer'}</button>
-        </div>
-        {gateMsg&&<div style={{marginTop:10,padding:'7px 12px',borderRadius:7,fontSize:11,background:gateMsg.ok?'rgba(16,185,129,.08)':'rgba(239,68,68,.08)',border:`1px solid ${gateMsg.ok?'rgba(16,185,129,.2)':'rgba(239,68,68,.2)'}`,color:gateMsg.ok?'#10b981':'#ef4444'}}>{gateMsg.txt}</div>}
-        <div style={{marginTop:20,padding:'12px 14px',borderRadius:8,background:'rgba(245,158,11,.06)',border:'1px solid rgba(245,158,11,.15)',fontSize:10,color:'#b07040',lineHeight:1.7}}>
-          ⚠️ <strong>Note :</strong> Si Supabase est inaccessible lors du chargement, le code de secours <code style={{fontFamily:'monospace'}}>1234</code> est utilisé automatiquement.
+            style={{width:'100%',padding:'13px',borderRadius:11,border:'none',background:gateInput.trim().length>=4?'var(--bl)':'var(--crd2)',color:gateInput.trim().length>=4?'#fff':'var(--t3)',fontSize:13,fontWeight:700,cursor:gateSaving||gateInput.trim().length<4?'not-allowed':'pointer',fontFamily:'inherit',letterSpacing:'.02em',transition:'all .2s',boxShadow:gateInput.trim().length>=4?'0 4px 16px rgba(196,50,74,.25)':'none'}}
+          >{gateSaving?'Enregistrement…':'Enregistrer le nouveau code'}</button>
+          {gateMsg&&<div style={{marginTop:12,padding:'9px 14px',borderRadius:9,fontSize:11,textAlign:'center',fontWeight:600,background:gateMsg.ok?'rgba(16,185,129,.08)':'rgba(239,68,68,.08)',border:`1px solid ${gateMsg.ok?'rgba(16,185,129,.25)':'rgba(239,68,68,.25)'}`,color:gateMsg.ok?'#10b981':'#ef4444'}}>
+            {gateMsg.ok?'✓ ':'✗ '}{gateMsg.txt}
+          </div>}
+          <div style={{marginTop:18,fontSize:10,color:'var(--t3)',textAlign:'center',lineHeight:1.6}}>
+            Code de secours hors-ligne : <code style={{fontFamily:'monospace',fontWeight:700,color:'var(--t2)'}}>1234</code>
+          </div>
         </div>
       </div>}
 
@@ -3506,8 +3513,9 @@ async function fetchGateCode(){
   const cfg=getSupaConfig();if(!cfg.url||!cfg.key)return null;
   try{
     const controller=new AbortController();
-    const t=setTimeout(()=>controller.abort(),4000);// timeout 4s
-    const res=await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__&select=zone_name&limit=1',{
+    const t=setTimeout(()=>controller.abort(),4000);
+    // Lire le plus récent (order by id desc)
+    const res=await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__&select=zone_name&order=id.desc&limit=1',{
       headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key},
       signal:controller.signal
     });
@@ -3518,19 +3526,14 @@ async function fetchGateCode(){
 }
 async function saveGateCode(code){
   const cfg=getSupaConfig();if(!cfg.url||!cfg.key)return false;
-  // Utilise la clé anon (même pattern que supaUpload qui fonctionne)
-  const headers={'Content-Type':'application/json','apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Prefer':'return=minimal'};
+  // Juste un INSERT — on lit toujours le plus récent, pas besoin de DELETE (évite les soucis RLS)
   try{
-    // 1. Supprimer l'ancien enregistrement s'il existe
-    await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__',{
-      method:'DELETE',headers
-    });
-    // 2. Insérer le nouveau code
     const res=await fetch(cfg.url+'/rest/v1/kalepin_views',{
-      method:'POST',headers,
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Prefer':'return=minimal'},
       body:JSON.stringify({project_name:'__kp_gate__',zone_name:code,zone_json:'{}',calc_json:'{}'})
     });
-    if(!res.ok){const t=await res.text();console.error('saveGateCode HTTP',res.status,t);return false;}
+    if(!res.ok){const t=await res.text();console.error('saveGateCode',res.status,t);return false;}
     return true;
   }catch(e){console.error('saveGateCode:',e);return false}
 }
