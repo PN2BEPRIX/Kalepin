@@ -37,7 +37,7 @@
   <style>
     :root{--bg:#faf5f0;--pnl:#f4ece5;--crd:#eee3da;--crd2:#e8d8cd;--inp:#f8f2ed;--bd:#deccbf;--bd2:#c8b0a0;--bdf:#c4324a;--t1:#2a0e14;--t2:#7a3848;--t3:#a86878;--bl:#c4324a;--blg:rgba(42,14,20,.09);--gn:#0e9268;--gnd:rgba(14,146,104,.10);--am:#c47a10;--amd:rgba(196,122,16,.10);--rs:#c43040;--rsd:rgba(196,48,64,.10);--pp:#c4324a;--ppd:rgba(42,14,20,.06);--cy:#8b3a4a;--cyd:rgba(139,58,74,.10)}
     *{font-family:'DM Sans',system-ui,sans-serif;box-sizing:border-box;margin:0}
-    html,body,#root{height:100%;overflow:hidden;background:var(--bg);color:var(--t1)}
+    html,body,#root{height:100%;width:100%;overflow:hidden;background:var(--bg);color:var(--t1)}
     .mn{font-family:'JetBrains Mono',monospace}
     ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:10px}
     input[type=number]{-moz-appearance:textfield}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
@@ -562,19 +562,20 @@ function Facade3D({zone,calc,ralColor,ralFinish,showWall,onToggle,onClose,hideBa
     const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
     renderer.domElement.style.pointerEvents='auto';
     renderer.domElement.style.cursor='grab';
 
     // Lights — warm beige style
-    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
     const sunS=new THREE.DirectionalLight(0xfff5e8,1.15);sunS.position.set(20,32,14);sunS.castShadow=true;
-    sunS.shadow.mapSize.set(2048,2048);sunS.shadow.camera.near=.5;sunS.shadow.camera.far=80;
+    sunS.shadow.mapSize.set(4096,4096);sunS.shadow.camera.near=.5;sunS.shadow.camera.far=80;
     sunS.shadow.camera.left=-20;sunS.shadow.camera.right=20;sunS.shadow.camera.top=20;sunS.shadow.camera.bottom=-20;
     sunS.shadow.bias=-.0003;scene.add(sunS);
     const skyS=new THREE.DirectionalLight(0xc8dcff,.28);skyS.position.set(0,20,-5);scene.add(skyS);
     const fillS=new THREE.DirectionalLight(0xe8f0ff,.22);fillS.position.set(-18,10,-12);scene.add(fillS);
+    const bnc=new THREE.DirectionalLight(0xf8e8c0,.1);bnc.position.set(0,-5,0);scene.add(bnc);
     // Ground + grid
     const flrS=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
     flrS.rotation.x=-Math.PI/2;flrS.position.y=0;flrS.receiveShadow=true;scene.add(flrS);
@@ -3564,6 +3565,10 @@ async function fetchGateCode(){
 async function saveGateCode(code,enabled){
   const cfg=getSupaConfig();if(!cfg.url||!cfg.key)return false;
   try{
+    // Try DELETE old rows first, then POST fresh (cleanest for Supabase anon)
+    try{await fetch(cfg.url+'/rest/v1/kalepin_views?project_name=eq.__kp_gate__',{
+      method:'DELETE',headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key}
+    })}catch(e){}
     const res=await fetch(cfg.url+'/rest/v1/kalepin_views',{
       method:'POST',
       headers:{'Content-Type':'application/json','apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Prefer':'return=minimal'},
@@ -3801,7 +3806,10 @@ function App({user,profile,signOut,subStatus}){
   const[showQuickCreate,setShowQuickCreate]=useState(false);
   const[newProjName,setNewProjName]=useState('');
   const[newProjType,setNewProjType]=useState('cassette');const[dashLoading,setDashLoading]=useState(true);
-  useEffect(()=>{if(step==='dashboard')cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})},[step]);
+  const[dashTab,setDashTab]=useState('projets');
+  const[dashSearch,setDashSearch]=useState('');
+  const[currentModuleProject,setCurrentModuleProject]=useState(null);
+  useEffect(()=>{if(step==='dashboard'){setDashLoading(true);cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)}).catch(()=>setDashLoading(false));}},[step]);
   const[cloudProjId,setCloudProjId]=useState(null);
   const[saving,setSaving]=useState(false);
   const[lastSaved,setLastSaved]=useState(null);
@@ -5775,7 +5783,7 @@ function App({user,profile,signOut,subStatus}){
 
   /* ── MAIN RENDER ── */
   return(
-    <div className="h-full flex flex-col">
+    <div className="h-full w-full flex flex-col" style={{minWidth:0}}>
       {/* ── LIGNE 1 : Logo + projet + outils ── */}
       <div className="flex items-center px-3 flex-shrink-0" style={{height:step==='dashboard'||step==='carrelage'||step==='brique'||step==='etancheite'||step==='charpente'?0:44,borderBottom:step==='work'?'none':'1px solid var(--bd)',background:'var(--pnl)',overflow:step==='work'?'visible':'hidden',transition:'height .2s'}}>
         <div className="flex items-center gap-2 flex-shrink-0" style={{cursor:'pointer'}} onClick={()=>{if(step!=='dashboard')setStep('dashboard')}} title="Retour au dashboard">
@@ -5783,7 +5791,13 @@ function App({user,profile,signOut,subStatus}){
             <svg width="14" height="14" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
           </div><span className="font-bold text-sm">Kalepin</span></div>
         {step==='work'&&<>
-          <div className="mx-2 h-5 w-px flex-shrink-0" style={{background:'var(--bd)'}}/>
+          <svg width="6" height="10" viewBox="0 0 6 10" fill="none" style={{flexShrink:0,marginLeft:4}}><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          <div style={{display:'flex',alignItems:'center',gap:5,flexShrink:0}}>
+            <div style={{width:20,height:20,borderRadius:5,background:'linear-gradient(135deg,#c4324a,#8a1830)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10}}>🏢</div>
+            <span style={{fontSize:11,fontWeight:700,color:'#c4324a'}}>Cassettes</span>
+          </div>
+          <svg width="6" height="10" viewBox="0 0 6 10" fill="none" style={{flexShrink:0,marginLeft:4}}><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          <div className="mx-0 h-5 w-px flex-shrink-0" style={{background:'var(--bd)'}}/>
           <input type="text" value={projectName} onChange={e=>setProjectName(e.target.value)} className="bg-transparent border-none outline-none text-sm font-medium flex-shrink-0" style={{color:'var(--t2)',width:130}} onKeyDown={e=>e.stopPropagation()}/>
           <div className="flex gap-1 ml-1 flex-shrink-0">
             <button onClick={()=>saveProject(false)}
@@ -6041,337 +6055,476 @@ function App({user,profile,signOut,subStatus}){
       <div className="flex-1 flex min-h-0">
         {/* ── DASHBOARD ── */}
         {/* ══════════ DASHBOARD ══════════ */}
-        {step==='dashboard'&&<div className="h-full w-full overflow-y-auto" style={{background:'linear-gradient(160deg,#faf5f0,#f4ece5 40%,#ede4db 70%,#faf5f0)'}}>
-
-          {/* ─── STICKY NAV ─── */}
-          <div style={{position:'sticky',top:0,zIndex:20,background:'rgba(10,10,15,.88)',backdropFilter:'blur(14px)',borderBottom:'1px solid rgba(42,14,20,.05)'}}>
-            <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 16px',display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-              <div style={{width:34,height:34,borderRadius:10,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 16px rgba(196,50,74,.3)'}}>
-                <svg width="16" height="16" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".95"/><rect x="23" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="3" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".75"/><rect x="23" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".55"/></svg>
-              </div>
-              <span style={{fontSize:15,fontWeight:800,color:'#f5ede8',letterSpacing:'-.02em'}}>Kalepin</span>
-              <div style={{flex:1}}/>
-              <span style={{fontSize:11,color:'var(--t3)',marginRight:4}}>{user?.email||''}</span>
-              <button onClick={()=>setShowAccount(true)} style={{padding:'5px 12px',borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>⚙ Compte</button>
-              <button onClick={signOut} style={{padding:'5px 12px',borderRadius:7,border:'1px solid rgba(239,68,68,.12)',background:'rgba(239,68,68,.04)',color:'#f87171',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>Déconnexion</button>
-            </div>
-          </div>
-
-          {/* ─── DASHBOARD HEADER ─── */}
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'24px 16px 10px'}}>
-            <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:6}}>
-              <div style={{width:44,height:44,borderRadius:13,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,color:'#fff',fontWeight:900,boxShadow:'0 6px 20px rgba(196,50,74,.25)'}}>K</div>
-              <div>
-                <div style={{fontSize:20,fontWeight:800,color:'#2a0e14',letterSpacing:'-.02em'}}>Bonjour{user?.user_metadata?.full_name?' '+user.user_metadata.full_name:user?.email?' '+user.email.split('@')[0]:''}  👋</div>
-                <div style={{fontSize:11,color:'#a89898',marginTop:2}}>Que souhaitez-vous calepiner aujourd'hui ?</div>
-              </div>
-              <div style={{flex:1}}/>
-              {isAdmin&&<button onClick={()=>setStep('admin')} style={{padding:'7px 16px',borderRadius:8,border:'1px solid rgba(196,50,74,.25)',background:'rgba(42,14,20,.07)',color:'#c4324a',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>⚡ Admin</button>}
-            </div>
-          </div>
-
-          {/* ─── PROFILE & STATS ─── */}
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 20px'}}>
-            <div className="dash-grid-3" style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14}}>
-              
-              {/* Profile Card */}
-              <div style={{gridColumn:'1/2',padding:20,borderRadius:18,background:'linear-gradient(135deg,rgba(196,50,74,.06),rgba(196,50,74,.01))',border:'1px solid rgba(196,50,74,.1)',position:'relative',overflow:'hidden'}}>
-                <div style={{position:'absolute',top:0,left:0,right:0,height:3,background:'linear-gradient(90deg,#c4324a,#a0243a)',opacity:.5}}/>
-                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
-                  <div style={{width:48,height:48,borderRadius:14,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,color:'#fff',fontWeight:800,boxShadow:'0 4px 16px rgba(196,50,74,.25)'}}>
-                    {(user?.user_metadata?.full_name||user?.email||'U').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2)}
-                  </div>
+        {step==='dashboard'&&(()=>{
+          /* ─── CONFIG ─── */
+          const MC={
+            cassette:{icon:'🏢',label:'Cassettes',color:'#c4324a',rgb:'196,50,74',sub:'Bardage métallique & façade',tags:['DXF','3D','RAL','Ossature','PDF'],canUse:true,
+              onClick:()=>{setProjectType('facade');setStep('welcome')}},
+            brique:{icon:'🧱',label:'Brique',color:'#d97706',rgb:'217,119,6',sub:'Façade parement',tags:['Panneresse','Flamande','Anglaise','Coupes'],canUse:canUseBrique,
+              onClick:()=>{if(!canUseBrique){setShowPaywall(true);return;}setProjectType('brique');setStep('brique')}},
+            carrelage:{icon:'🔲',label:'Carrelage',color:'#0ea5e9',rgb:'14,165,233',sub:'Sol, mur & piscine',tags:['Décalé','Diagonal','Chevron','Opus'],canUse:canUseCarrelage,
+              onClick:()=>{if(!canUseCarrelage){setShowPaywall(true);return;}setProjectType('carrelage');setStep('carrelage')}},
+            etancheite:{icon:'🏗',label:'Étanchéité',color:'#7e4faa',rgb:'126,79,170',sub:'Toiture-terrasse & relevés',tags:['EEP','Devis','Complexes','Acrotère'],canUse:canUseEtancheite,
+              onClick:()=>{if(!canUseEtancheite){setShowPaywall(true);return;}setProjectType('etancheite');setStep('etancheite')}},
+            charpente:{icon:'⛩',label:'Charpente',color:'#0e9268',rgb:'14,146,104',sub:'EC3/EC5 dimensionnement',tags:['Portique','Ferme','Bac','PV','3D'],canUse:canUseCharpente,
+              onClick:()=>{if(!canUseCharpente){setShowPaywall(true);return;}setProjectType('charpente');setStep('charpente')}},
+          };
+          const getPT=(p)=>{try{const d=typeof p.data==='string'?JSON.parse(p.data):p.data;if(!d)return'cassette';if(d.projectType==='brique'||d.brickBond)return'brique';if(d.projectType==='carrelage'||d.tileW)return'carrelage';if(d.projectType==='etancheite')return'etancheite';if(d.projectType==='charpente')return'charpente';return'cassette'}catch{return'cassette'}};
+          const ago=(d)=>{try{const s=(Date.now()-new Date(d))/1000;if(s<3600)return Math.max(1,Math.floor(s/60))+'min';if(s<86400)return Math.floor(s/3600)+'h';if(s<604800)return Math.floor(s/86400)+'j';return new Date(d).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}catch{return'—'}};
+          const filtered=dashSearch?dashProjects.filter(p=>p.name?.toLowerCase().includes(dashSearch.toLowerCase())):dashProjects;
+          const sorted=[...filtered].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at));
+          const recent=[...dashProjects].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,5);
+          const totalSurf=dashProjects.reduce((s,p)=>s+(p.total_surface||0),0);
+          const totalZ=dashProjects.reduce((s,p)=>s+(p.zones_count||0),0);
+          const pdfCount=(()=>{try{return getPdfExportCount().count}catch{return 0}})();
+          const byType=Object.keys(MC).reduce((o,k)=>{o[k]=dashProjects.filter(p=>getPT(p)===k).length;return o},{});
+          /* ─── SIDEBAR NAV ITEM ─── */
+          const SideNav=({id,icon,label,badge,onClick:oc})=>{
+            const sel=dashTab===id;
+            return<button onClick={oc||(() =>setDashTab(id))} style={{width:'100%',display:'flex',alignItems:'center',gap:9,padding:'7px 10px',borderRadius:8,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .13s',textAlign:'left',background:sel?'rgba(196,50,74,.1)':'transparent',color:sel?'#c4324a':'var(--t2)'}}>
+              <span style={{fontSize:14,flexShrink:0,opacity:sel?1:.75}}>{icon}</span>
+              <span style={{fontSize:11,fontWeight:sel?700:500,flex:1}}>{label}</span>
+              {badge>0&&<span style={{fontSize:8,fontWeight:700,background:sel?'rgba(196,50,74,.2)':'rgba(42,14,20,.08)',color:sel?'#c4324a':'var(--t3)',padding:'1px 6px',borderRadius:20,minWidth:16,textAlign:'center'}}>{badge}</span>}
+            </button>;
+          };
+          /* ─── PROJECT CARD ─── */
+          const ProjCard=({p})=>{
+            const pt=getPT(p);const m=MC[pt]||MC.cassette;
+            return<div onClick={()=>openCloudProject(p.id)} className="dash-pcard"
+              style={{borderRadius:14,background:'var(--crd)',border:`1.5px solid rgba(${m.rgb},.1)`,cursor:'pointer',transition:'all .18s',overflow:'hidden',position:'relative',display:'flex',flexDirection:'column'}}
+              onMouseOver={e=>{e.currentTarget.style.borderColor=`rgba(${m.rgb},.35)`;e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow=`0 10px 30px rgba(${m.rgb},.12)`}}
+              onMouseOut={e=>{e.currentTarget.style.borderColor=`rgba(${m.rgb},.1)`;e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+              <div style={{height:3,background:`linear-gradient(90deg,${m.color},rgba(${m.rgb},.3))`}}/>
+              <div style={{padding:'13px 15px 12px',flex:1}}>
+                <div style={{display:'flex',gap:10,alignItems:'flex-start',marginBottom:11}}>
+                  <div style={{width:34,height:34,borderRadius:9,background:`rgba(${m.rgb},.1)`,border:`1px solid rgba(${m.rgb},.15)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>{m.icon}</div>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:14,fontWeight:700,color:'#2a0e14',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{user?.user_metadata?.full_name||user?.email?.split('@')[0]||'Utilisateur'}</div>
-                    <div style={{fontSize:10,color:'#a89898',marginTop:2}}>{user?.email}</div>
+                    <div style={{fontSize:12,fontWeight:700,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:1.3}}>{p.name}</div>
+                    <div style={{fontSize:9,color:m.color,fontWeight:700,letterSpacing:'.05em',marginTop:2,textTransform:'uppercase'}}>{m.label}</div>
                   </div>
                 </div>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}}>
-                  <span style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:planLimits.color+'18',color:planLimits.color}}>{planLimits.name}</span>
-                  {subStatus?.status==='trialing'&&<span style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(245,158,11,.12)',color:'#f59e0b'}}>⏳ Essai {subStatus.daysLeft}j</span>}
-                  {profile?.role==='superadmin'&&<span style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(139,92,246,.12)',color:'#8b5cf6'}}>Admin</span>}
+                <div style={{display:'flex',gap:4,borderRadius:8,overflow:'hidden',border:'1px solid rgba(42,14,20,.05)'}}>
+                  {[[p.zones_count||0,'zone'+(p.zones_count>1?'s':'')],[parseFloat((p.total_surface||0).toFixed(1))>0&&(p.total_surface||0).toFixed(1),'m²']].filter(([v])=>v||v===0).map(([v,l],i)=>v!==false&&<div key={i} style={{flex:1,padding:'6px 8px',background:i%2===0?'rgba(42,14,20,.02)':'rgba(42,14,20,.01)',borderRight:i===0?'1px solid rgba(42,14,20,.04)':'none'}}>
+                    <div style={{fontSize:13,fontWeight:800,color:'var(--t1)',fontFamily:'JetBrains Mono,monospace',lineHeight:1}}>{v}</div>
+                    <div style={{fontSize:7,color:'var(--t3)',fontWeight:700,marginTop:2,textTransform:'uppercase',letterSpacing:'.06em'}}>{l}</div>
+                  </div>)}
+                  <div style={{flex:1,padding:'6px 8px',display:'flex',alignItems:'center',justifyContent:'flex-end'}}>
+                    <span style={{fontSize:9,fontWeight:700,color:m.color}}>Ouvrir →</span>
+                  </div>
                 </div>
-                <div style={{display:'flex',gap:8}}>
-                  <button onClick={()=>setShowAccount(true)} style={{flex:1,padding:'7px 0',borderRadius:8,border:'1px solid rgba(42,14,20,.08)',background:'rgba(42,14,20,.03)',color:'#6a5a5e',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>⚙ Mon profil</button>
-                  {planLimits.id==='free'&&<button onClick={()=>setShowPaywall(true)} style={{flex:1,padding:'7px 0',borderRadius:8,border:'none',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 3px 12px rgba(196,50,74,.2)'}}>⚡ Passer Pro</button>}
+              </div>
+              <div style={{padding:'6px 15px 8px',borderTop:'1px solid rgba(42,14,20,.04)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                <span style={{fontSize:9,color:'var(--t3)'}}>Modifié {ago(p.updated_at)}</span>
+                <button onClick={async ev=>{ev.stopPropagation();if(!confirm('Supprimer « '+p.name+' » ?'))return;const ok=await cloudProjectDelete(p.id);if(ok)setDashProjects(prev=>prev.filter(pr=>pr.id!==p.id))}}
+                  style={{width:20,height:20,borderRadius:5,border:'1px solid rgba(239,68,68,.12)',background:'transparent',color:'rgba(239,68,68,.35)',cursor:'pointer',fontSize:9,display:'flex',alignItems:'center',justifyContent:'center',transition:'all .12s'}}
+                  onMouseOver={e=>{e.currentTarget.style.background='rgba(239,68,68,.08)';e.currentTarget.style.color='#ef4444'}}
+                  onMouseOut={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(239,68,68,.35)'}}>🗑</button>
+              </div>
+            </div>;
+          };
+
+          return<div style={{height:'100%',width:'100%',display:'flex',background:'var(--bg)',overflow:'hidden',fontFamily:'DM Sans,system-ui,sans-serif'}}>
+
+            {/* ══════ SIDEBAR ══════ */}
+            <aside style={{width:216,flexShrink:0,display:'flex',flexDirection:'column',background:'var(--pnl)',borderRight:'1px solid var(--bd)',height:'100%',overflow:'hidden'}}>
+              {/* Logo */}
+              <div style={{padding:'13px 14px 11px',borderBottom:'1px solid var(--bd)',flexShrink:0,display:'flex',alignItems:'center',gap:9}}>
+                <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#8a1830)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 3px 10px rgba(196,50,74,.28)'}}>
+                  <svg width="13" height="13" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5"/><rect x="23" y="3" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".7"/><rect x="3" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".7"/><rect x="23" y="23" width="14" height="14" rx="2.5" stroke="#fff" strokeWidth="2.5" opacity=".4"/></svg>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:800,color:'var(--t1)',letterSpacing:'-.02em',lineHeight:1}}>Kalepin</div>
+                  <div style={{fontSize:8,color:'var(--t3)',fontWeight:600,letterSpacing:'.07em',textTransform:'uppercase',marginTop:1}}>BTP · Pro</div>
                 </div>
               </div>
 
-              {/* Stats Card */}
-              <div style={{padding:20,borderRadius:18,background:'rgba(42,14,20,.025)',border:'1px solid rgba(42,14,20,.06)'}}>
-                <div style={{fontSize:11,fontWeight:700,color:'#6a5a5e',marginBottom:14,display:'flex',alignItems:'center',gap:6}}>
-                  <span style={{fontSize:14}}>📊</span> Statistiques
-                </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(196,50,74,.04)'}}>
-                    <div style={{fontSize:22,fontWeight:800,color:'#c4324a',fontFamily:'monospace'}}>{dashProjects.length}</div>
-                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>Projets</div>
-                  </div>
-                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(14,165,233,.04)'}}>
-                    <div style={{fontSize:22,fontWeight:800,color:'#0ea5e9',fontFamily:'monospace'}}>{dashProjects.reduce((s,p)=>s+(p.zones_count||0),0)}</div>
-                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>Zones</div>
-                  </div>
-                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(34,197,94,.04)'}}>
-                    <div style={{fontSize:22,fontWeight:800,color:'#22c55e',fontFamily:'monospace'}}>{dashProjects.reduce((s,p)=>s+(p.total_surface||0),0).toFixed(1)}</div>
-                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>m² total</div>
-                  </div>
-                  <div style={{padding:'10px 12px',borderRadius:10,background:'rgba(168,104,120,.04)'}}>
-                    <div style={{fontSize:22,fontWeight:800,color:'#a86878',fontFamily:'monospace'}}>{(()=>{try{return getPdfExportCount().count}catch(e){return 0}})()}</div>
-                    <div style={{fontSize:9,color:'#a89898',fontWeight:600,marginTop:2}}>PDF ce mois</div>
-                  </div>
-                </div>
+              {/* New project */}
+              <div style={{padding:'10px 12px 8px',borderBottom:'1px solid var(--bd)',flexShrink:0}}>
+                <button onClick={()=>{
+                  if(planLimits.maxProjects>0&&dashProjects.length>=planLimits.maxProjects){setShowPaywall(true);return;}
+                  setShowQuickCreate(v=>!v);
+                }} style={{width:'100%',padding:'7px 0',borderRadius:8,border:'none',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit',display:'flex',alignItems:'center',justifyContent:'center',gap:6,boxShadow:'0 2px 8px rgba(196,50,74,.22)',transition:'opacity .15s'}}
+                  onMouseOver={e=>e.currentTarget.style.opacity='.9'} onMouseOut={e=>e.currentTarget.style.opacity='1'}>
+                  <svg width="10" height="10" viewBox="0 0 10 10"><line x1="5" y1="1" x2="5" y2="9" stroke="white" strokeWidth="1.8" strokeLinecap="round"/><line x1="1" y1="5" x2="9" y2="5" stroke="white" strokeWidth="1.8" strokeLinecap="round"/></svg>
+                  Nouveau projet
+                </button>
               </div>
 
-              {/* Plan & Limits Card */}
-              <div style={{padding:20,borderRadius:18,background:'rgba(42,14,20,.025)',border:'1px solid rgba(42,14,20,.06)'}}>
-                <div style={{fontSize:11,fontWeight:700,color:'#6a5a5e',marginBottom:14,display:'flex',alignItems:'center',gap:6}}>
-                  <span style={{fontSize:14}}>🎯</span> Mon plan
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,padding:'10px 14px',borderRadius:12,background:planLimits.color+'0a',border:'1px solid '+planLimits.color+'20'}}>
-                  <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,'+planLimits.color+','+planLimits.color+'aa)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:'#fff',fontWeight:800}}>{planLimits.name[0]}</div>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:700,color:planLimits.color}}>{planLimits.name}</div>
-                    <div style={{fontSize:9,color:'#a89898'}}>{planLimits.price===0?'Gratuit':planLimits.price+'€/mois'}</div>
-                  </div>
-                </div>
-                <div style={{display:'flex',flexDirection:'column',gap:6}}>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10}}>
-                    <span style={{color:'#6a5a5e'}}>Projets</span>
-                    <span style={{fontWeight:700,color:'var(--t1)',fontFamily:'monospace'}}>{dashProjects.length}{planLimits.maxProjects>0?' / '+planLimits.maxProjects:' / ∞'}</span>
-                  </div>
-                  {planLimits.maxProjects>0&&<div style={{height:4,borderRadius:2,background:'rgba(42,14,20,.06)',overflow:'hidden'}}>
-                    <div style={{height:'100%',borderRadius:2,background:dashProjects.length>=planLimits.maxProjects?'#ef4444':'#c4324a',width:Math.min(100,dashProjects.length/planLimits.maxProjects*100)+'%',transition:'width .3s'}}/>
-                  </div>}
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10}}>
-                    <span style={{color:'#6a5a5e'}}>Exports PDF</span>
-                    <span style={{fontWeight:700,color:'var(--t1)',fontFamily:'monospace'}}>{(()=>{try{return getPdfExportCount().count}catch(e){return 0}})()}{planLimits.pdfPerMonth>0?' / '+planLimits.pdfPerMonth:' / ∞'}</span>
-                  </div>
-                  {planLimits.pdfPerMonth>0&&<div style={{height:4,borderRadius:2,background:'rgba(42,14,20,.06)',overflow:'hidden'}}>
-                    <div style={{height:'100%',borderRadius:2,background:(()=>{try{return getPdfExportCount().count>=planLimits.pdfPerMonth?'#ef4444':'#0ea5e9'}catch(e){return'#0ea5e9'}})(),width:(()=>{try{return Math.min(100,getPdfExportCount().count/planLimits.pdfPerMonth*100)}catch(e){return 0}})()+'%',transition:'width .3s'}}/>
-                  </div>}
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10,marginTop:2}}>
-                    <span style={{color:'#6a5a5e'}}>Vue 3D</span>
-                    <span style={{fontWeight:700,color:planLimits.has3D?'#22c55e':'#a89898'}}>{planLimits.has3D?'✓ Activée':'✗ Désactivée'}</span>
-                  </div>
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:10}}>
-                    <span style={{color:'#6a5a5e'}}>Modules</span>
-                    <span style={{fontWeight:700,color:'var(--t1)'}}>{planLimits.modules?.length||1}/{3}</span>
-                  </div>
-                </div>
-              </div>
+              {/* Nav */}
+              <nav style={{flex:1,overflowY:'auto',padding:'8px 6px 4px'}}>
+                <div style={{fontSize:8,fontWeight:700,color:'var(--t3)',letterSpacing:'.1em',textTransform:'uppercase',padding:'4px 6px 5px'}}>Espace de travail</div>
+                <SideNav id="projets" icon="📁" label="Projets" badge={dashProjects.length}/>
+                <SideNav id="modules" icon="🧩" label="Modules"/>
+                <SideNav id="stats" icon="📊" label="Statistiques"/>
+                <div style={{height:1,background:'var(--bd)',margin:'7px 4px'}}/>
+                <div style={{fontSize:8,fontWeight:700,color:'var(--t3)',letterSpacing:'.1em',textTransform:'uppercase',padding:'4px 6px 5px'}}>Compte</div>
+                <SideNav id="__account" icon="⚙️" label="Mon profil" onClick={()=>setShowAccount(true)}/>
+                <SideNav id="__pay" icon="💳" label="Abonnement" onClick={()=>setShowPaywall(true)}/>
+                <SideNav id="__cloud" icon="☁️" label="Dossiers cloud" onClick={()=>setShowProjects(true)}/>
+                {isAdmin&&<SideNav id="__admin" icon="⚡" label="Admin" onClick={()=>setStep('admin')}/>}
+              </nav>
 
-            </div>
-          </div>
-
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'10px 16px 44px'}}>
-            <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Modules
-            </div>
-            <div className="dash-grid-modules" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:16}}>
-              {/* Facade cassettes */}
-              <div onClick={()=>{setProjectType('facade');setStep('welcome')}} style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(42,14,20,.04),rgba(196,50,74,.01))',border:'1.5px solid rgba(196,50,74,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(42,14,20,.09)'}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                <div style={{fontSize:30,marginBottom:10}}>🏢</div>
-                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Facade Cassettes</div>
-                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Bardage métallique, cassettes, panneaux composites (Alucobond, Trespa, Equitone).</div>
-                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-                  {['PDF','DXF','3D','RAL','Ossature'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(42,14,20,.07)',color:'#c4324a'}}>{t}</span>)}
-                </div>
-              </div>
-              {/* Facade brique */}
-              <div onClick={()=>{if(!canUseBrique){setShowPaywall(true);return;}setProjectType('brique');setStep('brique')}}
-                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(217,119,6,.05),rgba(217,119,6,.01))',border:'1.5px solid rgba(217,119,6,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{if(canUseBrique){e.currentTarget.style.borderColor='rgba(217,119,6,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(217,119,6,.12)'}}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(217,119,6,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                {!canUseBrique&&<ModuleLock label="Facade Brique" onUpgrade={()=>setShowPaywall(true)}/>}
-                <div style={{fontSize:30,marginBottom:10}}>🧱</div>
-                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Facade Brique</div>
-                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Briques de parement, plaquettes. Appareillages classiques, joints et ouvertures.</div>
-                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-                  {['Panneresse','Flamande','Anglaise','Coupes','Métrés'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(217,119,6,.08)',color:'#d97706'}}>{t}</span>)}
-                </div>
-              </div>
-              {/* Carrelage */}
-              <div onClick={()=>{if(!canUseCarrelage){setShowPaywall(true);return;}setProjectType('carrelage');setStep('carrelage')}}
-                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(14,165,233,.05),rgba(14,165,233,.015))',border:'1.5px solid rgba(14,165,233,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{if(canUseCarrelage){e.currentTarget.style.borderColor='rgba(14,165,233,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(14,165,233,.12)'}}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(14,165,233,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                {!canUseCarrelage&&<ModuleLock label="Calepinage Carrelage" onUpgrade={()=>setShowPaywall(true)}/>}
-                <div style={{fontSize:30,marginBottom:10}}>🔲</div>
-                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Calepinage Carrelage</div>
-                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Sol, mur, piscine. Motifs de pose, calepins, coupes périphériques.</div>
-                <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                  {['Sol','Mur','Piscine','Coupes','Métrés','Motifs'].map(t=><span key={t} style={{padding:'3px 10px',borderRadius:6,fontSize:9,fontWeight:700,background:'rgba(14,165,233,.08)',color:'#0ea5e9'}}>{t}</span>)}
-                </div>
-              </div>
-              {/* Étanchéité */}
-              <div onClick={()=>{if(!canUseEtancheite){setShowPaywall(true);return;}setProjectType('etancheite');setStep('etancheite')}}
-                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(126,79,170,.05),rgba(126,79,170,.01))',border:'1.5px solid rgba(126,79,170,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{if(canUseEtancheite){e.currentTarget.style.borderColor='rgba(126,79,170,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(126,79,170,.12)'}}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(126,79,170,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                {!canUseEtancheite&&<ModuleLock label="Étanchéité" onUpgrade={()=>setShowPaywall(true)}/>}
-                <div style={{fontSize:30,marginBottom:10}}>🏗</div>
-                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Étanchéité</div>
-                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Toiture terrasse, relevé d'acrotère, couvertine, lanterneaux, EP.</div>
-                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-                  {['Complexe','Acrotère','EP','Couvertine','3D','Métrés'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(126,79,170,.08)',color:'#7e4faa'}}>{t}</span>)}
-                </div>
-              </div>
-              {/* Charpente */}
-              <div onClick={()=>{if(!canUseCharpente){setShowPaywall(true);return;}setProjectType('charpente');setStep('charpente')}}
-                style={{padding:24,borderRadius:20,background:'linear-gradient(135deg,rgba(14,146,104,.05),rgba(14,146,104,.01))',border:'1.5px solid rgba(14,146,104,.1)',cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                onMouseOver={e=>{if(canUseCharpente){e.currentTarget.style.borderColor='rgba(14,146,104,.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 16px 48px rgba(14,146,104,.12)'}}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(14,146,104,.1)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                {!canUseCharpente&&<ModuleLock label="Charpente" onUpgrade={()=>setShowPaywall(true)}/>}
-                <div style={{fontSize:30,marginBottom:10}}>⛩</div>
-                <div style={{fontSize:15,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Charpente</div>
-                <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6,marginBottom:12}}>Dimensionnement EC3/EC5, portique, ferme, pannes. Végétalisé, bac, PV.</div>
-                <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
-                  {['EC3','EC5','Portique','Ferme','Bac','PV','3D'].map(t=><span key={t} style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba(14,146,104,.08)',color:'#0e9268'}}>{t}</span>)}
-                </div>
-              </div>
-              
-            </div>
-          </div>
-
-          {/* ─── MES PROJETS ─── */}
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 56px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
-              <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',display:'flex',alignItems:'center',gap:8}}>
-                <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Mes projets ({dashProjects.length})
-              </div>
-              <div style={{display:'flex',gap:6,alignItems:'center'}}>
-                <button onClick={()=>{setDashLoading(true);cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})}} title="Actualiser"
-                  style={{padding:'6px 10px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>↻</button>
-                <button onClick={()=>setShowProjects(true)} title="Gérer mes projets"
-                  style={{padding:'6px 12px',borderRadius:8,border:'1px solid rgba(14,165,233,.25)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>📂 Dossiers</button>
-                {/* Quick create project */}
-                <div style={{position:'relative'}}>
-                  <button onClick={()=>{
-                    if(planLimits.maxProjects>0&&dashProjects.length>=planLimits.maxProjects){setShowPaywall(true);return;}
-                    setShowQuickCreate(!showQuickCreate)}}
-                    style={{padding:'6px 12px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 3px 12px rgba(196,50,74,.25)'}}>
-                    {planLimits.maxProjects>0&&dashProjects.length>=planLimits.maxProjects?'🔒 Limite atteinte':'+ Nouveau'}
-                  </button>
-                  {showQuickCreate&&<><div onClick={()=>setShowQuickCreate(false)} style={{position:'fixed',inset:0,zIndex:29}}/><div style={{position:'absolute',top:'100%',right:0,marginTop:6,width:260,padding:14,borderRadius:14,background:'rgba(16,16,24,.98)',border:'1px solid rgba(42,14,20,.08)',backdropFilter:'blur(16px)',boxShadow:'0 16px 48px rgba(0,0,0,.5)',zIndex:30}}>
-                    <div style={{fontSize:11,fontWeight:700,color:'var(--t1)',marginBottom:10}}>Créer un projet</div>
-                    <input type="text" value={newProjName} onChange={e=>setNewProjName(e.target.value)} placeholder="Nom du projet..."
-                      onKeyDown={e=>e.stopPropagation()}
-                      style={{width:'100%',padding:'8px 10px',borderRadius:8,border:'1px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:12,boxSizing:'border-box',marginBottom:10,fontFamily:'inherit',outline:'none'}}/>
-                    <div style={{fontSize:9,fontWeight:600,color:'var(--t3)',marginBottom:6}}>TYPE</div>
-                    <div style={{display:'flex',gap:6,marginBottom:12}}>
-                      {[{t:'cassette',icon:'🏢',label:'Cassettes',color:'196,50,74'},{t:'brique',icon:'🧱',label:'Brique',color:'217,119,6'},{t:'carrelage',icon:'🔲',label:'Carrelage',color:'14,165,233'},{t:'etancheite',icon:'🏗',label:'Étanch.',color:'126,79,170'},{t:'charpente',icon:'⛩',label:'Charpente',color:'14,146,104'}].map(m=>
-                        <button key={m.t} onClick={()=>setNewProjType(m.t)}
-                          style={{flex:1,padding:'8px 4px',borderRadius:8,border:`1.5px solid rgba(${m.color},${newProjType===m.t?'.4':'.1'})`,
-                            background:`rgba(${m.color},${newProjType===m.t?'.12':'.03'})`,cursor:'pointer',textAlign:'center',fontFamily:'inherit'}}>
-                          <div style={{fontSize:16,marginBottom:2}}>{m.icon}</div>
-                          <div style={{fontSize:8,fontWeight:700,color:`rgb(${m.color})`}}>{m.label}</div>
-                        </button>)}
+              {/* User + plan */}
+              <div style={{padding:'10px 12px',borderTop:'1px solid var(--bd)',flexShrink:0}}>
+                <div style={{padding:'10px 12px',borderRadius:10,background:planLimits.color+'0f',border:'1px solid '+planLimits.color+'22',marginBottom:8}}>
+                  <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:planLimits.maxProjects>0?8:0}}>
+                    <div style={{width:22,height:22,borderRadius:6,background:'linear-gradient(135deg,'+planLimits.color+','+planLimits.color+'99)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',fontWeight:800,flexShrink:0}}>{planLimits.name[0]}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:10,fontWeight:700,color:planLimits.color,lineHeight:1}}>{planLimits.name}</div>
+                      <div style={{fontSize:8,color:'var(--t3)',marginTop:1}}>{planLimits.price===0?'Gratuit':planLimits.price+'€/mois'}</div>
                     </div>
-                    <button onClick={async()=>{if(!newProjName.trim())return;const stepMap={cassette:'welcome',brique:'brique',carrelage:'carrelage',etancheite:'etancheite',charpente:'charpente'};setProjectType(newProjType==='cassette'?'facade':newProjType);setShowQuickCreate(false);setStep(stepMap[newProjType]);setNewProjName('')}}
-                      style={{width:'100%',padding:'8px',borderRadius:8,border:'none',background:'#c4324a',color:'#fff',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Créer et ouvrir →</button>
-                  </div></>}
+                    {subStatus?.status==='trialing'&&<span style={{fontSize:7,fontWeight:700,background:'rgba(245,158,11,.15)',color:'#f59e0b',padding:'2px 5px',borderRadius:20,flexShrink:0}}>{subStatus.daysLeft}j</span>}
+                  </div>
+                  {planLimits.maxProjects>0&&<div>
+                    <div style={{display:'flex',justifyContent:'space-between',fontSize:8,color:'var(--t3)',marginBottom:3}}>
+                      <span>Projets</span><span style={{fontWeight:600,fontFamily:'monospace',color:'var(--t2)'}}>{dashProjects.length}/{planLimits.maxProjects}</span>
+                    </div>
+                    <div style={{height:3,borderRadius:2,background:'rgba(42,14,20,.07)'}}>
+                      <div style={{height:'100%',borderRadius:2,background:dashProjects.length>=planLimits.maxProjects?'#ef4444':planLimits.color,width:Math.min(100,dashProjects.length/(planLimits.maxProjects||1)*100)+'%',transition:'width .4s'}}/>
+                    </div>
+                  </div>}
+                  {planLimits.id==='free'&&<button onClick={()=>setShowPaywall(true)} style={{marginTop:8,width:'100%',padding:'5px',borderRadius:6,border:'none',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>⚡ Passer Pro</button>}
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:6,overflow:'hidden'}}>
+                  <div style={{width:22,height:22,borderRadius:6,background:'linear-gradient(135deg,#c4324a,#8a1830)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#fff',fontWeight:800,flexShrink:0}}>
+                    {(user?.user_metadata?.full_name||user?.email||'U')[0].toUpperCase()}
+                  </div>
+                  <span style={{fontSize:9,color:'var(--t3)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1}}>{user?.email}</span>
+                  <button onClick={signOut} title="Déconnexion" style={{width:22,height:22,borderRadius:5,border:'1px solid rgba(239,68,68,.12)',background:'transparent',color:'rgba(239,68,68,.5)',cursor:'pointer',fontSize:9,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center'}} onMouseOver={e=>{e.currentTarget.style.background='rgba(239,68,68,.07)';e.currentTarget.style.color='#ef4444'}} onMouseOut={e=>{e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(239,68,68,.5)'}}>↩</button>
                 </div>
               </div>
-            </div>
-            {dashLoading?<div style={{textAlign:'center',padding:40,color:'var(--t3)',fontSize:13}}>Chargement...</div>
-            :dashProjects.length===0?<div style={{textAlign:'center',padding:60,borderRadius:24,border:'1.5px dashed rgba(42,14,20,.06)',background:'rgba(255,255,255,.012)'}}>
-              <div style={{fontSize:48,marginBottom:16}}>📐</div>
-              <div style={{fontSize:16,fontWeight:700,color:'var(--t2)',marginBottom:8}}>Aucun projet pour l'instant</div>
-              <div style={{fontSize:12,color:'var(--t3)',lineHeight:1.6}}>Choisissez un module ci-dessus pour créer<br/>votre premier calepinage</div>
-            </div>
-            :<div className="dash-grid-projects" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:14}}>
-              {dashProjects.map(p=>{
-                const pType=(()=>{try{const d=typeof p.data==='string'?JSON.parse(p.data):p.data;if(!d)return'cassette';if(d.projectType==='brique'||d.brickBond)return'brique';if(d.projectType==='carrelage'||d.tileW)return'carrelage';return'cassette'}catch(e){return'cassette'}})();
-                const typeConf={cassette:{icon:'🏢',label:'Cassettes',color:'196,50,74',gradient:'#c4324a,#a0243a'},brique:{icon:'🧱',label:'Brique',color:'217,119,6',gradient:'#d97706,#b45309'},carrelage:{icon:'🔲',label:'Carrelage',color:'14,165,233',gradient:'#0ea5e9,#0284c7'}}[pType];
-                const dateStr=(()=>{try{const d=new Date(p.updated_at);const now=new Date();const diff=now-d;if(diff<3600000)return'Il y a '+Math.max(1,Math.floor(diff/60000))+' min';if(diff<86400000)return'Il y a '+Math.floor(diff/3600000)+'h';return d.toLocaleDateString('fr-FR',{day:'2-digit',month:'short',year:'numeric'})}catch(e){return'-'}})();
-                return <div key={p.id} onClick={()=>openCloudProject(p.id)} style={{
-                  padding:0,borderRadius:16,background:'rgba(42,14,20,.025)',border:'1px solid rgba('+typeConf.color+',.12)',
-                  cursor:'pointer',transition:'all .25s',position:'relative',overflow:'hidden'}}
-                  onMouseOver={e=>{e.currentTarget.style.borderColor='rgba('+typeConf.color+',.35)';e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 12px 40px rgba(0,0,0,.3)'}}
-                  onMouseOut={e=>{e.currentTarget.style.borderColor='rgba('+typeConf.color+',.12)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
-                  {/* Color banner top */}
-                  <div style={{height:4,background:'linear-gradient(90deg,'+typeConf.gradient+')',opacity:.6}}/>
-                  <div style={{padding:'14px 16px'}}>
-                    {/* Header row */}
-                    <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12}}>
-                      <div style={{width:42,height:42,borderRadius:12,background:'linear-gradient(135deg,rgba('+typeConf.color+',.12),rgba('+typeConf.color+',.04))',border:'1px solid rgba('+typeConf.color+',.15)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0}}>{typeConf.icon}</div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginBottom:3}}>{p.name}</div>
-                        <div style={{display:'flex',alignItems:'center',gap:6}}>
-                          <span style={{padding:'2px 8px',borderRadius:5,fontSize:8,fontWeight:700,background:'rgba('+typeConf.color+',.1)',color:'rgb('+typeConf.color+')',letterSpacing:'.03em'}}>{typeConf.label}</span>
-                          <span style={{fontSize:9,color:'var(--t3)'}}>{dateStr}</span>
+            </aside>
+
+            {/* ══════ MAIN ══════ */}
+            <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden',minWidth:0}}>
+
+              {/* Top bar */}
+              <header style={{height:50,flexShrink:0,display:'flex',alignItems:'center',padding:'0 22px',gap:12,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:14,fontWeight:800,color:'var(--t1)',letterSpacing:'-.015em',lineHeight:1}}>
+                    {dashTab==='projets'?'Mes projets':dashTab==='modules'?'Modules':dashTab==='stats'?'Statistiques':''}
+                  </div>
+                  <div style={{fontSize:9,color:'var(--t3)',marginTop:2}}>
+                    {dashTab==='projets'?`${dashProjects.length} projet${dashProjects.length!==1?'s':''} · ${totalSurf.toFixed(0)} m² total`:
+                     dashTab==='modules'?'5 modules BTP spécialisés — Multi-module bientôt':
+                     'Vue analytique de votre activité'}
+                  </div>
+                </div>
+                {dashTab==='projets'&&<>
+                  <div style={{position:'relative'}}>
+                    <svg style={{position:'absolute',left:8,top:'50%',transform:'translateY(-50%)',pointerEvents:'none',opacity:.45}} width="11" height="11" viewBox="0 0 11 11" fill="none"><circle cx="4.5" cy="4.5" r="3.5" stroke="#7a3848" strokeWidth="1.3"/><line x1="7.5" y1="7.5" x2="10" y2="10" stroke="#7a3848" strokeWidth="1.3" strokeLinecap="round"/></svg>
+                    <input value={dashSearch} onChange={e=>setDashSearch(e.target.value)} placeholder="Rechercher un projet…"
+                      onKeyDown={e=>e.stopPropagation()}
+                      style={{paddingLeft:24,paddingRight:10,paddingTop:6,paddingBottom:6,borderRadius:8,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:11,fontFamily:'inherit',outline:'none',width:186,transition:'border-color .15s'}}
+                      onFocus={e=>e.target.style.borderColor='#c4324a'} onBlur={e=>e.target.style.borderColor='var(--bd)'}/>
+                  </div>
+                  <button onClick={()=>{setDashLoading(true);cloudProjectsList().then(p=>{setDashProjects(p||[]);setDashLoading(false)})}}
+                    title="Rafraîchir" style={{width:32,height:32,borderRadius:7,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>↻</button>
+                  <button onClick={()=>setShowProjects(true)} style={{padding:'0 13px',height:32,borderRadius:7,border:'1px solid rgba(14,165,233,.22)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>☁ Dossiers</button>
+                </>}
+                <div onClick={()=>setShowAccount(true)} style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#8a1830)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'#fff',fontWeight:800,cursor:'pointer',flexShrink:0,boxShadow:'0 2px 8px rgba(196,50,74,.2)'}}>
+                  {(user?.user_metadata?.full_name||user?.email||'U')[0].toUpperCase()}
+                </div>
+              </header>
+
+              {/* Quick-create drawer */}
+              {showQuickCreate&&<><div onClick={()=>setShowQuickCreate(false)} style={{position:'fixed',inset:0,zIndex:29}}/>
+              <div style={{position:'fixed',top:110,left:228,width:310,padding:18,borderRadius:14,background:'var(--pnl)',border:'1px solid var(--bd)',boxShadow:'0 20px 60px rgba(42,14,20,.2)',zIndex:30,animation:'fu .18s ease-out'}}>
+                <div style={{fontSize:13,fontWeight:800,color:'var(--t1)',marginBottom:14,letterSpacing:'-.01em'}}>Créer un projet</div>
+                <div style={{fontSize:9,fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:7}}>Nom</div>
+                <input autoFocus type="text" value={newProjName} onChange={e=>setNewProjName(e.target.value)}
+                  onKeyDown={async e=>{e.stopPropagation();if(e.key==='Enter'&&newProjName.trim()){const nm=newProjName.trim();const stepMap={cassette:'welcome',brique:'brique',carrelage:'carrelage',etancheite:'etancheite',charpente:'charpente'};setProjectType(newProjType==='cassette'?'facade':newProjType);setShowQuickCreate(false);setNewProjName('');try{const sk={projectType:newProjType,name:nm,zones:[],zones_count:0,total_surface:0};const sv=await cloudSaveModuleProject(nm,newProjType,sk);if(sv){setDashProjects(prev=>prev.find(p=>p.id===sv.id)?prev:[sv,...prev]);if(newProjType==='cassette')setProjectName(nm);}}catch(e){}setStep(stepMap[newProjType]);}}}
+                  placeholder="Ex: Résidence Les Pins — Façade Sud…"
+                  style={{width:'100%',padding:'9px 12px',borderRadius:8,border:'1.5px solid var(--bd)',background:'var(--inp)',color:'var(--t1)',fontSize:12,fontFamily:'inherit',outline:'none',boxSizing:'border-box',marginBottom:14,transition:'border-color .15s'}}
+                  onFocus={e=>e.target.style.borderColor='#c4324a'} onBlur={e=>e.target.style.borderColor='var(--bd)'}/>
+                <div style={{fontSize:9,fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8}}>Module</div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:6,marginBottom:16}}>
+                  {Object.entries(MC).map(([t,m])=>
+                    <button key={t} onClick={()=>setNewProjType(t)}
+                      style={{padding:'9px 3px',borderRadius:8,border:`1.5px solid rgba(${m.rgb},${newProjType===t?.5:.15})`,background:`rgba(${m.rgb},${newProjType===t?.1:.03})`,cursor:'pointer',fontFamily:'inherit',transition:'all .12s',outline:'none'}}>
+                      <div style={{fontSize:17,marginBottom:3,textAlign:'center'}}>{m.icon}</div>
+                      <div style={{fontSize:7,fontWeight:700,color:m.color,textAlign:'center',lineHeight:1.2}}>{m.label}</div>
+                    </button>)}
+                </div>
+                <button onClick={async()=>{
+                  if(!newProjName.trim())return;
+                  const nm=newProjName.trim();
+                  const stepMap={cassette:'welcome',brique:'brique',carrelage:'carrelage',etancheite:'etancheite',charpente:'charpente'};
+                  const projType=newProjType==='cassette'?'facade':newProjType;
+                  setProjectType(projType);
+                  setShowQuickCreate(false);
+                  setNewProjName('');
+                  // Sauvegarder le projet skeleton immédiatement
+                  try{
+                    const skeletonData={projectType:newProjType==='cassette'?'cassette':newProjType,name:nm,zones:[],zones_count:0,total_surface:0,createdAt:new Date().toISOString()};
+                    const saved=await cloudSaveModuleProject(nm,newProjType,skeletonData);
+                    if(saved){
+                      setDashProjects(prev=>{
+                        const exists=prev.find(p=>p.id===saved.id);
+                        if(exists)return prev;
+                        return[saved,...prev];
+                      });
+                      // Pour les cassettes: pré-remplir le nom du projet
+                      if(newProjType==='cassette')setProjectName(nm);
+                    }
+                  }catch(e){console.warn('Auto-save skeleton:',e)}
+                  setStep(stepMap[newProjType]);
+                }} disabled={!newProjName.trim()} style={{width:'100%',padding:'10px',borderRadius:8,border:'none',background:newProjName.trim()?'#c4324a':'var(--crd2)',color:newProjName.trim()?'#fff':'var(--t3)',fontSize:12,fontWeight:700,cursor:newProjName.trim()?'pointer':'default',fontFamily:'inherit',transition:'all .15s'}}>
+                  Créer et ouvrir →
+                </button>
+              </div></>}
+
+              {/* ── Scrollable area ── */}
+              <div style={{flex:1,overflowY:'auto'}}>
+
+                {/* ══ TAB: PROJETS ══ */}
+                {dashTab==='projets'&&<div style={{padding:'20px 22px'}}>
+                  {/* Freemium banner */}
+                  {planLimits.id==='free'&&<div onClick={()=>setShowPaywall(true)} style={{marginBottom:18,padding:'11px 16px',borderRadius:10,background:'linear-gradient(135deg,rgba(196,50,74,.06),rgba(196,50,74,.03))',border:'1.5px solid rgba(196,50,74,.18)',cursor:'pointer',display:'flex',alignItems:'center',gap:10,transition:'border-color .15s'}}
+                    onMouseOver={e=>e.currentTarget.style.borderColor='rgba(196,50,74,.4)'}
+                    onMouseOut={e=>e.currentTarget.style.borderColor='rgba(196,50,74,.18)'}>
+                    <span style={{fontSize:18}}>⚡</span>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,fontWeight:700,color:'#c4324a'}}>Plan Freemium — 2 projets max, 3 PDF/mois</div>
+                      <div style={{fontSize:10,color:'var(--t3)',marginTop:1}}>Passez Pro pour débloquer tous les modules, la 3D, les exports Excel et DXF illimités.</div>
+                    </div>
+                    <span style={{fontSize:10,fontWeight:700,color:'#c4324a',whiteSpace:'nowrap'}}>Voir les plans →</span>
+                  </div>}
+                  {/* Content */}
+                  {dashLoading
+                    ?<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:12}}>
+                      {[1,2,3,4,5,6].map(i=><div key={i} style={{height:140,borderRadius:14,background:'linear-gradient(90deg,var(--crd) 25%,var(--crd2) 50%,var(--crd) 75%)',backgroundSize:'200% 100%',animation:'shimmer 1.5s infinite'}}/>)}
+                    </div>
+                    :sorted.length===0
+                    ?<div style={{display:'flex',flexDirection:'column',alignItems:'center',padding:'70px 20px',textAlign:'center'}}>
+                      <div style={{fontSize:56,marginBottom:16,opacity:.18}}>📐</div>
+                      <div style={{fontSize:16,fontWeight:800,color:'var(--t2)',marginBottom:8,letterSpacing:'-.01em'}}>{dashSearch?'Aucun résultat pour « '+dashSearch+' »':'Votre premier projet vous attend'}</div>
+                      <div style={{fontSize:12,color:'var(--t3)',maxWidth:340,lineHeight:1.7,marginBottom:22}}>{dashSearch?'Essayez un autre terme.':'Créez un projet de calepinage en choisissant un module ci-dessus.'}</div>
+                      {!dashSearch&&<button onClick={()=>setDashTab('modules')} style={{padding:'8px 22px',borderRadius:8,border:'1.5px solid rgba(196,50,74,.25)',background:'rgba(196,50,74,.06)',color:'#c4324a',fontSize:11,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>Voir les modules →</button>}
+                    </div>
+                    :<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:12}}>
+                      {sorted.map(p=><ProjCard key={p.id} p={p}/>)}
+                    </div>}
+                </div>}
+
+                {/* ══ TAB: MODULES ══ */}
+                {dashTab==='modules'&&<div style={{padding:'20px 22px'}}>
+                  {/* Module grid */}
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:14,marginBottom:20}}>
+                    {Object.entries(MC).map(([key,m])=><div key={key}
+                      style={{borderRadius:14,background:'var(--crd)',border:`1.5px solid rgba(${m.rgb},.12)`,overflow:'hidden',position:'relative',transition:'all .2s',cursor:'pointer'}}
+                      onClick={m.canUse?m.onClick:()=>setShowPaywall(true)}
+                      onMouseOver={e=>{e.currentTarget.style.borderColor=`rgba(${m.rgb},.38)`;e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow=`0 14px 40px rgba(${m.rgb},.11)`}}
+                      onMouseOut={e=>{e.currentTarget.style.borderColor=`rgba(${m.rgb},.12)`;e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none'}}>
+                      {!m.canUse&&<div style={{position:'absolute',inset:0,background:'rgba(250,245,240,.87)',backdropFilter:'blur(4px)',zIndex:5,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:6,borderRadius:12}}>
+                        <span style={{fontSize:24}}>🔒</span>
+                        <span style={{fontSize:11,fontWeight:700,color:'var(--t2)'}}>Plan Pro requis</span>
+                        <span style={{fontSize:10,color:'#c4324a',fontWeight:700,background:'rgba(196,50,74,.08)',padding:'3px 14px',borderRadius:20,border:'1px solid rgba(196,50,74,.18)'}}>Débloquer →</span>
+                      </div>}
+                      <div style={{height:3,background:`linear-gradient(90deg,${m.color},rgba(${m.rgb},.3))`}}/>
+                      <div style={{padding:'18px 18px 14px'}}>
+                        <div style={{display:'flex',alignItems:'flex-start',gap:12,marginBottom:12}}>
+                          <div style={{width:42,height:42,borderRadius:11,background:`rgba(${m.rgb},.1)`,border:`1px solid rgba(${m.rgb},.18)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:21,flexShrink:0}}>{m.icon}</div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:14,fontWeight:800,color:'var(--t1)',letterSpacing:'-.01em',lineHeight:1.2}}>{m.label}</div>
+                            <div style={{fontSize:10,color:'var(--t3)',marginTop:3}}>{m.sub}</div>
+                          </div>
+                        </div>
+                        <div style={{display:'flex',gap:4,flexWrap:'wrap',marginBottom:12}}>
+                          {m.tags.map(t=><span key={t} style={{padding:'2px 7px',borderRadius:5,fontSize:8,fontWeight:700,background:`rgba(${m.rgb},.08)`,color:m.color}}>{t}</span>)}
+                        </div>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:10,borderTop:'1px solid rgba(42,14,20,.05)'}}>
+                          <span style={{fontSize:10,color:'var(--t3)'}}><span style={{fontWeight:700,color:'var(--t2)',fontFamily:'monospace'}}>{byType[key]}</span> projet{byType[key]>1?'s':''}</span>
+                          <span style={{fontSize:11,fontWeight:700,color:m.color}}>Nouveau →</span>
+                        </div>
+                      </div>
+                    </div>)}
+                  </div>
+                  {/* Multi-module teaser */}
+                  <div style={{padding:'18px 22px',borderRadius:14,background:'linear-gradient(135deg,rgba(196,50,74,.03),rgba(14,165,233,.03))',border:'1.5px dashed rgba(196,50,74,.18)'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:14,marginBottom:10,flexWrap:'wrap'}}>
+                      <div>
+                        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:4}}>
+                          <span style={{fontSize:20}}>🔮</span>
+                          <span style={{fontSize:13,fontWeight:800,color:'var(--t1)',letterSpacing:'-.01em'}}>Projet Multi-modules — Bientôt</span>
+                          <span style={{fontSize:8,fontWeight:700,background:'rgba(196,50,74,.1)',color:'#c4324a',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(196,50,74,.2)'}}>ROADMAP</span>
+                        </div>
+                        <div style={{fontSize:11,color:'var(--t3)',lineHeight:1.6}}>Combinez plusieurs modules dans un seul projet : façade cassettes + brique, étanchéité + charpente 3D. Exportez un dossier technique complet avec toutes les vues assemblées.</div>
+                      </div>
+                    </div>
+                    <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+                      {Object.values(MC).map(m=><span key={m.label} style={{padding:'3px 10px',borderRadius:20,fontSize:9,fontWeight:700,background:`rgba(${m.rgb},.07)`,color:m.color,border:`1px solid rgba(${m.rgb},.18)`}}>{m.icon} {m.label}</span>)}
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M7 3l3 3-3 3" stroke="var(--t3)" strokeWidth="1.4" strokeLinecap="round"/></svg>
+                      <span style={{padding:'3px 10px',borderRadius:20,fontSize:9,fontWeight:700,background:'rgba(42,14,20,.06)',color:'var(--t2)',border:'1px solid rgba(42,14,20,.1)'}}>🧊 3D combinée</span>
+                      <span style={{padding:'3px 10px',borderRadius:20,fontSize:9,fontWeight:700,background:'rgba(42,14,20,.06)',color:'var(--t2)',border:'1px solid rgba(42,14,20,.1)'}}>📋 Dossier PDF complet</span>
+                    </div>
+                  </div>
+                </div>}
+
+                {/* ══ TAB: STATS ══ */}
+                {dashTab==='stats'&&(()=>{
+                  // Calculs enrichis
+                  const avgZones=dashProjects.length?+(totalZ/dashProjects.length).toFixed(1):0;
+                  const avgSurf=dashProjects.length?+(totalSurf/dashProjects.length).toFixed(0):0;
+                  const projThis7d=dashProjects.filter(p=>(Date.now()-new Date(p.updated_at))<7*86400000).length;
+                  const projThis30d=dashProjects.filter(p=>(Date.now()-new Date(p.updated_at))<30*86400000).length;
+                  const pdfLeft=planLimits.pdfPerMonth>0?Math.max(0,planLimits.pdfPerMonth-pdfCount):-1;
+                  const projLeft=planLimits.maxProjects>0?Math.max(0,planLimits.maxProjects-dashProjects.length):-1;
+                  const mostUsedType=Object.entries(byType).sort((a,b)=>b[1]-a[1])[0]||['cassette',0];
+                  const pctUsedProj=planLimits.maxProjects>0?Math.min(100,Math.round(dashProjects.length/planLimits.maxProjects*100)):0;
+                  const pctUsedPdf=planLimits.pdfPerMonth>0?Math.min(100,Math.round(pdfCount/planLimits.pdfPerMonth*100)):0;
+                  const StatCard=({icon,value,label,sub,color,rgb,trend})=><div style={{padding:'18px',borderRadius:13,background:`rgba(${rgb},.05)`,border:`1.5px solid rgba(${rgb},.12)`,position:'relative',overflow:'hidden'}}>
+                    <div style={{position:'absolute',top:0,right:0,width:80,height:80,borderRadius:'50%',background:`rgba(${rgb},.04)`,transform:'translate(25px,-25px)'}}/>
+                    <div style={{fontSize:22,marginBottom:10}}>{icon}</div>
+                    <div style={{fontSize:28,fontWeight:900,color:color,fontFamily:'JetBrains Mono,monospace',letterSpacing:'-.03em',lineHeight:1,marginBottom:5}}>{value}</div>
+                    <div style={{fontSize:10,fontWeight:700,color:'var(--t2)',lineHeight:1.3}}>{label}</div>
+                    {sub&&<div style={{fontSize:9,color:'var(--t3)',marginTop:3}}>{sub}</div>}
+                    {trend!=null&&<div style={{marginTop:8,fontSize:8,fontWeight:700,color:trend>0?'#22c55e':'var(--t3)',display:'flex',alignItems:'center',gap:3}}>
+                      <span>{trend>0?'↑':'→'}</span><span>{trend>0?trend+' cette semaine':'Aucune activité récente'}</span>
+                    </div>}
+                  </div>;
+                  return<div style={{padding:'20px 22px'}}>
+                    {/* KPI Hero - 4 grandes métriques */}
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:16}}>
+                      <StatCard icon="📁" value={dashProjects.length} label="Projets" sub={planLimits.maxProjects>0?`${projLeft} restants sur ${planLimits.maxProjects}`:'Illimités'} color="#c4324a" rgb="196,50,74" trend={projThis7d}/>
+                      <StatCard icon="📐" value={totalZ} label="Zones totales" sub={avgZones>0?`${avgZones} zones/projet en moy.`:undefined} color="#0ea5e9" rgb="14,165,233" trend={null}/>
+                      <StatCard icon="📏" value={totalSurf>0?totalSurf.toFixed(0)+'m²':'0m²'} label="Surface calculée" sub={avgSurf>0?`${avgSurf} m²/projet en moy.`:undefined} color="#22c55e" rgb="34,197,94" trend={null}/>
+                      <StatCard icon="📄" value={pdfCount} label="PDF ce mois" sub={planLimits.pdfPerMonth>0?`${pdfLeft} restants sur ${planLimits.pdfPerMonth}`:'Illimités'} color="#f59e0b" rgb="245,158,11" trend={null}/>
+                    </div>
+
+                    {/* Row 2: répartition + activité + plan */}
+                    <div style={{display:'grid',gridTemplateColumns:'2fr 1fr',gap:14,marginBottom:14}}>
+                      {/* Répartition modules - visuelle */}
+                      <div style={{padding:'18px',borderRadius:13,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+                          <div style={{fontSize:12,fontWeight:700,color:'var(--t1)'}}>Répartition par module</div>
+                          <div style={{fontSize:9,color:'var(--t3)'}}>{dashProjects.length} projet{dashProjects.length>1?'s':''} total</div>
+                        </div>
+                        {/* Stacked bar */}
+                        {dashProjects.length>0&&<div style={{display:'flex',height:12,borderRadius:6,overflow:'hidden',marginBottom:14,gap:1}}>
+                          {Object.entries(MC).filter(([k])=>byType[k]>0).map(([k,m])=><div key={k} title={`${m.label}: ${byType[k]}`} style={{flex:byType[k],background:m.color,transition:'flex .5s ease-out'}}/>)}
+                        </div>}
+                        <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                          {Object.entries(MC).map(([k,m])=>{
+                            const cnt=byType[k]||0;
+                            const pct=dashProjects.length?Math.round(cnt/dashProjects.length*100):0;
+                            return<div key={k} style={{display:'grid',gridTemplateColumns:'18px 100px 1fr 32px',alignItems:'center',gap:8}}>
+                              <span style={{fontSize:12}}>{m.icon}</span>
+                              <span style={{fontSize:10,color:'var(--t2)',fontWeight:500}}>{m.label}</span>
+                              <div style={{height:5,borderRadius:3,background:'rgba(42,14,20,.06)',overflow:'hidden'}}>
+                                <div style={{height:'100%',borderRadius:3,background:m.color,width:pct+'%',transition:'width .6s ease-out'}}/>
+                              </div>
+                              <span style={{fontSize:10,fontWeight:800,color:cnt>0?m.color:'var(--t3)',fontFamily:'monospace',textAlign:'right'}}>{cnt}</span>
+                            </div>;
+                          })}
+                        </div>
+                        {mostUsedType[1]>0&&<div style={{marginTop:14,padding:'8px 12px',borderRadius:8,background:MC[mostUsedType[0]]?.color+'10',border:'1px solid '+MC[mostUsedType[0]]?.color+'20',display:'flex',alignItems:'center',gap:8}}>
+                          <span style={{fontSize:14}}>{MC[mostUsedType[0]]?.icon}</span>
+                          <span style={{fontSize:10,color:'var(--t2)'}}>Module le + utilisé : <strong style={{color:MC[mostUsedType[0]]?.color}}>{MC[mostUsedType[0]]?.label}</strong> ({mostUsedType[1]} projet{mostUsedType[1]>1?'s':''})</span>
+                        </div>}
+                      </div>
+
+                      {/* Activité */}
+                      <div style={{padding:'18px',borderRadius:13,background:'var(--crd)',border:'1px solid var(--bd)'}}>
+                        <div style={{fontSize:12,fontWeight:700,color:'var(--t1)',marginBottom:4}}>Activité récente</div>
+                        <div style={{display:'flex',gap:8,marginBottom:14}}>
+                          <div style={{flex:1,padding:'8px',borderRadius:8,background:'rgba(196,50,74,.06)',textAlign:'center'}}>
+                            <div style={{fontSize:16,fontWeight:900,color:'#c4324a',fontFamily:'monospace'}}>{projThis7d}</div>
+                            <div style={{fontSize:8,color:'var(--t3)',fontWeight:600}}>7 derniers jours</div>
+                          </div>
+                          <div style={{flex:1,padding:'8px',borderRadius:8,background:'rgba(14,165,233,.06)',textAlign:'center'}}>
+                            <div style={{fontSize:16,fontWeight:900,color:'#0ea5e9',fontFamily:'monospace'}}>{projThis30d}</div>
+                            <div style={{fontSize:8,color:'var(--t3)',fontWeight:600}}>30 derniers jours</div>
+                          </div>
+                        </div>
+                        <div style={{display:'flex',flexDirection:'column',gap:2}}>
+                          {recent.slice(0,6).map(p=>{
+                            const m=MC[getPT(p)]||MC.cassette;
+                            return<div key={p.id} onClick={()=>openCloudProject(p.id)} style={{display:'flex',alignItems:'center',gap:7,padding:'6px 7px',borderRadius:7,cursor:'pointer',transition:'background .1s'}}
+                              onMouseOver={e=>e.currentTarget.style.background='rgba(42,14,20,.04)'}
+                              onMouseOut={e=>e.currentTarget.style.background='transparent'}>
+                              <span style={{fontSize:11,flexShrink:0}}>{m.icon}</span>
+                              <span style={{fontSize:10,color:'var(--t1)',flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</span>
+                              <span style={{fontSize:8,color:'var(--t3)',flexShrink:0}}>{ago(p.updated_at)}</span>
+                            </div>;
+                          })}
+                          {recent.length===0&&<div style={{fontSize:10,color:'var(--t3)',textAlign:'center',padding:'16px 0'}}>Aucun projet</div>}
                         </div>
                       </div>
                     </div>
-                    {/* Stats row */}
-                    <div style={{display:'flex',gap:0,borderRadius:10,overflow:'hidden',background:'rgba(0,0,0,.15)',flexWrap:'nowrap',minWidth:0}}>
-                      <div style={{flex:1,padding:'8px 12px',borderRight:'1px solid rgba(42,14,20,.04)'}}>
-                        <div style={{fontSize:15,fontWeight:800,color:'rgb('+typeConf.color+')',fontFamily:'monospace'}}>{p.zones_count||0}</div>
-                        <div style={{fontSize:8,color:'var(--t3)',marginTop:1,fontWeight:600}}>ZONE{(p.zones_count||0)>1?'S':''}</div>
+
+                    {/* Row 3: Plan + quotas visuels */}
+                    <div style={{padding:'20px',borderRadius:13,background:'linear-gradient(135deg,rgba(196,50,74,.04),rgba(196,50,74,.01))',border:`1.5px solid rgba(${planLimits.color==='#c4324a'?'196,50,74':planLimits.color==='#0ea5e9'?'14,165,233':'34,197,94'},.14)`}}>
+                      <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:18,flexWrap:'wrap'}}>
+                        <div style={{display:'flex',alignItems:'center',gap:9}}>
+                          <div style={{width:36,height:36,borderRadius:10,background:'linear-gradient(135deg,'+planLimits.color+','+planLimits.color+'aa)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,color:'#fff',fontWeight:800}}>{planLimits.name[0]}</div>
+                          <div>
+                            <div style={{fontSize:13,fontWeight:800,color:planLimits.color,lineHeight:1}}>{planLimits.name}</div>
+                            <div style={{fontSize:9,color:'var(--t3)',marginTop:2}}>{planLimits.price===0?'Gratuit':planLimits.price+'€/mois HT'}</div>
+                          </div>
+                        </div>
+                        <div style={{flex:1}}/>
+                        {subStatus?.status==='trialing'&&<div style={{padding:'5px 12px',borderRadius:20,background:'rgba(245,158,11,.1)',border:'1px solid rgba(245,158,11,.2)',fontSize:10,fontWeight:700,color:'#f59e0b'}}>⏳ Essai — {subStatus.daysLeft} jours restants</div>}
+                        {planLimits.id==='free'&&<button onClick={()=>setShowPaywall(true)} style={{padding:'6px 14px',borderRadius:8,border:'none',background:'linear-gradient(135deg,#c4324a,#a0243a)',color:'#fff',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 3px 10px rgba(196,50,74,.2)'}}>⚡ Passer Pro</button>}
                       </div>
-                      <div style={{flex:1,padding:'8px 12px',borderRight:'1px solid rgba(42,14,20,.04)'}}>
-                        <div style={{fontSize:15,fontWeight:800,color:'var(--t1)',fontFamily:'monospace'}}>{(p.total_surface||0).toFixed(1)}</div>
-                        <div style={{fontSize:8,color:'var(--t3)',marginTop:1,fontWeight:600}}>M²</div>
+                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12,marginBottom:14}}>
+                        {/* Quota projets */}
+                        <div style={{padding:'12px',borderRadius:10,background:'rgba(42,14,20,.03)',border:'1px solid rgba(42,14,20,.06)'}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+                            <span style={{fontSize:10,fontWeight:700,color:'var(--t2)'}}>Projets</span>
+                            <span style={{fontSize:11,fontWeight:900,color:'var(--t1)',fontFamily:'monospace'}}>{dashProjects.length}{planLimits.maxProjects>0?' / '+planLimits.maxProjects:' / ∞'}</span>
+                          </div>
+                          {planLimits.maxProjects>0&&<><div style={{height:6,borderRadius:3,background:'rgba(42,14,20,.07)',overflow:'hidden',marginBottom:4}}>
+                            <div style={{height:'100%',borderRadius:3,background:pctUsedProj>=90?'#ef4444':'#c4324a',width:pctUsedProj+'%',transition:'width .4s'}}/>
+                          </div>
+                          <div style={{fontSize:8,color:pctUsedProj>=90?'#ef4444':'var(--t3)'}}>{pctUsedProj>=90?'⚠ Quota presque atteint':projLeft+' place'+( projLeft>1?'s':'')+' libre'+(projLeft>1?'s':'')}</div></>}
+                          {planLimits.maxProjects<0&&<div style={{fontSize:8,color:'#22c55e',fontWeight:600}}>✓ Illimité</div>}
+                        </div>
+                        {/* Quota PDF */}
+                        <div style={{padding:'12px',borderRadius:10,background:'rgba(42,14,20,.03)',border:'1px solid rgba(42,14,20,.06)'}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:8}}>
+                            <span style={{fontSize:10,fontWeight:700,color:'var(--t2)'}}>PDF / mois</span>
+                            <span style={{fontSize:11,fontWeight:900,color:'var(--t1)',fontFamily:'monospace'}}>{pdfCount}{planLimits.pdfPerMonth>0?' / '+planLimits.pdfPerMonth:' / ∞'}</span>
+                          </div>
+                          {planLimits.pdfPerMonth>0&&<><div style={{height:6,borderRadius:3,background:'rgba(42,14,20,.07)',overflow:'hidden',marginBottom:4}}>
+                            <div style={{height:'100%',borderRadius:3,background:pctUsedPdf>=90?'#ef4444':'#f59e0b',width:pctUsedPdf+'%',transition:'width .4s'}}/>
+                          </div>
+                          <div style={{fontSize:8,color:pctUsedPdf>=90?'#ef4444':'var(--t3)'}}>{pctUsedPdf>=90?'⚠ Quota presque atteint':pdfLeft+' export'+(pdfLeft>1?'s':'')+' restant'+(pdfLeft>1?'s':'')}</div></>}
+                          {planLimits.pdfPerMonth<0&&<div style={{fontSize:8,color:'#22c55e',fontWeight:600}}>✓ Illimité</div>}
+                        </div>
+                        {/* Features */}
+                        <div style={{padding:'12px',borderRadius:10,background:'rgba(42,14,20,.03)',border:'1px solid rgba(42,14,20,.06)'}}>
+                          <div style={{fontSize:10,fontWeight:700,color:'var(--t2)',marginBottom:8}}>Fonctionnalités</div>
+                          <div style={{display:'flex',flexDirection:'column',gap:4}}>
+                            {[['🧊 Vue 3D',planLimits.has3D],['📊 Export Excel',planLimits.hasExcel],['📱 QR Chantier',planLimits.hasQR]].map(([l,ok])=>
+                              <div key={l} style={{display:'flex',justifyContent:'space-between',fontSize:9}}>
+                                <span style={{color:'var(--t2)'}}>{l}</span>
+                                <span style={{fontWeight:700,color:ok?'#22c55e':'rgba(42,14,20,.25)'}}>{ok?'✓':'✗'}</span>
+                              </div>)}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{flex:1,padding:'8px 12px',display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
-                        <span style={{fontSize:10,fontWeight:600,color:'rgb('+typeConf.color+')',display:'flex',alignItems:'center',gap:4}}>Ouvrir →</span>
+                      {/* Modules actifs */}
+                      <div>
+                        <div style={{fontSize:9,fontWeight:700,color:'var(--t3)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:8}}>Modules débloqués</div>
+                        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                          {Object.entries(MC).map(([k,m])=>{
+                            const ok=planLimits.modules?.includes(k==='cassette'?'cassettes':k)||k==='cassette';
+                            return<div key={k} style={{display:'flex',alignItems:'center',gap:5,padding:'4px 10px',borderRadius:20,fontSize:9,fontWeight:700,background:ok?`rgba(${m.rgb},.08)`:'rgba(42,14,20,.04)',border:`1px solid rgba(${m.rgb},${ok?.18:.06})`,color:ok?m.color:'rgba(42,14,20,.3)'}}>
+                              {m.icon} {m.label} {!ok&&<span style={{opacity:.6}}>🔒</span>}
+                            </div>;
+                          })}
+                        </div>
                       </div>
                     </div>
-                    {/* Delete button */}
-                    <button onClick={async(ev)=>{ev.stopPropagation();if(!confirm('Supprimer "'+p.name+'" ?'))return;const ok=await cloudProjectDelete(p.id);if(ok)setDashProjects(prev=>prev.filter(pr=>pr.id!==p.id))}}
-                      style={{position:'absolute',top:12,right:10,width:22,height:22,borderRadius:6,border:'1px solid rgba(239,68,68,.15)',background:'rgba(239,68,68,.05)',
-                        color:'#ef4444',cursor:'pointer',fontSize:9,display:'none',alignItems:'center',justifyContent:'center',zIndex:2}}
-                      className="dash-del">🗑</button>
-                  </div>
-                </div>})}
-            </div>}
-          </div>
+                  </div>;
+                })()}
 
-          {/* ─── ACTIVITE RECENTE ─── */}
-          {dashProjects.length>0&&<div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 20px'}}>
-            <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Activité récente
-            </div>
-            <div className="dash-grid-projects" style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(250px,1fr))',gap:10}}>
-              {[...dashProjects].sort((a,b)=>new Date(b.updated_at)-new Date(a.updated_at)).slice(0,6).map(p=>{
-                const ago=(()=>{try{const d=Date.now()-new Date(p.updated_at);if(d<3600000)return'Il y a '+Math.max(1,Math.floor(d/60000))+' min';if(d<86400000)return'Il y a '+Math.floor(d/3600000)+'h';if(d<604800000)return'Il y a '+Math.floor(d/86400000)+' jour'+(Math.floor(d/86400000)>1?'s':'');return new Date(p.updated_at).toLocaleDateString('fr-FR',{day:'2-digit',month:'short'})}catch(e){return'-'}})();
-                return<div key={'act-'+p.id} onClick={()=>openCloudProject(p.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,background:'rgba(42,14,20,.02)',border:'1px solid rgba(42,14,20,.04)',cursor:'pointer',transition:'all .2s'}}
-                  onMouseOver={e=>{e.currentTarget.style.background='rgba(42,14,20,.05)';e.currentTarget.style.borderColor='rgba(196,50,74,.15)'}}
-                  onMouseOut={e=>{e.currentTarget.style.background='rgba(42,14,20,.02)';e.currentTarget.style.borderColor='rgba(42,14,20,.04)'}}>
-                  <div style={{width:8,height:8,borderRadius:4,background:'#c4324a',flexShrink:0,opacity:.5}}/>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:11,fontWeight:600,color:'var(--t1)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{p.name}</div>
-                    <div style={{fontSize:9,color:'#a89898'}}>{ago}</div>
-                  </div>
-                  <span style={{fontSize:9,color:'#c4324a',fontWeight:600}}>Ouvrir →</span>
-                </div>})}
-            </div>
-          </div>}
+              </div>{/* /scroll */}
+            </div>{/* /main */}
+          </div>; /* /root */
+        })()}
 
-          {/* ─── RACCOURCIS ─── */}
-          <div style={{maxWidth:1120,margin:'0 auto',padding:'0 16px 56px'}}>
-            <div style={{fontSize:13,fontWeight:700,color:'var(--t1)',marginBottom:14,display:'flex',alignItems:'center',gap:8}}>
-              <div style={{width:3,height:18,borderRadius:2,background:'#c4324a'}}/>Raccourcis
-            </div>
-            <div className="dash-grid-4" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
-              {[
-                {icon:'⚙',label:'Mon profil',desc:'Nom, email, mot de passe',fn:()=>setShowAccount(true)},
-                {icon:'📂',label:'Mes dossiers',desc:'Gérer les projets',fn:()=>setShowProjects(true)},
-                {icon:'💳',label:'Abonnement',desc:planLimits.name+' — '+(planLimits.price===0?'Gratuit':planLimits.price+'€/mois'),fn:()=>setShowPaywall(true)},
-                {icon:'🚀',label:'Nouveau projet',desc:'Créer un calepinage',fn:()=>{if(planLimits.maxProjects>0&&dashProjects.length>=planLimits.maxProjects){setShowPaywall(true);return;}setShowQuickCreate(true)}},
-              ].map((s,i)=><div key={i} onClick={s.fn} style={{padding:'14px 16px',borderRadius:14,background:'rgba(42,14,20,.02)',border:'1px solid rgba(42,14,20,.05)',cursor:'pointer',transition:'all .2s'}}
-                onMouseOver={e=>{e.currentTarget.style.borderColor='rgba(196,50,74,.2)';e.currentTarget.style.transform='translateY(-2px)'}}
-                onMouseOut={e=>{e.currentTarget.style.borderColor='rgba(42,14,20,.05)';e.currentTarget.style.transform='none'}}>
-                <div style={{fontSize:22,marginBottom:6}}>{s.icon}</div>
-                <div style={{fontSize:11,fontWeight:700,color:'var(--t1)',marginBottom:2}}>{s.label}</div>
-                <div style={{fontSize:9,color:'#a89898',lineHeight:1.4}}>{s.desc}</div>
-              </div>)}
-            </div>
-          </div>
-
-        </div>}
 
 
         {step==='welcome'&&<Welcome/>}
@@ -7733,31 +7886,47 @@ function BriqueApp({onBack,user}){
     const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     el.appendChild(renderer.domElement);
     renderer.domElement.style.cursor='grab';
     renderer.domElement.style.pointerEvents='auto';
 
-    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
     const sun=new THREE.DirectionalLight(0xfff5e8,1.15);sun.position.set(20,32,14);sun.castShadow=true;
-    sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.near=.5;sun.shadow.camera.far=80;
+    sun.shadow.mapSize.set(4096,4096);sun.shadow.camera.near=.5;sun.shadow.camera.far=80;
     sun.shadow.camera.left=-20;sun.shadow.camera.right=20;sun.shadow.camera.top=20;sun.shadow.camera.bottom=-20;
     sun.shadow.bias=-.0003;scene.add(sun);
     const skyBk=new THREE.DirectionalLight(0xc8dcff,.28);skyBk.position.set(0,20,-5);scene.add(skyBk);
     const fillBk=new THREE.DirectionalLight(0xe8f0ff,.22);fillBk.position.set(-18,10,-12);scene.add(fillBk);
+    const bounce=new THREE.DirectionalLight(0xf8e8c0,.12);bounce.position.set(0,-5,0);scene.add(bounce);
     // Ground + grid
     const floorBk=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
     floorBk.rotation.x=-Math.PI/2;floorBk.position.y=0;floorBk.receiveShadow=true;scene.add(floorBk);
     const g1Bk=new THREE.GridHelper(60,12,0xa89880,0xb8aa98);g1Bk.position.y=.003;scene.add(g1Bk);
     const g2Bk=new THREE.GridHelper(60,60,0xb8aa98,0xc0b4a4);g2Bk.position.y=.001;scene.add(g2Bk);
 
-    const brickDepth=0.065;
+    const brickDepth=0.07;
     const brickHash=(i)=>{let h=i*2654435761;h=((h>>>16)^h)*0x45d9f3b;h=((h>>>16)^h)*0x45d9f3b;h=(h>>>16)^h;return(h&0xffff)/65535};
 
-    // ── Single active facade 3D ──
-    const f=facades[activeFacIdx]||facades[0];
-    const Wm=f.facW/1000,Hm=f.facH/1000;
-    const fi=activeFacIdx;
+    // ── All linked facades 3D (chain from plan de masse) ──
+    const chain3d=[];let cx3=0,cy3=0;
+    facades.forEach((f3,i3)=>{
+      if(i3>0&&bkBreaks.has(i3)){const prev=chain3d[chain3d.length-1];cx3=prev.x2+prev.nx*2+1.5;cy3=prev.y2+prev.ny*2;}
+      const a3=(f3.angle||0)*Math.PI/180;const nx3=Math.sin(a3),ny3=-Math.cos(a3),dx3=-ny3,dy3=nx3;
+      const Lm3=f3.facW/1000,Hm3=f3.facH/1000;
+      const x1_3=cx3,y1_3=cy3,x2_3=cx3+dx3*Lm3,y2_3=cy3+dy3*Lm3;
+      chain3d.push({x1:x1_3,y1:y1_3,x2:x2_3,y2:y2_3,nx:nx3,ny:ny3,dx:dx3,dy:dy3,Lm:Lm3,Hm:Hm3,f:f3,i:i3});
+      cx3=x2_3;cy3=y2_3;
+    });
+    // Center
+    let c3mnx=Infinity,c3mny=Infinity,c3mxx=-Infinity,c3mxy=-Infinity,c3maxH=0;
+    chain3d.forEach(ch=>{[ch.x1,ch.x2].forEach(x=>{c3mnx=Math.min(c3mnx,x);c3mxx=Math.max(c3mxx,x)});[ch.y1,ch.y2].forEach(y=>{c3mny=Math.min(c3mny,y);c3mxy=Math.max(c3mxy,y)});if(ch.Hm>c3maxH)c3maxH=ch.Hm});
+    const c3cx=(c3mnx+c3mxx)/2,c3cz=(c3mny+c3mxy)/2;
+
+    chain3d.forEach(ch=>{
+    const f=ch.f;
+    const Wm=ch.Lm,Hm=ch.Hm;
+    const fi=ch.i;
     {
       const fOpenings=f.openings||[];
       const facBricks=computeBricksForFacade(f);
@@ -7807,7 +7976,7 @@ function BriqueApp({onBack,user}){
       const addBrickGroup=(arr,baseCol,seedOff)=>{
         if(!arr.length)return;
         const geo=new THREE.BoxGeometry(1,1,brickDepth);
-        const mat=new THREE.MeshStandardMaterial({roughness:0.82,metalness:0.02});
+        const mat=new THREE.MeshStandardMaterial({roughness:0.85,metalness:0.01,flatShading:false});
         const mesh=new THREE.InstancedMesh(geo,mat,arr.length);
         mesh.castShadow=true;mesh.receiveShadow=true;
         const dummy=new THREE.Object3D();
@@ -7821,7 +7990,7 @@ function BriqueApp({onBack,user}){
           dummy.scale.set(sx,sy,1);dummy.updateMatrix();mesh.setMatrixAt(i,dummy.matrix);
           const si=i+seedOff;
           const h1=brickHash(si*3+7),h2=brickHash(si*5+13),h3=brickHash(si*7+29);
-          const shade=(h1-0.5)*0.022,rVar=(h2-0.5)*0.012,bVar=(h3-0.5)*0.008;
+          const shade=(h1-0.5)*0.04,rVar=(h2-0.5)*0.025,bVar=(h3-0.5)*0.015;
           colorAttr[i*3]=Math.max(0,Math.min(1,br+shade+rVar));
           colorAttr[i*3+1]=Math.max(0,Math.min(1,bg+shade*0.8));
           colorAttr[i*3+2]=Math.max(0,Math.min(1,bb+shade*0.5+bVar));
@@ -7874,8 +8043,8 @@ function BriqueApp({onBack,user}){
           if(ow>0.7){const mull=new THREE.Mesh(new THREE.BoxGeometry(ft2*0.7,oh-ft2*2,fd3),frameMat);mull.position.set(cx2,cy2,brickDepth*0.35);facadeGroup.add(mull)}
           if(oh>1.2){const hmull=new THREE.Mesh(new THREE.BoxGeometry(ow-ft2*2,ft2*0.7,fd3),frameMat);hmull.position.set(cx2,cy2,brickDepth*0.35);facadeGroup.add(hmull)}
           // Double glazing
-          const glBack=new THREE.MeshStandardMaterial({color:0x1a2a3a,roughness:0.95,transparent:true,opacity:0.55,side:THREE.DoubleSide});
-          const glFront=new THREE.MeshStandardMaterial({color:0x9cc8e8,metalness:0.35,roughness:0.02,transparent:true,opacity:0.3,side:THREE.DoubleSide});
+          const glBack=new THREE.MeshPhongMaterial({color:0x0a1520,shininess:5,transparent:true,opacity:0.65,side:THREE.DoubleSide});
+          const glFront=new THREE.MeshPhongMaterial({color:0x88c0e8,shininess:180,specular:0x8899bb,transparent:true,opacity:0.25,side:THREE.DoubleSide});
           const gb2=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.01,oh-0.01),glBack);gb2.position.set(cx2,cy2,brickDepth*0.25);facadeGroup.add(gb2);
           const gf2=new THREE.Mesh(new THREE.PlaneGeometry(ow-0.008,oh-0.008),glFront);gf2.position.set(cx2,cy2,brickDepth*0.38);facadeGroup.add(gf2);
           if(op.t==='Porte'||op.t==='Porte-fenêtre'){
@@ -7886,14 +8055,25 @@ function BriqueApp({onBack,user}){
         }
       });
 
-      // Center facade at origin
+      // Position facade in chain
+      const midX=(ch.x1+ch.x2)/2-c3cx,midZ=(ch.y1+ch.y2)/2-c3cz;
+      const angle3d=Math.atan2(ch.dx,ch.dy);
+      facadeGroup.rotation.y=-angle3d;
+      facadeGroup.position.set(midX,0,midZ);
+      // Highlight active
+      if(fi===activeFacIdx){
+        const edgeMat=new THREE.MeshBasicMaterial({color:0xd97706,transparent:true,opacity:0.06});
+        const edgePlane=new THREE.Mesh(new THREE.PlaneGeometry(Wm+0.1,Hm+0.1),edgeMat);
+        edgePlane.position.set(0,Hm/2,brickDepth+0.005);facadeGroup.add(edgePlane);
+      }
       scene.add(facadeGroup);
-    }
+    }});
 
-    // Camera for single facade
-    const dist0=Math.max(Wm,Hm)*1.8;
+    // Camera
+    const totalSpan=Math.max(c3mxx-c3mnx,c3mxy-c3mny,c3maxH)*1.6;
+    const dist0=Math.max(totalSpan,3);
     zoomRef.current=dist0;
-    const tgt=new THREE.Vector3(0,Hm/2,0);
+    const tgt=new THREE.Vector3(0,c3maxH/2,0);
 
     const onDown=e=>{dragRef.current={x:e.clientX,y:e.clientY,rx:rotRef.current.x,ry:rotRef.current.y,btn:e.button};renderer.domElement.style.cursor='grabbing'};
     const onUp=()=>{dragRef.current=null;renderer.domElement.style.cursor='grab'};
@@ -7943,15 +8123,16 @@ function BriqueApp({onBack,user}){
     const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.style.pointerEvents='auto';
-    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
     const sun2=new THREE.DirectionalLight(0xfff5e8,1.1);sun2.position.set(20,30,14);sun2.castShadow=true;
-    sun2.shadow.mapSize.set(2048,2048);sun2.shadow.camera.near=.5;sun2.shadow.camera.far=120;
+    sun2.shadow.mapSize.set(4096,4096);sun2.shadow.camera.near=.5;sun2.shadow.camera.far=120;
     sun2.shadow.camera.left=-40;sun2.shadow.camera.right=40;sun2.shadow.camera.top=40;sun2.shadow.camera.bottom=-40;
     sun2.shadow.bias=-.0003;scene.add(sun2);
     const sky2=new THREE.DirectionalLight(0xc8dcff,.28);sky2.position.set(0,20,-5);scene.add(sky2);
     const fill2b=new THREE.DirectionalLight(0xe8f0ff,.22);fill2b.position.set(-18,10,-12);scene.add(fill2b);
+    const bnc=new THREE.DirectionalLight(0xf8e8c0,.1);bnc.position.set(0,-5,0);scene.add(bnc);
     const ground2=new THREE.Mesh(new THREE.PlaneGeometry(100,100),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
     ground2.rotation.x=-Math.PI/2;ground2.position.y=-.01;ground2.receiveShadow=true;scene.add(ground2);
     const g1bk2=new THREE.GridHelper(100,20,0xa89880,0xb8aa98);g1bk2.position.y=.003;scene.add(g1bk2);
@@ -8109,20 +8290,27 @@ function BriqueApp({onBack,user}){
   const handleRH=8;// resize handle size in SVG px
 
   return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
-    {/* Kalepin header */}
-    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
-      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
-        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+    {/* ── HEADER UNIFIÉ ── */}
+    <div style={{height:44,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
+      {/* Logo + retour */}
+      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px 8px',borderRadius:7,transition:'background .12s'}}
+        onMouseOver={e=>e.currentTarget.style.background='rgba(42,14,20,.06)'}
+        onMouseOut={e=>e.currentTarget.style.background='transparent'}>
+        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
           <svg width="12" height="12" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
         </div>
         <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
       </div>
-      <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      <span style={{fontSize:12,fontWeight:600,color:'#d97706'}}>🧱 Brique</span>
-      <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      <span style={{fontSize:11,color:'var(--t2)',fontWeight:500}}>{fac.name}</span>
+      {/* Breadcrumb */}
+      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      <div style={{display:'flex',alignItems:'center',gap:6}}>
+        <div style={{width:22,height:22,borderRadius:6,background:'linear-gradient(135deg,#d97706,#b45309)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11}}>🧱</div>
+        <span style={{fontSize:12,fontWeight:700,color:'#d97706'}}>Brique</span>
+      </div>
+      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      <span style={{fontSize:11,color:'var(--t2)',fontWeight:500,maxWidth:200,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{fac.name}</span>
       <div style={{flex:1}}/>
-      <span style={{fontSize:9,color:'var(--t3)'}}>{facades.length} facade{facades.length>1?'s':''} — {openings.length} ouv.</span>
+      <span style={{fontSize:9,color:'var(--t3)',background:'rgba(217,119,6,.07)',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(217,119,6,.15)'}}>{facades.length} façade{facades.length>1?'s':''} · {openings.length} ouv.</span>
     </div>
     <div style={{display:'flex',flex:1,minHeight:0}}>
     {/* LEFT */}
@@ -8274,7 +8462,7 @@ function BriqueApp({onBack,user}){
         <button onClick={exportCSV} style={{padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',border:'1px solid rgba(52,211,153,.3)',background:'rgba(52,211,153,.08)',color:'#34d399'}}>📊 CSV</button>
       </div>
       {/* 2D SVG view */}
-      {!view3D&&<div ref={svgContainerRef} style={{flex:1,position:'relative',overflow:'hidden',background:'var(--bg)'}}
+      {!view3D&&<div ref={svgContainerRef} style={{flex:1,position:'relative',overflow:'hidden',background:'#f4ece5'}}
         onMouseMove={handleSvgMove} onMouseUp={handleSvgUp} onMouseLeave={handleSvgUp}>
         <svg ref={svgRef} style={{position:'absolute',inset:0,width:'100%',height:'100%',display:'block'}} viewBox={`0 0 ${svgW} ${svgH}`}>
           {/* Background */}
@@ -8438,7 +8626,7 @@ function BriqueApp({onBack,user}){
       {/* Content */}
       <div style={{flex:1,display:'flex',overflow:'hidden'}}>
         {/* 3D View */}
-        {bkMasse3D&&<div ref={bkMasseRef} style={{flex:1,background:'#1a1a2a',cursor:'grab'}}/>}
+        {bkMasse3D&&<div ref={bkMasseRef} style={{flex:1,background:'#ddd4c8',cursor:'grab'}}/>}
         {/* SVG Plan */}
         {!bkMasse3D&&<div style={{flex:1,position:'relative'}}>
           {(()=>{
@@ -8469,10 +8657,13 @@ function BriqueApp({onBack,user}){
             const pad=2;mnx-=pad;mny-=pad;mxx+=pad;mxy+=pad;
             const vbW=mxx-mnx,vbH=mxy-mny;
             const BK_PLAN_COLORS=['#d97706','#c4324a','#0ea5e9','#10b981','#8b5cf6','#ec4899'];
-            return<svg viewBox={`${mnx} ${mny} ${vbW} ${vbH}`} style={{width:'100%',height:'100%'}} xmlns="http://www.w3.org/2000/svg">
+            return<svg viewBox={`${mnx} ${mny} ${vbW} ${vbH}`} style={{width:'100%',height:'100%',background:'#f4ece5'}} xmlns="http://www.w3.org/2000/svg">
               <defs><marker id="bk-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#d97706" opacity="0.5"/></marker></defs>
-              <pattern id="bk-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.02"/></pattern>
+              <pattern id="bk-grid" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
+              <pattern id="bk-grid5" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="none" stroke="rgba(42,14,20,.07)" strokeWidth=".02"/></pattern>
+              <rect x={mnx} y={mny} width={vbW} height={vbH} fill="#f4ece5"/>
               <rect x={mnx} y={mny} width={vbW} height={vbH} fill="url(#bk-grid)"/>
+              <rect x={mnx} y={mny} width={vbW} height={vbH} fill="url(#bk-grid5)"/>
               {chain.map((c,i)=>{
                 const col=BK_PLAN_COLORS[i%BK_PLAN_COLORS.length];
                 const thick=0.25;
@@ -8628,9 +8819,9 @@ function CarrelageApp({onBack,user}){
     const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';renderer.domElement.style.pointerEvents='auto';
-    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
     const s3d=new THREE.DirectionalLight(0xfff5e8,1.1);s3d.position.set(20,30,14);s3d.castShadow=true;scene.add(s3d);
     const sk3d=new THREE.DirectionalLight(0xc8dcff,.28);sk3d.position.set(0,20,-5);scene.add(sk3d);
     const f3d=new THREE.DirectionalLight(0xe8f0ff,.22);f3d.position.set(-18,10,-12);scene.add(f3d);
@@ -8813,7 +9004,7 @@ function CarrelageApp({onBack,user}){
     const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.2;
     renderer.outputEncoding=THREE.sRGBEncoding;
@@ -8840,7 +9031,7 @@ function CarrelageApp({onBack,user}){
 
     // Grout slab — FLOOR: XZ plane (y=height, very thin)
     const jcC=new THREE.Color(jointColor);
-    const floorMat=new THREE.MeshStandardMaterial({color:jcC,roughness:0.88,metalness:0.01});
+    const floorMat=new THREE.MeshStandardMaterial({color:jcC,roughness:0.78,metalness:0.02});
     const floor=new THREE.Mesh(new THREE.BoxGeometry(RWm+.02,.006,RHm+.02),floorMat);
     floor.position.set(0,.003,0);floor.receiveShadow=true;scene.add(floor);
 
@@ -9134,19 +9325,24 @@ function CarrelageApp({onBack,user}){
   ];
 
   return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
-    {/* Kalepin header */}
-    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
-      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:6}}>
-        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+    {/* ── HEADER UNIFIÉ ── */}
+    <div style={{height:44,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
+      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px 8px',borderRadius:7,transition:'background .12s'}}
+        onMouseOver={e=>e.currentTarget.style.background='rgba(42,14,20,.06)'}
+        onMouseOut={e=>e.currentTarget.style.background='transparent'}>
+        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
           <svg width="12" height="12" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
         </div>
         <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
       </div>
-      <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      <span style={{fontSize:12,fontWeight:600,color:'#0ea5e9'}}>🔲 Carrelage</span>
-      <div style={{width:1,height:20,background:'var(--bd)'}}/>
+      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      <div style={{display:'flex',alignItems:'center',gap:6}}>
+        <div style={{width:22,height:22,borderRadius:6,background:'linear-gradient(135deg,#0ea5e9,#0284c7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11}}>🔲</div>
+        <span style={{fontSize:12,fontWeight:700,color:'#0ea5e9'}}>Carrelage</span>
+      </div>
+      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
       {/* Room tabs */}
-      <div style={{display:'flex',gap:2,alignItems:'center',overflow:'auto',maxWidth:300}}>
+      <div style={{display:'flex',gap:2,alignItems:'center',overflow:'auto',maxWidth:320}}>
         {cRooms.map((rm,i)=><button key={rm.id} onClick={()=>setActiveCRoomIdx(i)}
           style={{padding:'3px 10px',borderRadius:6,border:'1px solid '+(i===activeCRoomIdx?'rgba(14,165,233,.4)':'var(--bd)'),
             background:i===activeCRoomIdx?'rgba(14,165,233,.12)':'transparent',
@@ -9155,10 +9351,9 @@ function CarrelageApp({onBack,user}){
         <button onClick={()=>{const nr=mkRoom('Pièce '+(cRooms.length+1));setCRooms(rs=>[...rs,nr]);setActiveCRoomIdx(cRooms.length)}}
           style={{padding:'3px 8px',borderRadius:6,border:'1px dashed rgba(14,165,233,.3)',background:'none',color:'#0ea5e9',fontSize:10,cursor:'pointer',fontFamily:'inherit'}}>+</button>
       </div>
-      <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      <button onClick={()=>setShowCPlanMasse(true)} style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(14,165,233,.2)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>📐 Plan</button>
+      <button onClick={()=>setShowCPlanMasse(true)} style={{padding:'4px 10px',borderRadius:6,border:'1px solid rgba(14,165,233,.2)',background:'rgba(14,165,233,.06)',color:'#0ea5e9',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>📐 Plan masse</button>
       <div style={{flex:1}}/>
-      <span style={{fontSize:9,color:'var(--t3)'}}>{roomW}×{roomH}mm</span>
+      <span style={{fontSize:9,color:'var(--t3)',background:'rgba(14,165,233,.07)',padding:'2px 8px',borderRadius:20,border:'1px solid rgba(14,165,233,.15)'}}>{roomW}×{roomH} mm</span>
     </div>
     <div style={{display:'flex',flex:1,minHeight:0}}>
     {/* ─── LEFT PANEL ─── */}
@@ -9541,7 +9736,7 @@ function CarrelageApp({onBack,user}){
       </div>
       <div style={{flex:1,display:'flex',overflow:'hidden'}}>
         {/* 3D or 2D view */}
-        {cMasse3D?<div ref={cMasseRef} style={{flex:1,background:'#1a1a2a',cursor:'grab'}}/>
+        {cMasse3D?<div ref={cMasseRef} style={{flex:1,background:'#ddd4c8',cursor:'grab'}}/>
         :<div style={{flex:1,position:'relative',overflow:'hidden'}}>
           {(()=>{
             // Arrange rooms in a grid layout
@@ -9617,6 +9812,7 @@ function EtancheiteApp({onBack,user}){
     {id:'isol_pu',cat:'Complexe',label:'Isolant polyuréthane incl. relevés',unit:'m²',prix:28,auto:s=>s.nette},
     {id:'isol_pir',cat:'Complexe',label:'Isolant PIR incl. relevés',unit:'m²',prix:32,auto:s=>s.nette},
     {id:'isol_ldr',cat:'Complexe',label:'Isolant laine de roche',unit:'m²',prix:18,auto:s=>s.nette},
+    {id:'isol_xps',cat:'Complexe',label:'Isolant XPS',unit:'m²',prix:22,auto:s=>s.nette},
     {id:'eth_bi',cat:'Complexe',label:'Étanchéité bi-couche élastomère',unit:'m²',prix:35,auto:s=>s.nette},
     {id:'eth_mono',cat:'Complexe',label:'Étanchéité mono-couche',unit:'m²',prix:22,auto:s=>s.nette},
     {id:'eth_pvc',cat:'Complexe',label:'Étanchéité PVC soudé',unit:'m²',prix:28,auto:s=>s.nette},
@@ -9624,14 +9820,18 @@ function EtancheiteApp({onBack,user}){
     {id:'releve',cat:'Complexe',label:'Relevés d\'étanchéité',unit:'ml',prix:42,auto:s=>s.peri},
     {id:'veg',cat:'Complexe',label:'Végétalisation extensive',unit:'m²',prix:65,auto:s=>s.nette},
     {id:'gravillon',cat:'Complexe',label:'Protection gravillon roulé',unit:'m²',prix:9,auto:s=>s.nette},
+    {id:'dalle_prot',cat:'Complexe',label:'Dalles de protection gravillonnées',unit:'m²',prix:22,auto:s=>s.nette},
+    {id:'nettoyage',cat:'Complexe',label:'Nettoyage et préparation du support',unit:'m²',prix:5.5,auto:s=>s.nette},
     // COUVERTURE
     {id:'couv_acier',cat:'Couvertures',label:'Couvertines acier laqué',unit:'ml',prix:55,auto:s=>s.peri},
     {id:'couv_alu',cat:'Couvertures',label:'Couvertines aluminium',unit:'ml',prix:68,auto:s=>s.peri},
     {id:'couv_zinc',cat:'Couvertures',label:'Couvertines zinc naturel',unit:'ml',prix:88,auto:s=>s.peri},
     {id:'adapt_rive',cat:'Couvertures',label:'Adaptation rive complexe végétalisé existant',unit:'ml',prix:38,auto:null},
+    {id:'bac_acier',cat:'Couvertures',label:'Bac acier / couverture support',unit:'m²',prix:45,auto:s=>s.nette},
     // DÉMOLITION / RETRAIT
     {id:'ret_veg',cat:'Démolition',label:'Retrait complexe étanchéité végétalisé',unit:'m²',prix:20,auto:s=>s.nette},
     {id:'ret_grav',cat:'Démolition',label:'Retrait complexe étanchéité gravillonné',unit:'m²',prix:13,auto:s=>s.nette},
+    {id:'ret_dalle_grav',cat:'Démolition',label:'Retrait dalles gravillonnées (hors complexe)',unit:'m²',prix:8,auto:null},
     {id:'ret_eth',cat:'Démolition',label:'Retrait complexe étanchéité existante',unit:'m²',prix:11,auto:s=>s.nette},
     {id:'curage',cat:'Démolition',label:'Curage de chape',unit:'m²',prix:9,auto:null},
     {id:'decouv_plat',cat:'Démolition',label:'Découpe et adaptation platelage',unit:'ml',prix:28,auto:null},
@@ -9640,28 +9840,33 @@ function EtancheiteApp({onBack,user}){
     {id:'suppr_gaines',cat:'Démolition',label:'Suppression matériels et gaines (ff)',unit:'ff',prix:1500,auto:null},
     {id:'remise_etat',cat:'Démolition',label:'Remise en état toiture terrasse',unit:'m²',prix:48,auto:null},
     // TRÉMIES / PERCEMENTS
-    {id:'ouv_bac',cat:'Trémies',label:'Ouverture trémie dans toiture bac sec',unit:'u',prix:420,auto:null},
-    {id:'ouv_ba',cat:'Trémies',label:'Ouverture trémie dans dalle BA',unit:'u',prix:950,auto:null},
+    {id:'ouv_bac',cat:'Trémies',label:'Ouverture trémie dans toiture bac acier',unit:'u',prix:420,auto:null},
+    {id:'ouv_ba',cat:'Trémies',label:'Ouverture trémie dans dalle BA ep≤15cm',unit:'u',prix:950,auto:null},
+    {id:'ouv_ba_ep',cat:'Trémies',label:'Ouverture trémie dalle BA ep 7cm',unit:'u',prix:680,auto:null},
     {id:'chevetre',cat:'Trémies',label:'Fourniture et pose de chevêtres',unit:'u',prix:480,auto:null},
-    {id:'reprise_tremie',cat:'Trémies',label:'Reprise étanchéité au droit de la trémie',unit:'u',prix:320,auto:null},
+    {id:'reprise_tremie',cat:'Trémies',label:'Reprise étanchéité au droit de la trémie',unit:'u',prix:320,auto:s=>s.trems},
     {id:'reprise_trav',cat:'Trémies',label:'Reprise étanchéité au droit traversée existante',unit:'u',prix:195,auto:null},
     // ÉMERGENCES
     {id:'gaine_bbc',cat:'Émergences',label:'Gaine maçonnée bloc béton cellulaire ep15cm',unit:'m²',prix:95,auto:null},
     {id:'alleg_bbc',cat:'Émergences',label:'Allège maçonnée bloc béton cellulaire ep15cm',unit:'m²',prix:82,auto:null},
     {id:'ite_ext',cat:'Émergences',label:'ITE sur allège ou gaine extérieure',unit:'m²',prix:105,auto:null},
     {id:'toit_asc',cat:'Émergences',label:'Toiture gaine ascenseur (complexe complet)',unit:'u',prix:3200,auto:null},
-    {id:'adapt_veg_lant',cat:'Émergences',label:'Adaptation végétalisation autour lanterneau/gaine CVC',unit:'u',prix:380,auto:null},
+    {id:'adapt_veg_lant',cat:'Émergences',label:'Adaptation végétalisation autour lanterneau/gaine CVC',unit:'u',prix:380,auto:s=>s.lants},
+    {id:'costiere',cat:'Émergences',label:'Costière métallique pour émergence',unit:'u',prix:280,auto:null},
     // EP / DEP
     {id:'eep',cat:'EP / DEP',label:'EEP (entrée eaux pluviales)',unit:'u',prix:240,auto:s=>s.eps},
     {id:'dep_neuf',cat:'EP / DEP',label:'DEP neuf',unit:'ml',prix:48,auto:null},
     {id:'dep_raccord',cat:'EP / DEP',label:'DEP incl. raccord sur DEP existante',unit:'u',prix:420,auto:null},
     {id:'siphon',cat:'EP / DEP',label:'Siphon de sol',unit:'u',prix:165,auto:null},
+    {id:'trop_plein',cat:'EP / DEP',label:'Trop-plein de sécurité',unit:'u',prix:195,auto:null},
     // DIVERS
     {id:'esc_galva',cat:'Divers',label:'Escalier acier galvanisé',unit:'ff',prix:5500,auto:null},
     {id:'modif_esc',cat:'Divers',label:'Modification escalier de secours',unit:'ff',prix:2500,auto:null},
     {id:'saut_loup',cat:'Divers',label:'Saut de loup',unit:'u',prix:950,auto:null},
     {id:'lanterneau',cat:'Divers',label:'Lanterneau (fourniture et pose)',unit:'u',prix:1800,auto:s=>s.lants},
     {id:'lant_edic',cat:'Divers',label:'Lanterneau sur édicule',unit:'u',prix:2200,auto:null},
+    {id:'grd_corps',cat:'Divers',label:'Garde-corps provisoire / définitif (ml)',unit:'ml',prix:180,auto:null},
+    {id:'dalot',cat:'Divers',label:'Dalot de collecte EP',unit:'u',prix:350,auto:null},
   ];
   const CATS=[...new Set(PRESTA_LIB.map(p=>p.cat))];
 
@@ -9680,8 +9885,13 @@ function EtancheiteApp({onBack,user}){
     name:n||('Zone '+(i+1)),
     roofPts:[[0,0],[12,0],[12,8],[0,8]],
     edicules:[],lanterneaux:[],eps:[{id:'e1',x:0,y:4},{id:'e2',x:12,y:4}],
+    tremies:[],// {id,x,y,w,l} — rectangular openings
     surfManual:null,periManual:null,
     acroH:300,relH:150,couvertW:400,
+    support:'bac_acier',// bac_acier | dalle_ba
+    pente:1.5,// %
+    penteDir:'ew',// ns | ew — slope direction
+    complex:'bicouche',// bicouche | mono | pvc | epdm
     prestations:{},
   });
 
@@ -9708,7 +9918,8 @@ function EtancheiteApp({onBack,user}){
     const peri=z.periManual!=null?z.periManual:polyPeri(z.roofPts);
     const surfEdic=z.edicules.reduce((s,e)=>s+polyArea(e.pts),0);
     const surfLant=z.lanterneaux.reduce((s,l)=>s+l.w*l.l,0);
-    return{surf,peri,nette:Math.max(0,surf-surfEdic-surfLant),eps:z.eps.length,lants:z.lanterneaux.length+z.edicules.filter(e=>e.hasLant).length,surfEdic,surfLant};
+    const surfTrem=(z.tremies||[]).reduce((s,t)=>s+t.w*t.l,0);
+    return{surf,peri,nette:Math.max(0,surf-surfEdic-surfLant-surfTrem),eps:z.eps.length,lants:z.lanterneaux.length+z.edicules.filter(e=>e.hasLant).length,surfEdic,surfLant,surfTrem,trems:(z.tremies||[]).length};
   };
 
   const lineItem=(z,p)=>{
@@ -9727,6 +9938,13 @@ function EtancheiteApp({onBack,user}){
   // ═══════════════════════════════════════════
   // SVG INTERACTION
   // ═══════════════════════════════════════════
+  const[svgZoom,setSvgZoom]=useState(1);
+  const[svgPan,setSvgPan]=useState({x:0,y:0});
+  const[panning,setPanning]=useState(false);
+  const[panStart,setPanStart]=useState(null);
+  const[snapGrid,setSnapGrid]=useState(true);
+  const[dimInput,setDimInput]=useState(null);// {idx, value} — edit segment length
+  const snap=(v)=>snapGrid?Math.round(v*4)/4:Math.round(v*20)/20;// 0.25m snap
   const svgCoord=e=>{
     const svg=svgRef.current;if(!svg)return[0,0];
     const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
@@ -9738,22 +9956,24 @@ function EtancheiteApp({onBack,user}){
   const handleMM=e=>{
     if(!dragPt)return;
     const[x,y]=svgCoord(e);
-    if(dragPt.type==='roof')setAz({roofPts:az.roofPts.map((p,i)=>i===dragPt.idx?[x,y]:p)});
+    if(dragPt.type==='roof')setAz({roofPts:az.roofPts.map((p,i)=>i===dragPt.idx?[snap(x),snap(y)]:p)});
     else if(dragPt.type==='lant')setAz({lanterneaux:az.lanterneaux.map((l,i)=>i===dragPt.idx?{...l,x,y}:l)});
     else if(dragPt.type==='lant_r'){setAz({lanterneaux:az.lanterneaux.map((l,i)=>{if(i!==dragPt.idx)return l;return{...l,w:Math.max(.3,Math.abs(x-l.x)*2),l:Math.max(.3,Math.abs(y-l.y)*2)}})});}
     else if(dragPt.type==='ep')setAz({eps:az.eps.map((ep,i)=>i===dragPt.idx?{...ep,x,y}:ep)});
-    else if(dragPt.type==='edic_pt')setAz({edicules:az.edicules.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map((p,i)=>i===dragPt.idx?[x,y]:p)}:ed)});
+    else if(dragPt.type==='edic_pt')setAz({edicules:az.edicules.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map((p,i)=>i===dragPt.idx?[snap(x),snap(y)]:p)}:ed)});
     else if(dragPt.type==='edic_mv'){
       if(!lastPt.current)lastPt.current=[x,y];
       const dx=x-lastPt.current[0],dy=y-lastPt.current[1];lastPt.current=[x,y];
       setAz({edicules:az.edicules.map(ed=>ed.id===dragPt.edicId?{...ed,pts:ed.pts.map(p=>[p[0]+dx,p[1]+dy])}:ed)});
     }
+    else if(dragPt.type==='trem')setAz({tremies:(az.tremies||[]).map((t,i)=>i===dragPt.idx?{...t,x,y}:t)});
+    else if(dragPt.type==='trem_r')setAz({tremies:(az.tremies||[]).map((t,i)=>{if(i!==dragPt.idx)return t;return{...t,w:Math.max(.3,Math.abs(x-t.x)*2),l:Math.max(.3,Math.abs(y-t.y)*2)}})});
   };
   const handleMU=()=>{setDragPt(null);lastPt.current=null;};
   const handleClick=e=>{
     if(!drawMode)return;
     const[x,y]=svgCoord(e);
-    const np=[...drawPts,[x,y]];
+    const np=[...drawPts,[snap(x),snap(y)]];
     const close=np.length>=3&&Math.hypot(np[0][0]-x,np[0][1]-y)<.8;
     if(drawMode==='roof'){
       if(close){setAz({roofPts:np.slice(0,-1)});setDrawMode(null);setDrawPts([]);}
@@ -9762,6 +9982,17 @@ function EtancheiteApp({onBack,user}){
       if(close){
         const id=Date.now();
         setAz({edicules:[...az.edicules,{id,name:'Édicule '+(az.edicules.length+1),pts:np.slice(0,-1),h:2500,type:'ventelles',hasLant:false,lantW:1200,lantL:1200}]});
+        setDrawMode(null);setDrawPts([]);
+      } else setDrawPts(np);
+    } else if(drawMode==='tremie'){
+      // Tremie: 2 clicks = rectangle
+      if(np.length>=2){
+        const[x1,y1]=np[0],[x2,y2]=np[1];
+        const tw=Math.abs(x2-x1),tl=Math.abs(y2-y1);
+        if(tw>.1&&tl>.1){
+          const id=Date.now();
+          setAz({tremies:[...(az.tremies||[]),{id,x:Math.min(x1,x2)+tw/2,y:Math.min(y1,y2)+tl/2,w:tw,l:tl}]});
+        }
         setDrawMode(null);setDrawPts([]);
       } else setDrawPts(np);
     }
@@ -9787,50 +10018,168 @@ function EtancheiteApp({onBack,user}){
     const cam=new THREE.PerspectiveCamera(42,W/H,.01,300);
     const rend=new THREE.WebGLRenderer({antialias:true});
     rend.setSize(W,H);rend.setPixelRatio(Math.min(devicePixelRatio,2));
-    rend.shadowMap.enabled=true;rend.toneMapping=THREE.ACESFilmicToneMapping;rend.toneMappingExposure=1.05;
+    rend.shadowMap.enabled=true;rend.shadowMap.type=THREE.PCFSoftShadowMap;rend.toneMapping=THREE.ACESFilmicToneMapping;rend.toneMappingExposure=1.12;
     el.appendChild(rend.domElement);rend.domElement.style.cursor='grab';
-    scene.add(new THREE.AmbientLight(0xffe8d8,.6));
-    const sun=new THREE.DirectionalLight(0xfff5e8,1.1);sun.position.set(20,30,15);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);scene.add(sun);
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
+    const sun=new THREE.DirectionalLight(0xfff5e8,1.1);sun.position.set(20,30,15);sun.castShadow=true;sun.shadow.mapSize.set(4096,4096);scene.add(sun);
     const skyL=new THREE.DirectionalLight(0xc8dcff,.25);skyL.position.set(-15,20,-10);scene.add(skyL);
     const flr=new THREE.Mesh(new THREE.PlaneGeometry(150,150),new THREE.MeshPhongMaterial({color:0xc8b8a0}));
     flr.rotation.x=-Math.PI/2;flr.receiveShadow=true;scene.add(flr);
     const gr=new THREE.GridHelper(150,30,0xa89880,0xb8aa98);gr.position.y=.003;scene.add(gr);
 
-    // Draw all zones stacked or side by side
+    // ── Draw all zones, chacune dans un groupe pour que la pente s'applique correctement ──
+    const ROOF_Y=3;const slabH=.15;
     let offsetX=0;
     zones.forEach(z=>{
-      const ct=polyCtr(z.roofPts);const ROOF_Y=3;const slabH=.15;
+      const ct=polyCtr(z.roofPts);
+      const penteRad=Math.atan((z.pente||0)/100);
+      const penteDir=z.penteDir||'ew';
+      const zComplex=z.complex||'bicouche';
+      const memCol=zComplex==='pvc'?0xc8c8c8:zComplex==='epdm'?0x2a2a2a:zComplex==='mono'?0x444440:0x3a3a38;
+
+      // ── Groupe zone : position + pente (tilt autour de l'axe correct) ──
+      // La pente doit incliner la dalle, pas la faire tourner.
+      // On utilise un groupe parent pour la position et la pente,
+      // et on ne met que rotation.x=-PI/2 sur les meshes (pour aplatir la forme extrudée).
+      const zG=new THREE.Group();
+      zG.position.set(offsetX,ROOF_Y,0);
+      // Appliquer la pente sur le groupe : rotation autour de Z (EW) ou X (NS)
+      // IMPORTANT : cet axe est dans le repère du groupe AVANT rotation.x=-PI/2 des meshes
+      // → rotation.z du groupe = inclinaison EW correcte en monde
+      if(penteRad>0.001){
+        if(penteDir==='ew') zG.rotation.z=penteRad;
+        else zG.rotation.x=penteRad;
+      }
+      scene.add(zG);
+
+      // Coordonnées locales relatives à ct (sans offsetX — c'est le groupe qui positionne)
+      const lx=p=>p[0]-ct[0];
+      const lz=p=>p[1]-ct[1];
+
+      // Shape principale (trous : édicules, lanterneaux, trémies)
       const shape=new THREE.Shape();
-      z.roofPts.forEach((p,i)=>{const sx=p[0]-ct[0]+offsetX,sy=-(p[1]-ct[1]);i===0?shape.moveTo(sx,sy):shape.lineTo(sx,sy)});
+      z.roofPts.forEach((p,i)=>{const sx=lx(p),sy=-lz(p);i===0?shape.moveTo(sx,sy):shape.lineTo(sx,sy)});
       shape.closePath();
-      z.edicules.forEach(ed=>{const h=new THREE.Path();ed.pts.forEach((p,i)=>{const hx=p[0]-ct[0]+offsetX,hy=-(p[1]-ct[1]);i===0?h.moveTo(hx,hy):h.lineTo(hx,hy)});h.closePath();shape.holes.push(h)});
-      z.lanterneaux.forEach(la=>{const h=new THREE.Path();const hx=la.x-ct[0]+offsetX,hy=-(la.y-ct[1]);h.moveTo(hx-la.w/2,hy-la.l/2);h.lineTo(hx+la.w/2,hy-la.l/2);h.lineTo(hx+la.w/2,hy+la.l/2);h.lineTo(hx-la.w/2,hy+la.l/2);h.closePath();shape.holes.push(h)});
-      const geo=new THREE.ExtrudeGeometry(shape,{depth:slabH,bevelEnabled:false});
-      const mat=new THREE.MeshStandardMaterial({color:0x444444,roughness:.9,metalness:.05});
-      const slab=new THREE.Mesh(geo,mat);slab.rotation.x=-Math.PI/2;slab.position.y=ROOF_Y;slab.castShadow=true;slab.receiveShadow=true;scene.add(slab);
-      // Acrotere walls
-      const bnds=polyBnds(z.roofPts);const acH=z.acroH/1000;
-      [[bnds.min[0],bnds.min[1],bnds.max[0],bnds.min[1]],[bnds.max[0],bnds.min[1],bnds.max[0],bnds.max[1]],[bnds.max[0],bnds.max[1],bnds.min[0],bnds.max[1]],[bnds.min[0],bnds.max[1],bnds.min[0],bnds.min[1]]].forEach(([x1,y1,x2,y2])=>{
-        const len=Math.sqrt((x2-x1)**2+(y2-y1)**2);if(len<.01)return;
-        const wx=(x1+x2)/2-ct[0]+offsetX,wz=(y1+y2)/2-ct[1];
-        const ang=Math.atan2(y2-y1,x2-x1);
-        const acroGeo=new THREE.BoxGeometry(len,.15+acH,.18);
-        const acroM=new THREE.Mesh(acroGeo,new THREE.MeshStandardMaterial({color:0x888888,roughness:.9}));
-        acroM.position.set(wx,ROOF_Y+slabH+(.15+acH)/2,-wz);acroM.rotation.y=-ang;scene.add(acroM);
-      });
-      // Edicules
+      z.edicules.forEach(ed=>{const h=new THREE.Path();ed.pts.forEach((p,i)=>{const hx=lx(p),hy=-lz(p);i===0?h.moveTo(hx,hy):h.lineTo(hx,hy)});h.closePath();shape.holes.push(h)});
+      z.lanterneaux.forEach(la=>{const h=new THREE.Path();const hx=la.x-ct[0],hy=-(la.y-ct[1]);h.moveTo(hx-la.w/2,hy-la.l/2);h.lineTo(hx+la.w/2,hy-la.l/2);h.lineTo(hx+la.w/2,hy+la.l/2);h.lineTo(hx-la.w/2,hy+la.l/2);h.closePath();shape.holes.push(h)});
+      (z.tremies||[]).forEach(tr=>{const h=new THREE.Path();const hx=tr.x-ct[0],hy=-(tr.y-ct[1]);h.moveTo(hx-tr.w/2,hy-tr.l/2);h.lineTo(hx+tr.w/2,hy-tr.l/2);h.lineTo(hx+tr.w/2,hy+tr.l/2);h.lineTo(hx-tr.w/2,hy+tr.l/2);h.closePath();shape.holes.push(h)});
+
+      // ── Dalle béton ──
+      const slabGeo=new THREE.ExtrudeGeometry(shape,{depth:slabH,bevelEnabled:false});
+      const slab=new THREE.Mesh(slabGeo,new THREE.MeshPhongMaterial({color:0x666660,shininess:8,specular:0x111111}));
+      slab.rotation.x=-Math.PI/2;slab.castShadow=true;slab.receiveShadow=true;zG.add(slab);
+
+      // ── Membrane d'étanchéité ──
+      const memMesh=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:.015,bevelEnabled:false}),
+        new THREE.MeshPhongMaterial({color:memCol,shininess:zComplex==='pvc'?50:10,specular:zComplex==='pvc'?0x333333:0x111111}));
+      memMesh.rotation.x=-Math.PI/2;memMesh.position.y=slabH;zG.add(memMesh);
+
+      // ── Acrotères + couvertines ──
+      const acH=z.acroH/1000;const acT=.18;
+      const acMat=new THREE.MeshPhongMaterial({color:0xc8c0b0,shininess:12,specular:0x201810});
+      const cvMat=new THREE.MeshPhongMaterial({color:0xb0b8c0,shininess:60,specular:0x444444});
+      for(let ei=0;ei<z.roofPts.length;ei++){
+        const ej=(ei+1)%z.roofPts.length;
+        const ax=lx(z.roofPts[ei]),az2=lz(z.roofPts[ei]);
+        const bx=lx(z.roofPts[ej]),bz=lz(z.roofPts[ej]);
+        const dx=bx-ax,dz=bz-az2,len=Math.sqrt(dx*dx+dz*dz);if(len<.01)continue;
+        const mx=(ax+bx)/2,mz=(az2+bz)/2;const ang=Math.atan2(dz,dx);
+        const aw=new THREE.Mesh(new THREE.BoxGeometry(len+acT,acH,acT),acMat);
+        aw.position.set(mx,slabH+acH/2,-mz);aw.rotation.y=-ang;aw.castShadow=true;zG.add(aw);
+        const cv=new THREE.Mesh(new THREE.BoxGeometry(len+acT+.06,.018,(z.couvertW||400)/1000),cvMat);
+        cv.position.set(mx,slabH+acH+.009,-mz);cv.rotation.y=-ang;zG.add(cv);
+      }
+
+      // ── Relevés d'étanchéité ──
+      const relHm=(z.relH||150)/1000;
+      const relMat=new THREE.MeshPhongMaterial({color:memCol,shininess:5,specular:0x080808});
+      for(let ei=0;ei<z.roofPts.length;ei++){
+        const ej=(ei+1)%z.roofPts.length;
+        const ax=lx(z.roofPts[ei]),az2=lz(z.roofPts[ei]);
+        const bx=lx(z.roofPts[ej]),bz=lz(z.roofPts[ej]);
+        const dx=bx-ax,dz=bz-az2,len=Math.sqrt(dx*dx+dz*dz);if(len<.01)continue;
+        const relBand=new THREE.Mesh(new THREE.BoxGeometry(len,relHm,.008),relMat);
+        relBand.position.set((ax+bx)/2,slabH+relHm/2,-((az2+bz)/2));relBand.rotation.y=-Math.atan2(dz,dx);zG.add(relBand);
+      }
+
+      // ── Édicules (ventelles ou parois pleines) ──
       z.edicules.forEach(ed=>{
-        const ec=polyCtr(ed.pts);const eb=polyBnds(ed.pts);
-        const edGeo=new THREE.BoxGeometry(eb.w,ed.h/1000,eb.h);
-        const edM=new THREE.Mesh(edGeo,new THREE.MeshStandardMaterial({color:0x999090,roughness:.85}));
-        edM.position.set(ec[0]-ct[0]+offsetX,ROOF_Y+slabH+ed.h/2000,-(ec[1]-ct[1]));edM.castShadow=true;scene.add(edM);
+        const eH=ed.h/1000;
+        for(let ei=0;ei<ed.pts.length;ei++){
+          const ej=(ei+1)%ed.pts.length;
+          const ax=lx(ed.pts[ei]),az2=lz(ed.pts[ei]);
+          const bx=lx(ed.pts[ej]),bz=lz(ed.pts[ej]);
+          const dx=bx-ax,dz=bz-az2,len=Math.sqrt(dx*dx+dz*dz);if(len<.01)continue;
+          const mx=(ax+bx)/2,mz=(az2+bz)/2;const ang=Math.atan2(dz,dx);
+          if(ed.type==='ventelles'){
+            const nS=Math.max(3,Math.floor(eH/.12));
+            const slatMat=new THREE.MeshPhongMaterial({color:0x555555,shininess:50});
+            for(let s=0;s<nS;s++){const sl=new THREE.Mesh(new THREE.BoxGeometry(len,.03,.05),slatMat);sl.position.set(mx,slabH+.05+s*(eH/nS),-mz);sl.rotation.y=-ang;zG.add(sl);}
+            [ed.pts[ei],ed.pts[ej]].forEach(pp=>{const post=new THREE.Mesh(new THREE.BoxGeometry(.05,eH,.05),new THREE.MeshPhongMaterial({color:0x333333}));post.position.set(lx(pp),slabH+eH/2,-lz(pp));zG.add(post);});
+          } else {
+            const ww=new THREE.Mesh(new THREE.BoxGeometry(len,eH,.06),new THREE.MeshPhongMaterial({color:0x7a7a80,shininess:20}));
+            ww.position.set(mx,slabH+eH/2,-mz);ww.rotation.y=-ang;zG.add(ww);
+          }
+        }
+        const eShape=new THREE.Shape();
+        ed.pts.forEach((p,i)=>{i===0?eShape.moveTo(lx(p),-lz(p)):eShape.lineTo(lx(p),-lz(p))});eShape.closePath();
+        const erMesh=new THREE.Mesh(new THREE.ExtrudeGeometry(eShape,{depth:.06,bevelEnabled:false}),new THREE.MeshPhongMaterial({color:0x555555}));
+        erMesh.rotation.x=-Math.PI/2;erMesh.position.y=slabH+ed.h/1000;zG.add(erMesh);
+        if(ed.hasLant){const ec=polyCtr(ed.pts);
+          const gl=new THREE.Mesh(new THREE.BoxGeometry(ed.lantW/1000,.06,ed.lantL/1000),new THREE.MeshPhongMaterial({color:0x88bbdd,transparent:true,opacity:.45,shininess:120}));
+          gl.position.set(lx(ec),slabH+ed.h/1000+.08,-lz(ec));zG.add(gl);}
       });
-      // Lanterneaux
+
+      // ── Lanterneaux ──
       z.lanterneaux.forEach(la=>{
-        const lantGeo=new THREE.BoxGeometry(la.w,.5,la.l);
-        const lantM=new THREE.Mesh(lantGeo,new THREE.MeshStandardMaterial({color:0x88bbcc,metalness:.3,roughness:.3,transparent:true,opacity:.7}));
-        lantM.position.set(la.x-ct[0]+offsetX,ROOF_Y+slabH+.25,-(la.y-ct[1]));lantM.castShadow=true;scene.add(lantM);
+        const lxv=la.x-ct[0],lzv=la.y-ct[1];const curbH=.12;
+        const curbMat=new THREE.MeshPhongMaterial({color:0x888888});
+        [[lxv,-(lzv-la.l/2),la.w+.08,.04],[lxv,-(lzv+la.l/2),la.w+.08,.04],
+         [lxv-la.w/2,-lzv,.04,la.l],[lxv+la.w/2,-lzv,.04,la.l]].forEach(([fx,fz,fw,fd])=>{
+          const f=new THREE.Mesh(new THREE.BoxGeometry(fw,curbH,fd),curbMat);f.position.set(fx,slabH+curbH/2,fz);zG.add(f)});
+        const gl=new THREE.Mesh(new THREE.BoxGeometry(la.w,.05,la.l),new THREE.MeshPhongMaterial({color:0x88c0e8,transparent:true,opacity:.35,shininess:150}));
+        gl.position.set(lxv,slabH+curbH+.025,-lzv);zG.add(gl);
       });
+
+      // ── Bac acier (sous la dalle) ──
+      if(z.support==='bac_acier'){
+        const bn=polyBnds(z.roofPts);const nervStep=.6;const nNerv=Math.ceil(bn.w/nervStep);
+        const bacMat=new THREE.MeshPhongMaterial({color:0xb0b8c0,shininess:40});
+        for(let ni=0;ni<=nNerv;ni++){
+          const nx=bn.min[0]+ni*nervStep-ct[0];
+          const nerv=new THREE.Mesh(new THREE.BoxGeometry(.015,.06,bn.h+.1),bacMat);
+          nerv.position.set(nx,-.05,-(bn.min[1]+bn.h/2-ct[1]));zG.add(nerv);}
+        const bp=new THREE.Mesh(new THREE.BoxGeometry(bn.w+.2,.008,bn.h+.2),new THREE.MeshPhongMaterial({color:0xa0a8b0}));
+        bp.position.set(bn.min[0]+bn.w/2-ct[0],-.08,-(bn.min[1]+bn.h/2-ct[1]));zG.add(bp);
+      }
+
+      // ── Costières de trémies ──
+      (z.tremies||[]).forEach(tr=>{
+        const tx=tr.x-ct[0],tz=tr.y-ct[1];const costH=.12;
+        const costMat=new THREE.MeshPhongMaterial({color:0x666660});
+        [[tx,-(tz-tr.l/2),tr.w+.06,.04],[tx,-(tz+tr.l/2),tr.w+.06,.04],
+         [tx-tr.w/2,-tz,.04,tr.l],[tx+tr.w/2,-tz,.04,tr.l]].forEach(([fx,fz,fw,fd])=>{
+          const f=new THREE.Mesh(new THREE.BoxGeometry(fw,costH,fd),costMat);f.position.set(fx,slabH+costH/2,fz);zG.add(f)});
+      });
+
+      // ── EP — dans la scène principale (tubes verticaux, pas inclinés avec la toiture) ──
+      z.eps.forEach(ep=>{
+        const px=ep.x-ct[0]+offsetX,pz=ep.y-ct[1];
+        const pipe=new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,ROOF_Y+.3,8),new THREE.MeshPhongMaterial({color:0x505050,shininess:30}));
+        pipe.position.set(px,(ROOF_Y+.3)/2,-pz);pipe.castShadow=true;scene.add(pipe);
+        const collar=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.03,8),new THREE.MeshPhongMaterial({color:0x333333}));
+        collar.position.set(px,ROOF_Y+slabH+.015,-pz);scene.add(collar);
+      });
+
+      // ── Poteaux de structure ──
+      const pilMat=new THREE.MeshPhongMaterial({color:0x888880});
+      z.roofPts.forEach((p,pi)=>{
+        if(pi%Math.max(1,Math.floor(z.roofPts.length/4))===0){
+          const pil=new THREE.Mesh(new THREE.BoxGeometry(.3,ROOF_Y,.3),pilMat);
+          pil.position.set(lx(p)+offsetX,ROOF_Y/2,-lz(p));pil.castShadow=true;scene.add(pil);
+        }
+      });
+
       const bnds2=polyBnds(z.roofPts);
       offsetX+=bnds2.w+5;
     });
@@ -9863,37 +10212,51 @@ function EtancheiteApp({onBack,user}){
 
   const st=zStats(az);
   const bnd=polyBnds(az.roofPts.length>=3?az.roofPts:[[0,0],[10,0],[10,8],[0,8]]);
-  const pad=3;const vb=`${bnd.min[0]-pad} ${bnd.min[1]-pad} ${bnd.w+pad*2} ${bnd.h+pad*2}`;
+  const pad=3;
+  const vbW=(bnd.w+pad*2)/svgZoom,vbH=(bnd.h+pad*2)/svgZoom;
+  const vbX=bnd.min[0]-pad+(bnd.w+pad*2)*(1-1/svgZoom)/2+svgPan.x;
+  const vbY=bnd.min[1]-pad+(bnd.h+pad*2)*(1-1/svgZoom)/2+svgPan.y;
+  const vb=`${vbX} ${vbY} ${vbW} ${vbH}`;
 
   // ═══════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════
-  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)',fontFamily:'DM Sans,sans-serif'}}>
-
-    {/* ── HEADER ── */}
-    <div style={{height:44,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:8,background:'var(--pnl)',borderBottom:'1px solid var(--bd)'}}>
-      <button onClick={onBack} style={{padding:'4px 12px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Retour</button>
-      <div style={{width:28,height:28,borderRadius:8,background:'linear-gradient(135deg,#7e4faa,#5a3080)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'#fff',fontWeight:900}}>K</div>
-      <span style={{fontSize:13,fontWeight:800,color:'var(--t1)'}}>Étanchéité</span>
-      <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      {/* Zone selector */}
-      <div style={{display:'flex',gap:4,alignItems:'center',flex:1,overflowX:'auto'}}>
-        {zones.map((z,i)=><button key={z.id} onClick={()=>{setActiveId(z.id);setSelEdic(null);}}
-          style={{padding:'3px 10px',borderRadius:6,border:'1.5px solid '+(az.id===z.id?'rgba(126,79,170,.4)':'var(--bd)'),
-            background:az.id===z.id?'rgba(126,79,170,.1)':'var(--crd)',color:az.id===z.id?'#7e4faa':'var(--t2)',
-            fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>
-          {z.name} <span style={{opacity:.5,fontWeight:400}}>{r2(zStats(z).nette)}m²</span>
+  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)',fontFamily:'DM Sans,system-ui,sans-serif'}}>
+    {/* ── HEADER UNIFIÉ ── */}
+    <div style={{height:44,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
+      {/* Logo / retour */}
+      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px 8px',borderRadius:7,transition:'background .12s',flexShrink:0}}
+        onMouseOver={e=>e.currentTarget.style.background='rgba(42,14,20,.06)'}
+        onMouseOut={e=>e.currentTarget.style.background='transparent'}>
+        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <svg width="12" height="12" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
+        </div>
+        <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
+      </div>
+      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+        <div style={{width:22,height:22,borderRadius:6,background:'linear-gradient(135deg,#7e4faa,#5a3080)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11}}>🏗</div>
+        <span style={{fontSize:12,fontWeight:700,color:'#7e4faa'}}>Étanchéité</span>
+      </div>
+      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      {/* Zone tabs */}
+      <div style={{display:'flex',gap:3,alignItems:'center',flex:1,overflowX:'auto',minWidth:0}}>
+        {zones.map((z)=><button key={z.id} onClick={()=>{setActiveId(z.id);setSelEdic(null);}}
+          style={{padding:'3px 10px',borderRadius:6,border:'1.5px solid '+(az.id===z.id?'rgba(126,79,170,.45)':'var(--bd)'),
+            background:az.id===z.id?'rgba(126,79,170,.1)':'transparent',color:az.id===z.id?'#7e4faa':'var(--t3)',
+            fontSize:10,fontWeight:az.id===z.id?700:500,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',flexShrink:0}}>
+          {z.name}<span style={{opacity:.45,fontWeight:400,marginLeft:4}}>{r2(zStats(z).nette)}m²</span>
         </button>)}
         <button onClick={()=>{const z=mkZone(null,zones.length);setZones(zs=>[...zs,z]);setActiveId(z.id);}}
-          style={{padding:'3px 10px',borderRadius:6,border:'1px dashed rgba(126,79,170,.3)',background:'none',color:'#7e4faa',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap'}}>+ Zone</button>
+          style={{padding:'3px 9px',borderRadius:6,border:'1px dashed rgba(126,79,170,.3)',background:'none',color:'#7e4faa',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',whiteSpace:'nowrap',flexShrink:0}}>+ Zone</button>
       </div>
       {/* Tabs */}
-      <div style={{display:'flex',gap:2,background:'rgba(42,14,20,.05)',borderRadius:8,padding:2}}>
+      <div style={{display:'flex',gap:2,background:'rgba(42,14,20,.05)',borderRadius:8,padding:2,flexShrink:0}}>
         {[['plan','📐 Plan'],['presta','✅ Prestations'],['devis','📋 Devis']].map(([k,l])=>
           <button key={k} onClick={()=>setTab(k)} style={{padding:'4px 10px',borderRadius:6,fontSize:10,fontWeight:700,border:'none',cursor:'pointer',fontFamily:'inherit',
-            background:tab===k?'rgba(126,79,170,.2)':'transparent',color:tab===k?'#7e4faa':'var(--t2)'}}>{l}</button>)}
+            background:tab===k?'rgba(126,79,170,.18)':'transparent',color:tab===k?'#7e4faa':'var(--t2)',transition:'all .12s'}}>{l}</button>)}
       </div>
-      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 10px',borderRadius:6,border:'1px solid '+(view3D?'rgba(126,79,170,.4)':'var(--bd)'),background:view3D?'rgba(126,79,170,.12)':'var(--crd)',color:'#7e4faa',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>{view3D?'↩ 2D':'🧊 3D'}</button>
+      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid '+(view3D?'rgba(126,79,170,.4)':'var(--bd)'),background:view3D?'rgba(126,79,170,.1)':'transparent',color:'#7e4faa',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',flexShrink:0,transition:'all .12s'}}>{view3D?'↩ 2D':'🧊 3D'}</button>
     </div>
 
     <div style={{display:'flex',flex:1,minHeight:0}}>
@@ -9912,29 +10275,77 @@ function EtancheiteApp({onBack,user}){
             style={{color:'#ef4444',fontSize:10,cursor:'pointer',padding:'2px 5px',borderRadius:4,border:'1px solid rgba(239,68,68,.2)',background:'rgba(239,68,68,.05)',fontFamily:'inherit'}}>✕</button>}
         </div>
 
-        {/* Métrés zone */}
+        {/* Dimensions + Métrés */}
         <div style={{padding:7,borderRadius:9,border:'1px solid rgba(126,79,170,.15)',background:'rgba(126,79,170,.04)',marginBottom:6}}>
-          <div style={{fontSize:8,fontWeight:700,color:'#7e4faa',marginBottom:5}}>📐 Surfaces & périmètres</div>
+          <div style={{fontSize:8,fontWeight:700,color:'#7e4faa',marginBottom:5}}>📐 Dimensions</div>
+          {/* Quick L×l → rectangle */}
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginBottom:4}}>
-            <InputN label="Surface (m²)" value={az.surfManual??r2(st.surf)} onChange={v=>setAz({surfManual:v>0?v:null})} step={0.1}/>
-            <InputN label="Périmètre (ml)" value={az.periManual??r2(st.peri)} onChange={v=>setAz({periManual:v>0?v:null})} step={0.1}/>
+            <InputN label="Longueur" value={r2(bnd.w)} onChange={v=>{if(v>0){const mn=bnd.min;setAz({roofPts:[[mn[0],mn[1]],[mn[0]+v,mn[1]],[mn[0]+v,mn[1]+bnd.h],[mn[0],mn[1]+bnd.h]]})}}} unit="m" step={0.25} small/>
+            <InputN label="Largeur" value={r2(bnd.h)} onChange={v=>{if(v>0){const mn=bnd.min;setAz({roofPts:[[mn[0],mn[1]],[mn[0]+bnd.w,mn[1]],[mn[0]+bnd.w,mn[1]+v],[mn[0],mn[1]+v]]})}}} unit="m" step={0.25} small/>
           </div>
-          <div style={{fontSize:8,color:'var(--t3)',lineHeight:1.7}}>
-            Brute : <b style={{color:'var(--t1)'}}>{r2(st.surf)} m²</b><br/>
-            Édicules : <b style={{color:'var(--t1)'}}>-{r2(st.surfEdic)} m²</b><br/>
-            Lanterneaux : <b style={{color:'var(--t1)'}}>-{r2(st.surfLant)} m²</b><br/>
-            <b style={{color:'#7e4faa',fontSize:9}}>Nette : {r2(st.nette)} m²</b>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginBottom:4}}>
+            <InputN label="Surface" value={az.surfManual??r2(st.surf)} onChange={v=>setAz({surfManual:v>0?v:null})} unit="m²" step={0.1} small/>
+            <InputN label="Périmètre" value={az.periManual??r2(st.peri)} onChange={v=>setAz({periManual:v>0?v:null})} unit="ml" step={0.1} small/>
+          </div>
+          <div style={{fontSize:7.5,color:'var(--t3)',lineHeight:1.8}}>
+            Brute: <b>{r2(st.surf)} m²</b> · Édic: <b>-{r2(st.surfEdic)}</b> · Lant: <b>-{r2(st.surfLant)}</b> · Trém: <b>-{r2(st.surfTrem||0)}</b><br/>
+            <b style={{color:'#7e4faa',fontSize:9}}>Nette: {r2(st.nette)} m²</b> · Péri: <b>{r2(st.peri)} ml</b>
           </div>
           {(az.surfManual!=null||az.periManual!=null)&&<button onClick={()=>setAz({surfManual:null,periManual:null})}
-            style={{marginTop:4,width:'100%',padding:'2px',borderRadius:4,border:'1px dashed var(--bd)',background:'none',color:'var(--t3)',fontSize:7,cursor:'pointer',fontFamily:'inherit'}}>↩ Recalculer depuis tracé</button>}
+            style={{marginTop:3,width:'100%',padding:'2px',borderRadius:4,border:'1px dashed var(--bd)',background:'none',color:'var(--t3)',fontSize:7,cursor:'pointer',fontFamily:'inherit'}}>↩ Auto depuis tracé</button>}
         </div>
 
         {/* Complexe */}
         <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:6}}>
           <div style={{fontSize:8,fontWeight:700,color:'var(--t1)',marginBottom:5}}>🔧 Paramètres</div>
+          {/* Support type */}
+          <div style={{fontSize:7,fontWeight:600,color:'var(--t2)',marginBottom:3}}>Support</div>
+          <div style={{display:'flex',gap:2,marginBottom:5}}>
+            {[{id:'bac_acier',l:'Bac acier'},{id:'dalle_ba',l:'Dalle BA'}].map(t=>
+              <button key={t.id} onClick={()=>setAz({support:t.id})}
+                style={{flex:1,padding:'3px',fontSize:7.5,fontWeight:700,borderRadius:5,border:'1.5px solid '+((az.support||'bac_acier')===t.id?'rgba(126,79,170,.4)':'var(--bd)'),
+                  background:(az.support||'bac_acier')===t.id?'rgba(126,79,170,.1)':'var(--inp)',color:(az.support||'bac_acier')===t.id?'#7e4faa':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
+          </div>
+          {/* Complexe type */}
+          <div style={{fontSize:7,fontWeight:600,color:'var(--t2)',marginBottom:3}}>Complexe</div>
+          <div style={{display:'flex',gap:2,marginBottom:5}}>
+            {[{id:'bicouche',l:'Bic.'},{id:'mono',l:'Mono'},{id:'pvc',l:'PVC'},{id:'epdm',l:'EPDM'}].map(t=>
+              <button key={t.id} onClick={()=>setAz({complex:t.id})}
+                style={{flex:1,padding:'3px',fontSize:7,fontWeight:700,borderRadius:5,border:'1.5px solid '+((az.complex||'bicouche')===t.id?'rgba(14,146,104,.4)':'var(--bd)'),
+                  background:(az.complex||'bicouche')===t.id?'rgba(14,146,104,.1)':'var(--inp)',color:(az.complex||'bicouche')===t.id?'#0e9268':'var(--t2)',cursor:'pointer',fontFamily:'inherit'}}>{t.l}</button>)}
+          </div>
+          {/* Pente */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginBottom:5}}>
+            <InputN label="Pente" value={az.pente||1.5} onChange={v=>setAz({pente:v})} unit="%" step={0.5} min={0} max={5} small/>
+            <div><div style={{fontSize:7,fontWeight:600,color:'var(--t2)',marginBottom:2}}>Direction</div>
+              <div style={{display:'flex',gap:2}}>
+                {[{id:'ew',l:'↔'},{id:'ns',l:'↕'}].map(t=>
+                  <button key={t.id} onClick={()=>setAz({penteDir:t.id})}
+                    style={{flex:1,padding:'3px',fontSize:10,fontWeight:700,borderRadius:4,border:'1px solid '+((az.penteDir||'ew')===t.id?'rgba(126,79,170,.3)':'var(--bd)'),
+                      background:(az.penteDir||'ew')===t.id?'rgba(126,79,170,.08)':'var(--inp)',cursor:'pointer'}}>{t.l}</button>)}
+              </div>
+            </div>
+          </div>
           <InputN label="H acrotère" value={az.acroH} onChange={v=>setAz({acroH:v})} unit="mm" min={100} max={1200}/>
-          <InputN label="H relevé étanchéité" value={az.relH} onChange={v=>setAz({relH:v})} unit="mm" min={100} max={500}/>
-          <InputN label="Développé couvertine" value={az.couvertW} onChange={v=>setAz({couvertW:v})} unit="mm" min={200} max={800}/>
+          <InputN label="H relevé" value={az.relH} onChange={v=>setAz({relH:v})} unit="mm" min={100} max={500}/>
+          <InputN label="Dév. couvertine" value={az.couvertW} onChange={v=>setAz({couvertW:v})} unit="mm" min={200} max={800}/>
+        </div>
+        {/* Trémies */}
+        <div style={{padding:7,borderRadius:9,border:'1px solid rgba(239,68,68,.12)',background:'rgba(239,68,68,.02)',marginBottom:6}}>
+          <div style={{fontSize:8,fontWeight:700,color:'#ef4444',marginBottom:5}}>🔲 Trémies ({(az.tremies||[]).length})</div>
+          {(az.tremies||[]).map((tr,i)=><div key={tr.id} style={{padding:4,borderRadius:6,border:'1px solid rgba(239,68,68,.15)',background:'rgba(239,68,68,.03)',marginBottom:3}}>
+            <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:3}}>
+              <span style={{fontSize:8,fontWeight:700,color:'#ef4444'}}>T{i+1}</span>
+              <span style={{fontSize:7,color:'var(--t3)',flex:1}}>{r2(tr.w*tr.l)} m²</span>
+              <button onClick={()=>setAz({tremies:(az.tremies||[]).filter(t=>t.id!==tr.id)})} style={{fontSize:8,color:'#ef4444',cursor:'pointer',background:'none',border:'none',fontFamily:'inherit'}}>✕</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:3}}>
+              <InputN label="Longueur" value={tr.w} onChange={v=>setAz({tremies:(az.tremies||[]).map(t=>t.id===tr.id?{...t,w:v}:t)})} unit="m" step={0.1} min={0.2} small/>
+              <InputN label="Largeur" value={tr.l} onChange={v=>setAz({tremies:(az.tremies||[]).map(t=>t.id===tr.id?{...t,l:v}:t)})} unit="m" step={0.1} min={0.2} small/>
+            </div>
+          </div>)}
+          <button onClick={()=>{const ct2=polyCtr(az.roofPts);setAz({tremies:[...(az.tremies||[]),{id:Date.now(),x:ct2[0],y:ct2[1],w:1,l:1}]})}}
+            style={{width:'100%',padding:4,borderRadius:5,border:'1px dashed rgba(239,68,68,.2)',background:'none',color:'#ef4444',fontSize:7.5,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>+ Ajouter trémie</button>
         </div>
 
         {/* Édicules */}
@@ -10006,19 +10417,32 @@ function EtancheiteApp({onBack,user}){
         {/* ──── TAB : PLAN ──── */}
         {tab==='plan'&&<>
           {drawMode&&<div style={{padding:'5px 14px',background:'rgba(196,50,74,.06)',borderBottom:'1px solid rgba(196,50,74,.15)',display:'flex',alignItems:'center',gap:8,fontSize:10,color:'#c4324a',fontWeight:600}}>
-            ✏ {drawMode==='roof'?'Tracé toiture':'Tracé édicule'} — cliquez pour poser des points · double-clic pour fermer
+            ✏ {drawMode==='roof'?'Tracé toiture':drawMode==='tremie'?'Trémie — 2 clics (coin opposés)':'Tracé édicule'} — {drawMode==='tremie'?'cliquez 2 coins':'cliquez · double-clic pour fermer'}
             <button onClick={()=>{setDrawMode(null);setDrawPts([])}} style={{color:'#c4324a',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700}}>✕ Annuler</button>
           </div>}
           <div style={{padding:'4px 10px',background:'var(--pnl)',borderBottom:'1px solid var(--bd)',display:'flex',gap:6,alignItems:'center'}}>
             <button onClick={()=>{setDrawMode('roof');setDrawPts([])}} style={{padding:'3px 10px',borderRadius:5,border:'1px solid rgba(126,79,170,.25)',background:drawMode==='roof'?'rgba(126,79,170,.12)':'var(--crd)',color:'#7e4faa',fontSize:9,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>✏ Toiture</button>
-            <span style={{fontSize:8,color:'var(--t3)'}}>Clic droit sur un point = supprimer · milieu de côté = insérer</span>
+            <span style={{fontSize:8,color:'var(--t3)'}}>Clic droit = suppr · milieu = insérer · Molette = zoom</span>
+            <div style={{flex:1}}/>
+            <button onClick={()=>setSnapGrid(v=>!v)} style={{padding:'3px 8px',borderRadius:5,border:'1px solid '+(snapGrid?'rgba(126,79,170,.3)':'var(--bd)'),background:snapGrid?'rgba(126,79,170,.1)':'var(--crd)',color:snapGrid?'#7e4faa':'var(--t3)',fontSize:8,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>🧲 {snapGrid?'Aimant 25cm':'Libre'}</button>
+            <button onClick={()=>{setSvgZoom(1);setSvgPan({x:0,y:0})}} style={{padding:'3px 8px',borderRadius:5,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t3)',fontSize:8,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>⟲ Reset vue</button>
           </div>
           {view3D
             ?<div ref={mountRef} style={{flex:1,background:'#ddd4c8'}}/>
             :<svg ref={svgRef} viewBox={vb} preserveAspectRatio="xMidYMid meet"
               style={{flex:1,background:'#f4ece5',cursor:drawMode?'crosshair':dragPt?'grabbing':'default'}}
-              onClick={handleClick} onDoubleClick={handleDbl} onMouseMove={handleMM} onMouseUp={handleMU} onMouseLeave={handleMU} onContextMenu={e=>e.preventDefault()}>
+              onClick={handleClick} onDoubleClick={handleDbl} onMouseMove={e=>{
+                if(panning&&panStart){
+                  const dx=(e.clientX-panStart.x)*vbW/svgRef.current.clientWidth;
+                  const dy=(e.clientY-panStart.y)*vbH/svgRef.current.clientHeight;
+                  setSvgPan({x:svgPan.x-dx,y:svgPan.y-dy});
+                  setPanStart({x:e.clientX,y:e.clientY});
+                } else handleMM(e);
+              }} onMouseUp={e=>{if(panning){setPanning(false);setPanStart(null)}else handleMU(e)}} onMouseLeave={e=>{setPanning(false);setPanStart(null);handleMU(e)}} onContextMenu={e=>e.preventDefault()}
+              onWheel={e=>{e.preventDefault();const d=e.deltaY>0?.9:1.1;setSvgZoom(z=>Math.max(.3,Math.min(8,z*d)))}}
+              onMouseDown={e=>{if(e.button===1){e.preventDefault();setPanning(true);setPanStart({x:e.clientX,y:e.clientY})}}}>
               <defs>
+                <marker id="pente-arr" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><path d="M0,0 L6,2.5 L0,5" fill="#0ea5e9"/></marker>
                 <pattern id="et-grd" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
                 <pattern id="et-grd5" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="none" stroke="rgba(42,14,20,.07)" strokeWidth=".02"/></pattern>
               </defs>
@@ -10026,8 +10450,29 @@ function EtancheiteApp({onBack,user}){
               <rect x={bnd.min[0]-pad} y={bnd.min[1]-pad} width={bnd.w+pad*2} height={bnd.h+pad*2} fill="url(#et-grd5)"/>
               {/* Toiture */}
               <polygon points={az.roofPts.map(p=>p.join(',')).join(' ')} fill="rgba(126,79,170,.07)" stroke="#7e4faa" strokeWidth=".05"/>
+              {/* Acrotère + couvertine bands */}
+              {az.roofPts.map((p,i)=>{
+                const j=(i+1)%az.roofPts.length;const dxx=az.roofPts[j][0]-p[0],dyy=az.roofPts[j][1]-p[1];
+                const len=Math.sqrt(dxx*dxx+dyy*dyy);if(len<.01)return null;
+                const nxx=-dyy/len,nyy=dxx/len;// outward normal
+                const acOff=.08;const cvDev=Math.max(.15,(az.couvertW||400)/2000);
+                return<g key={'cv'+i}>
+                  <line x1={p[0]+nxx*acOff} y1={p[1]+nyy*acOff} x2={az.roofPts[j][0]+nxx*acOff} y2={az.roofPts[j][1]+nyy*acOff}
+                    stroke="#c4324a" strokeWidth=".1" opacity=".15"/>
+                  <line x1={p[0]+nxx*(acOff+.05)} y1={p[1]+nyy*(acOff+.05)} x2={az.roofPts[j][0]+nxx*(acOff+.05)} y2={az.roofPts[j][1]+nyy*(acOff+.05)}
+                    stroke="#888" strokeWidth={cvDev} opacity=".1"/>
+                </g>
+              })}
               {/* Dimensions */}
-              {az.roofPts.map((p,i)=>{const j=(i+1)%az.roofPts.length;const mx=(p[0]+az.roofPts[j][0])/2,my=(p[1]+az.roofPts[j][1])/2;const dx=az.roofPts[j][0]-p[0],dy=az.roofPts[j][1]-p[1];const len=Math.sqrt(dx*dx+dy*dy);return<text key={'d'+i} x={mx} y={my-.22} textAnchor="middle" fill="#7e4faa" fontSize=".22" fontWeight="700">{r2(len)}m</text>})}
+              {az.roofPts.map((p,i)=>{const j=(i+1)%az.roofPts.length;const mx=(p[0]+az.roofPts[j][0])/2,my=(p[1]+az.roofPts[j][1])/2;const dx2=az.roofPts[j][0]-p[0],dy2=az.roofPts[j][1]-p[1];const len=Math.sqrt(dx2*dx2+dy2*dy2);const ang=Math.atan2(dy2,dx2)*180/Math.PI;
+                return<g key={'d'+i}>
+                  <rect x={mx-.5} y={my-.42} width={1} height={.25} rx=".06" fill="rgba(244,236,229,.9)" stroke="rgba(126,79,170,.15)" strokeWidth=".01"/>
+                  <text x={mx} y={my-.24} textAnchor="middle" fill="#7e4faa" fontSize=".2" fontWeight="700" style={{cursor:'pointer'}}
+                    onDoubleClick={e=>{e.stopPropagation();const v=prompt('Longueur du côté (m):',r2(len).toString());if(v&&!isNaN(parseFloat(v))){
+                      const newLen=parseFloat(v);const ratio=newLen/len;const nj=[(p[0]+dx2*ratio),(p[1]+dy2*ratio)];
+                      setAz({roofPts:az.roofPts.map((pp,k)=>k===j?nj:pp)});
+                    }}}>{r2(len)}m</text>
+                </g>})}
               {/* Handles toiture */}
               {!drawMode&&az.roofPts.map((p,i)=><circle key={'rp'+i} cx={p[0]} cy={p[1]} r=".22" fill="#7e4faa" stroke="#fff" strokeWidth=".06" style={{cursor:'grab'}}
                 onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'roof',idx:i})}}
@@ -10052,6 +10497,26 @@ function EtancheiteApp({onBack,user}){
                 <circle cx={la.x+la.w/2} cy={la.y+la.l/2} r=".1" fill="#0ea5e9" stroke="#fff" strokeWidth=".03" style={{cursor:'se-resize'}}
                   onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'lant_r',idx:i})}}/>
               </g>)}
+              {/* Trémies */}
+              {(az.tremies||[]).map((tr,i)=><g key={tr.id}>
+                <rect x={tr.x-tr.w/2} y={tr.y-tr.l/2} width={tr.w} height={tr.l} fill="rgba(239,68,68,.1)" stroke="#ef4444" strokeWidth=".04" strokeDasharray=".12,.08" rx=".04"
+                  style={{cursor:'move'}} onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'trem',idx:i})}}/>
+                <line x1={tr.x-tr.w/2} y1={tr.y-tr.l/2} x2={tr.x+tr.w/2} y2={tr.y+tr.l/2} stroke="#ef4444" strokeWidth=".02" opacity=".3"/>
+                <line x1={tr.x+tr.w/2} y1={tr.y-tr.l/2} x2={tr.x-tr.w/2} y2={tr.y+tr.l/2} stroke="#ef4444" strokeWidth=".02" opacity=".3"/>
+                <text x={tr.x} y={tr.y+.06} textAnchor="middle" fill="#ef4444" fontSize=".17" fontWeight="600" style={{pointerEvents:'none'}}>T{i+1} {r2(tr.w)}×{r2(tr.l)}</text>
+                <circle cx={tr.x+tr.w/2} cy={tr.y+tr.l/2} r=".1" fill="#ef4444" stroke="#fff" strokeWidth=".03" style={{cursor:'se-resize'}}
+                  onMouseDown={e=>{e.stopPropagation();e.preventDefault();setDragPt({type:'trem_r',idx:i})}}/>
+                <circle cx={tr.x} cy={tr.y} r=".08" fill="#ef4444" opacity=".4" style={{pointerEvents:'none'}}/>
+              </g>)}
+              {/* Pente indicator */}
+              {(az.pente||0)>0&&(()=>{const ct2=polyCtr(az.roofPts);const dir=az.penteDir||'ew';
+                const arrowLen=Math.min(bnd.w,bnd.h)*.3;
+                const dx=dir==='ew'?arrowLen:0,dy=dir==='ns'?arrowLen:0;
+                return<g opacity=".4">
+                  <line x1={ct2[0]-dx/2} y1={ct2[1]-dy/2} x2={ct2[0]+dx/2} y2={ct2[1]+dy/2} stroke="#0ea5e9" strokeWidth=".06" markerEnd="url(#pente-arr)"/>
+                  <text x={ct2[0]+dx/2+.3} y={ct2[1]+dy/2+.06} fill="#0ea5e9" fontSize=".18" fontWeight="600">{az.pente}%</text>
+                </g>
+              })()}
               {/* EP */}
               {az.eps.map((ep,i)=><g key={ep.id}>
                 <circle cx={ep.x} cy={ep.y} r=".28" fill="rgba(14,165,233,.15)" stroke="#0ea5e9" strokeWidth=".06" style={{cursor:'grab'}}
@@ -10271,17 +10736,18 @@ function CharpenteApp({onBack,user}){
     const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(devicePixelRatio,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     el.appendChild(renderer.domElement);renderer.domElement.style.cursor='grab';
-    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
     const sun=new THREE.DirectionalLight(0xfff5e8,1.15);sun.position.set(20,32,14);sun.castShadow=true;
     sun.shadow.mapSize.set(4096,4096);sun.shadow.camera.near=.5;sun.shadow.camera.far=120;
     sun.shadow.camera.left=-50;sun.shadow.camera.right=50;sun.shadow.camera.top=50;sun.shadow.camera.bottom=-50;
     sun.shadow.bias=-.0003;scene.add(sun);
     const skyCh=new THREE.DirectionalLight(0xc8dcff,.28);skyCh.position.set(0,20,-5);scene.add(skyCh);
     const fillCh=new THREE.DirectionalLight(0xe8f0ff,.22);fillCh.position.set(-18,10,-12);scene.add(fillCh);
+    const bounce=new THREE.DirectionalLight(0xf8e8c0,.12);bounce.position.set(0,-5,0);scene.add(bounce);
     // Ground+grid
-    const floor=new THREE.Mesh(new THREE.PlaneGeometry(160,160),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2,specular:0x222018}));
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(160,160),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:4,specular:0x1a1810}));
     floor.rotation.x=-Math.PI/2;floor.receiveShadow=true;scene.add(floor);
     const g1=new THREE.GridHelper(160,32,0xa89880,0xb8aa98);g1.position.y=.004;scene.add(g1);
     const g2=new THREE.GridHelper(160,160,0xb8aa98,0xc0b4a4);g2.position.y=.002;scene.add(g2);
@@ -10295,7 +10761,7 @@ function CharpenteApp({onBack,user}){
       const cx=(ax+bx)/2,cy=(ay+by)/2,cz=(az+bz)/2;
       const dx=bx-ax,dy=by-ay,dz=bz-az;const len=Math.sqrt(dx*dx+dy*dy+dz*dz);if(len<.001)return;
       const g=new THREE.BoxGeometry(tw,len,td);
-      const m=new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:col,shininess:55,specular:new THREE.Color(col).multiplyScalar(.18)}));
+      const m=new THREE.Mesh(g,new THREE.MeshPhongMaterial({color:col,shininess:80,specular:new THREE.Color(col).multiplyScalar(.25)}));
       m.castShadow=true;m.receiveShadow=true;
       const axis=new THREE.Vector3(dx/len,dy/len,dz/len);
       m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),axis);
@@ -10397,16 +10863,25 @@ function CharpenteApp({onBack,user}){
     <div style={{height:4,background:'var(--crd)',borderRadius:2,overflow:'hidden'}}><div style={{height:'100%',width:Math.min(100,v)+'%',background:c,borderRadius:2,transition:'width .3s'}}/></div>
   </div>};
 
-  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)'}}>
-    <div style={{height:40,flexShrink:0,display:'flex',alignItems:'center',padding:'0 12px',gap:8,background:'var(--pnl)',borderBottom:'1px solid var(--bd)'}}>
-      <button onClick={onBack} style={{padding:'4px 12px',borderRadius:6,border:'1px solid var(--bd)',background:'var(--crd)',color:'var(--t2)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Retour</button>
-      <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#0e9268,#066040)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'#fff',fontWeight:900}}>K</div>
-      <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
-      <div style={{width:1,height:20,background:'var(--bd)'}}/>
-      <span style={{fontSize:12,fontWeight:600,color:'#0e9268'}}>⛩ Charpente</span>
+  return<div style={{display:'flex',flexDirection:'column',width:'100%',height:'100%',minHeight:0,background:'var(--bg)',fontFamily:'DM Sans,system-ui,sans-serif'}}>
+    {/* ── HEADER UNIFIÉ ── */}
+    <div style={{height:44,flexShrink:0,display:'flex',alignItems:'center',padding:'0 14px',gap:10,borderBottom:'1px solid var(--bd)',background:'var(--pnl)'}}>
+      <div onClick={onBack} style={{cursor:'pointer',display:'flex',alignItems:'center',gap:7,padding:'4px 8px',borderRadius:7,transition:'background .12s',flexShrink:0}}
+        onMouseOver={e=>e.currentTarget.style.background='rgba(42,14,20,.06)'}
+        onMouseOut={e=>e.currentTarget.style.background='transparent'}>
+        <div style={{width:26,height:26,borderRadius:7,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+          <svg width="12" height="12" viewBox="0 0 40 40" fill="none"><rect x="3" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="3" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="3" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/><rect x="23" y="23" width="14" height="14" rx="2" stroke="#fff" strokeWidth="3"/></svg>
+        </div>
+        <span style={{fontSize:13,fontWeight:700,color:'var(--t1)'}}>Kalepin</span>
+      </div>
+      <svg width="6" height="10" viewBox="0 0 6 10" fill="none"><path d="M1 1l4 4-4 4" stroke="var(--bd)" strokeWidth="1.5" strokeLinecap="round"/></svg>
+      <div style={{display:'flex',alignItems:'center',gap:6,flexShrink:0}}>
+        <div style={{width:22,height:22,borderRadius:6,background:'linear-gradient(135deg,#0e9268,#066040)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11}}>⛩</div>
+        <span style={{fontSize:12,fontWeight:700,color:'#0e9268'}}>Charpente</span>
+      </div>
       <div style={{flex:1}}/>
-      <button onClick={()=>setShowRes(v=>!v)} style={{padding:'4px 12px',borderRadius:6,border:'1px solid rgba(196,50,74,.2)',background:showRes?'rgba(196,50,74,.1)':'rgba(196,50,74,.04)',color:'#c4324a',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{showRes?'↩ Vue':'📊 Résultats'}</button>
-      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 12px',borderRadius:6,border:'1px solid '+(view3D?'rgba(14,146,104,.4)':'rgba(14,146,104,.2)'),background:view3D?'rgba(14,146,104,.15)':'rgba(14,146,104,.05)',color:'#0e9268',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{view3D?'↩ Schéma':'🧊 3D'}</button>
+      <button onClick={()=>setShowRes(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid rgba(196,50,74,.2)',background:showRes?'rgba(196,50,74,.08)':'transparent',color:'#c4324a',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .12s'}}>{showRes?'↩ Vue':'📊 Résultats'}</button>
+      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid '+(view3D?'rgba(14,146,104,.45)':'var(--bd)'),background:view3D?'rgba(14,146,104,.1)':'transparent',color:'#0e9268',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all .12s'}}>{view3D?'↩ Schéma':'🧊 3D'}</button>
     </div>
     <div style={{display:'flex',flex:1,minHeight:0}}>
       {/* Panel */}
@@ -10502,18 +10977,92 @@ function CharpenteApp({onBack,user}){
       </div>
       :<div style={{flex:1,position:'relative'}}>
         {view3D?<div ref={mountRef} style={{width:'100%',height:'100%',background:'#ddd4c8'}}/>
-        :<svg viewBox={`${-L/2-1} ${-1} ${L+2} ${ht+5}`} style={{width:'100%',height:'100%',background:'#f4ece5',transform:'scaleY(-1)'}}>
-          {/* 2D Schema */}
-          <line x1={-L/2} y1={0} x2={L/2} y2={0} stroke="#c8b8a0" strokeWidth=".03"/>
-          {/* Columns */}
-          <rect x={-L/2-.1} y={0} width={.2} height={ht} fill="#9a2030" opacity={.7}/>
-          <rect x={L/2-.1} y={0} width={.2} height={ht} fill="#9a2030" opacity={.7}/>
-          {geo==='portique'&&<><line x1={-L/2} y1={ht} x2={0} y2={ht+Math.tan(pe*Math.PI/180)*(L/2)} stroke="#8a3848" strokeWidth=".08"/>
-            <line x1={L/2} y1={ht} x2={0} y2={ht+Math.tan(pe*Math.PI/180)*(L/2)} stroke="#8a3848" strokeWidth=".08"/></>}
-          {geo==='plate'&&<line x1={-L/2} y1={ht} x2={L/2} y2={ht} stroke="#8a3848" strokeWidth=".08"/>}
-          {/* Dims */}
-          <text x={0} y={-.3} textAnchor="middle" fill="#c4324a" fontSize=".3" fontWeight="700" style={{transform:'scaleY(-1)'}}>{L}m</text>
-          <text x={-L/2-.3} y={ht/2} textAnchor="middle" fill="#c4324a" fontSize=".25" style={{transform:'scaleY(-1)'}}>{ht}m</text>
+        :<svg viewBox={`${-L/2-2} ${-1.5} ${L+4} ${ht+6}`} style={{width:'100%',height:'100%',background:'#f4ece5',transform:'scaleY(-1)'}}>
+          <defs>
+            <pattern id="ch-grd" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
+            <pattern id="ch-veg" width=".3" height=".3" patternUnits="userSpaceOnUse"><circle cx=".15" cy=".15" r=".06" fill="rgba(26,154,106,.15)"/></pattern>
+          </defs>
+          <rect x={-L/2-2} y={-1.5} width={L+4} height={ht+6} fill="url(#ch-grd)"/>
+          {/* Sol */}
+          <line x1={-L/2-1} y1={0} x2={L/2+1} y2={0} stroke="#c8b8a0" strokeWidth=".04"/>
+          <rect x={-L/2-1} y={-.3} width={L+2} height={.3} fill="rgba(200,184,160,.2)"/>
+          {(()=>{
+            const tanA=Math.tan(pe*Math.PI/180);
+            const ridgeH=geo==='portique'?ht+tanA*(L/2):geo==='ferme'?Math.max(tanA*(L/2),1):ht;
+            const isFlat=geo==='plate';
+            // Couverture fill
+            const couvColor=couv==='veg'?'rgba(26,154,106,.08)':couv==='pv'?'rgba(13,30,66,.06)':'rgba(176,188,200,.08)';
+            return<>
+              {/* Platines */}
+              <rect x={-L/2-.25} y={0} width={.5} height={.04} fill="#2a1018" rx=".01"/>
+              <rect x={L/2-.25} y={0} width={.5} height={.04} fill="#2a1018" rx=".01"/>
+              {/* Poteaux */}
+              <rect x={-L/2-.1} y={.04} width={.2} height={ht-.04} fill="#9a2030" opacity={.75} rx=".02"/>
+              <rect x={L/2-.1} y={.04} width={.2} height={ht-.04} fill="#9a2030" opacity={.75} rx=".02"/>
+              {/* Traverses */}
+              {(geo==='portique'||geo==='ferme')&&<>
+                <polygon points={`${-L/2},${ht} 0,${ridgeH} ${L/2},${ht}`} fill={couvColor} stroke="none"/>
+                <line x1={-L/2} y1={ht} x2={0} y2={ridgeH} stroke="#8a3848" strokeWidth=".1"/>
+                <line x1={L/2} y1={ht} x2={0} y2={ridgeH} stroke="#8a3848" strokeWidth=".1"/>
+                {couv==='veg'&&<polygon points={`${-L/2},${ht} 0,${ridgeH} ${L/2},${ht}`} fill="url(#ch-veg)"/>}
+              </>}
+              {isFlat&&<>
+                <rect x={-L/2} y={ht} width={L} height={.15} fill={couvColor} stroke="none"/>
+                <line x1={-L/2} y1={ht} x2={L/2} y2={ht} stroke="#8a3848" strokeWidth=".1"/>
+              </>}
+              {geo==='panne'&&(()=>{
+                const pts=[];for(let i2=0;i2<=nb;i2++){const t2=i2/nb,d=Math.abs(t2-.5)*2;pts.push({px:-L/2+t2*L,py:ht+d*tanA*(L/2)})}
+                return<>
+                  {pts.map((pp,i2)=>{if(i2>=pts.length-1)return null;return<g key={'cf'+i2}>
+                    <polygon points={`${pts[i2].px},${pts[i2].py} ${pts[i2+1].px},${pts[i2+1].py} ${pts[i2+1].px},${pts[i2].py>pts[i2+1].py?pts[i2].py:pts[i2+1].py}`} fill={couvColor}/>
+                    <line x1={pts[i2].px} y1={pts[i2].py} x2={pts[i2+1].px} y2={pts[i2+1].py} stroke="#8a3848" strokeWidth=".08"/></g>})}
+                  {pts.map((pp,i2)=><rect key={'post'+i2} x={pp.px-.09} y={0} width={.18} height={pp.py} fill="#9a2030" opacity={.6} rx=".02"/>)}
+                </>
+              })()}
+              {/* Pannes (marks on traverses) */}
+              {(geo==='portique')&&Array.from({length:nb}).map((_,i2)=>{
+                const t2=(i2+1)/(nb+1);
+                const pxL=-L/2+t2*(L/2),pyL=ht+t2*(ridgeH-ht);
+                const pxR=t2*(L/2),pyR=ridgeH-t2*(ridgeH-ht);
+                return<g key={'pn'+i2}>
+                  <circle cx={pxL} cy={pyL} r=".08" fill="#a86808"/>
+                  <circle cx={pxR} cy={pyR} r=".08" fill="#a86808"/>
+                </g>})}
+              {/* Faîtière */}
+              {(geo==='portique')&&<circle cx={0} cy={ridgeH} r=".1" fill="#a86808" stroke="#fff" strokeWidth=".03"/>}
+              {/* Ferme diagonals */}
+              {geo==='ferme'&&(()=>{
+                const fH=ridgeH;
+                return Array.from({length:nb}).map((_,i2)=>{
+                  const t2=(i2+1)/(nb+1),bx=-L/2+t2*L,ty=t2<=.5?t2*2*fH:(1-t2)*2*fH;
+                  return<g key={'fm'+i2}>
+                    {ty>.08&&<line x1={bx} y1={0} x2={bx} y2={ty} stroke="#8a3848" strokeWidth=".04" strokeDasharray=".08,.06"/>}
+                    <line x1={-L/2+(i2/(nb+1))*L} y1={i2/(nb+1)<=.5?(i2/(nb+1))*2*fH:(1-i2/(nb+1))*2*fH} x2={bx} y2={0} stroke="#8a3848" strokeWidth=".03" opacity=".5"/>
+                  </g>})
+              })()}
+              {/* Dim lines */}
+              {/* Portée */}
+              <line x1={-L/2} y1={-.6} x2={L/2} y2={-.6} stroke="#c4324a" strokeWidth=".02"/>
+              <text x={0} y={-.75} textAnchor="middle" fill="#c4324a" fontSize=".3" fontWeight="700" style={{transform:'scaleY(-1)'}}>{L} m</text>
+              {/* Hauteur */}
+              <line x1={-L/2-.6} y1={0} x2={-L/2-.6} y2={ht} stroke="#c4324a" strokeWidth=".02"/>
+              <text x={-L/2-.9} y={ht/2} textAnchor="middle" fill="#c4324a" fontSize=".25" fontWeight="600" style={{transform:'scaleY(-1)'}}>{ht} m</text>
+              {/* Pente */}
+              {(geo==='portique'||geo==='ferme')&&<text x={-L/4} y={(ht+ridgeH)/2+.3} textAnchor="middle" fill="#8a3848" fontSize=".2" fontWeight="600" style={{transform:'scaleY(-1)'}}>{pe}°</text>}
+              {/* Ridge height */}
+              {(geo==='portique'||geo==='ferme')&&<>
+                <line x1={L/2+.3} y1={0} x2={L/2+.3} y2={ridgeH} stroke="rgba(168,104,8,.4)" strokeWidth=".02" strokeDasharray=".08,.06"/>
+                <text x={L/2+.6} y={ridgeH/2} textAnchor="middle" fill="#a86808" fontSize=".2" fontWeight="600" style={{transform:'scaleY(-1)'}}>{r2(ridgeH)} m</text>
+              </>}
+              {/* Entraxe label */}
+              <text x={0} y={-.35} textAnchor="middle" fill="var(--t3)" fontSize=".18" style={{transform:'scaleY(-1)'}}>ea = {ea} m · {nb} pannes</text>
+              {/* Couverture label */}
+              <text x={0} y={ridgeH+.35} textAnchor="middle" fill={couv==='veg'?'#1a9a6a':couv==='pv'?'#0d1e42':'#808890'} fontSize=".18" fontWeight="600" style={{transform:'scaleY(-1)'}}>{couv==='veg'?'🌿 Végétalisé':couv==='pv'?'☀ Panneaux PV':'⬜ Bac acier'}</text>
+              {/* Profil résultat */}
+              {calc.pM&&<text x={-L/4} y={ht-.3} textAnchor="middle" fill="#c4324a" fontSize=".18" fontWeight="700" style={{transform:'scaleY(-1)'}}>⚙ {calc.pM.n}</text>}
+              {calc.pB&&<text x={L/4} y={ht-.3} textAnchor="middle" fill="#0e9268" fontSize=".18" fontWeight="700" style={{transform:'scaleY(-1)'}}>🪵 {calc.pB.n}</text>}
+            </>
+          })()}
         </svg>}
         {/* Info overlay */}
         <div style={{position:'absolute',top:12,right:12,zIndex:10,background:'rgba(244,236,229,.95)',backdropFilter:'blur(8px)',borderRadius:10,padding:'8px 12px',border:'1px solid rgba(14,146,104,.12)',fontSize:9}}>
@@ -10880,17 +11429,18 @@ function Facade3DMulti({zones,chain,ZONE_COLORS,scaffs,showCorners,RAL_COLORS,ra
     const renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(W,H);renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
     renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
-    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.08;
+    renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.12;
     mountRef.current.innerHTML='';mountRef.current.appendChild(renderer.domElement);
     renderer.domElement.style.pointerEvents='auto';renderer.domElement.style.cursor='grab';
 
-    scene.add(new THREE.AmbientLight(0xffe8d8,.55));
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
     const sun=new THREE.DirectionalLight(0xfff5e8,1.15);sun.position.set(20,32,14);sun.castShadow=true;
-    sun.shadow.mapSize.set(2048,2048);sun.shadow.camera.near=.5;sun.shadow.camera.far=80;
+    sun.shadow.mapSize.set(4096,4096);sun.shadow.camera.near=.5;sun.shadow.camera.far=80;
     sun.shadow.camera.left=-20;sun.shadow.camera.right=20;sun.shadow.camera.top=20;sun.shadow.camera.bottom=-20;
     sun.shadow.bias=-.0003;scene.add(sun);
     const skyFc=new THREE.DirectionalLight(0xc8dcff,.28);skyFc.position.set(0,20,-5);scene.add(skyFc);
     const fill=new THREE.DirectionalLight(0xe8f0ff,.22);fill.position.set(-18,10,-12);scene.add(fill);
+    const bnc=new THREE.DirectionalLight(0xf8e8c0,.1);bnc.position.set(0,-5,0);scene.add(bnc);
     // Ground + grid
     const floorFc=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:2}));
     floorFc.rotation.x=-Math.PI/2;floorFc.position.y=0;floorFc.receiveShadow=true;scene.add(floorFc);
