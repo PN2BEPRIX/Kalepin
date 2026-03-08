@@ -41,7 +41,7 @@
     .mn{font-family:'JetBrains Mono',monospace}
     ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--bd);border-radius:10px}
     input[type=number]{-moz-appearance:textfield}input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
-    .idark{background:var(--inp);border:1.5px solid var(--bd);color:var(--t1);transition:.2s}.idark:focus{border-color:var(--bdf);box-shadow:0 0 0 3px rgba(196,50,74,.12);outline:none}
+    .idark{background:var(--inp);border:1.5px solid var(--bd);color:var(--t1);transition:.2s}input::placeholder{color:rgba(255,255,255,.2)}.idark:focus{border-color:var(--bdf);box-shadow:0 0 0 3px rgba(196,50,74,.12);outline:none}
     .cd{background:var(--crd);border:1px solid var(--bd);transition:.2s;border-radius:12px}.cd:hover{border-color:var(--bd2)}
     .ba{transition:.15s;cursor:pointer;user-select:none}.ba:active{transform:scale(.97)}
     .rv{font-family:'JetBrains Mono',monospace;font-weight:600;font-size:.92rem;letter-spacing:-.02em}
@@ -3114,7 +3114,7 @@ function AuthGate({children}){
         Du plan au chantier,<br/><span style={{color:'#c4324a',fontStyle:'italic'}}>sans les allers-retours.</span>
       </h1>
       <p style={{textAlign:'center',fontSize:17,color:'#a86878',maxWidth:600,margin:'0 auto 44px',lineHeight:1.75}}>
-        Kalepin automatise le calepinage pour le <strong style={{color:'#7a3848'}}>bardage cassettes</strong>, la <strong style={{color:'#7a3848'}}>brique de parement</strong> et le <strong style={{color:'#7a3848'}}>carrelage</strong>. Plans d’exécution, métrés et dossiers techniques en quelques clics.
+        Kalepin automatise le calepinage pour le <strong style={{color:'#7a3848'}}>bardage</strong>, la <strong style={{color:'#7a3848'}}>brique</strong>, le <strong style={{color:'#7a3848'}}>carrelage</strong>, l'<strong style={{color:'#7a3848'}}>étanchéité</strong> et la <strong style={{color:'#7a3848'}}>charpente</strong>. Plans d’exécution, métrés et dossiers techniques en quelques clics.
       </p>
       <div style={{display:'flex',justifyContent:'center',alignItems:'center',gap:14,flexWrap:'wrap'}}>
         <button onClick={()=>setMode('signup')} style={{padding:'16px 36px',borderRadius:12,border:'none',background:'#c4324a',color:'#fff',fontSize:15,fontWeight:800,cursor:'pointer',fontFamily:'inherit',boxShadow:'0 8px 32px rgba(196,50,74,.45)',transition:'all .2s'}}
@@ -3379,135 +3379,141 @@ function AuthGate({children}){
 
   </div>;
 
-    // ── Écran de connexion / inscription avec présentation ──
-  return<div style={{minHeight:'100vh',background:'#faf5f0',fontFamily:'DM Sans,sans-serif',position:'relative',overflow:'auto'}}>
-    <div style={{position:'fixed',inset:0,pointerEvents:'none'}}>
-      <div style={{position:'absolute',top:'-5%',left:'15%',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.2),transparent 60%)',filter:'blur(90px)'}}/>
-      <div style={{position:'absolute',bottom:'10%',right:'10%',width:350,height:350,borderRadius:'50%',background:'radial-gradient(circle,rgba(42,14,20,.05),transparent 60%)',filter:'blur(80px)'}}/>
+    // ── Écran de connexion / inscription — Dark modern design ──
+  return<div style={{minHeight:'100vh',background:'#0a0a0f',fontFamily:'DM Sans,sans-serif',display:'flex',position:'relative',overflow:'hidden'}}>
+    {/* ── Ambient orbs ── */}
+    <div style={{position:'fixed',inset:0,pointerEvents:'none',overflow:'hidden'}}>
+      <div style={{position:'absolute',top:'-15%',left:'20%',width:600,height:600,borderRadius:'50%',background:'radial-gradient(circle,rgba(196,50,74,.12),transparent 65%)',filter:'blur(80px)'}}/>
+      <div style={{position:'absolute',bottom:'-10%',right:'15%',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(14,165,233,.06),transparent 65%)',filter:'blur(80px)'}}/>
+      <div style={{position:'absolute',top:'40%',left:'-5%',width:400,height:400,borderRadius:'50%',background:'radial-gradient(circle,rgba(126,79,170,.05),transparent 65%)',filter:'blur(60px)'}}/>
+      <div style={{position:'absolute',inset:0,backgroundImage:'radial-gradient(rgba(255,255,255,.015) 1px,transparent 1px)',backgroundSize:'32px 32px'}}/>
     </div>
-    {/* ── Nav bar ── */}
-    <div style={{position:'sticky',top:0,zIndex:20,background:'rgba(250,245,240,.92)',backdropFilter:'blur(14px)',borderBottom:'1px solid rgba(196,50,74,.12)'}}>
-      <div style={{maxWidth:1100,margin:'0 auto',padding:'10px 28px',display:'flex',alignItems:'center',gap:10}}>
-        <div onClick={()=>setMode('landing')} style={{display:'flex',alignItems:'center',gap:8,cursor:'pointer'}}>
-          <div style={{width:30,height:30,borderRadius:8,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,fontWeight:900,color:'#fff'}}>K</div>
-          <span style={{fontSize:14,fontWeight:800,color:'#2a0e14'}}>Kale<span style={{color:'#c4324a'}}>pin</span></span>
-        </div>
-        <div style={{flex:1}}/>
-        <span style={{fontSize:10,color:'#a86878'}}>{isSignup?'Déjà inscrit ?':'Pas encore de compte ?'}</span>
-        <button onClick={()=>switchMode(isSignup?'login':'signup')} style={{padding:'5px 14px',borderRadius:7,border:'1px solid rgba(42,14,20,.08)',background:'transparent',color:'#7a3848',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{isSignup?'Se connecter':'Créer un compte'}</button>
+
+    {/* ── Left panel — Brand + features ── */}
+    <div className="login-left" style={{flex:1,display:'flex',flexDirection:'column',justifyContent:'center',padding:'60px 48px',position:'relative',zIndex:1,minWidth:0}}>
+      {/* Logo */}
+      <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:48}}>
+        <div style={{width:38,height:38,borderRadius:10,background:'linear-gradient(135deg,#c4324a,#a0243a)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:17,fontWeight:900,color:'#fff',boxShadow:'0 4px 20px rgba(196,50,74,.4)',fontStyle:'italic'}}>K</div>
+        <span style={{fontSize:20,fontWeight:800,color:'#fff',letterSpacing:'-.02em'}}>Kale<span style={{color:'#c4324a'}}>pin</span></span>
       </div>
-    </div>
-    {/* ── Main: 2-col layout ── */}
-    <div className="login-2col" style={{maxWidth:1060,margin:'0 auto',padding:'48px 28px 40px',display:'flex',gap:48,alignItems:'flex-start',position:'relative',zIndex:1}}>
-      {/* ── Left: Presentation ── */}
-      <div className="login-left" style={{flex:1,minWidth:0}}>
-        <div style={{marginBottom:36}}>
-          <div style={{display:'inline-flex',alignItems:'center',gap:8,padding:'4px 14px',borderRadius:20,background:'rgba(52,211,153,.06)',border:'1px solid rgba(52,211,153,.12)',marginBottom:20}}>
-            <span style={{width:6,height:6,borderRadius:3,background:'#34d399'}}/><span style={{fontSize:10,fontWeight:600,color:'#34d399'}}>Bêta ouverte — Accès gratuit</span>
-          </div>
-          <h1 style={{fontSize:'clamp(20px,5vw,28px)',fontWeight:800,lineHeight:1.15,color:'#2a0e14',marginBottom:14,letterSpacing:'-.02em'}}>
-            L'outil de calepinage<br/><span style={{background:'linear-gradient(135deg,#c4324a,#e8697f)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>pour les pros du bâtiment</span>
-          </h1>
-          <p style={{fontSize:13,color:'#6a5a5e',lineHeight:1.7,marginBottom:0}}>
-            Du plan à la commande en quelques minutes. Cassettes, briques, carrelage.
-          </p>
-        </div>
-        {/* ── 4 features ── */}
-        <div className="login-features" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:28}}>
-          {[{icon:'🎯',title:'Zéro erreur de commande',desc:'Calcul auto des surfaces, chutes et nombre exact de panneaux.',color:'#c4324a'},
-            {icon:'🧊',title:'Rendu 3D interactif',desc:'Visualisation réaliste avec finitions RAL, ombres et matériaux.',color:'#0ea5e9'},
-            {icon:'📊',title:'Métrés instantanés',desc:'Export Excel/PDF avec métrés par zone et ossature en 1 clic.',color:'#34d399'},
-            {icon:'📐',title:'Import DXF / PDF',desc:'Importez vos plans architecte, calibrez et tracez vos zones.',color:'#f59e0b'}
-          ].map((f,i)=><div key={i} style={{padding:'14px 16px',borderRadius:14,background:'rgba(42,14,20,.04)',border:'1px solid rgba(42,14,20,.08)'}}>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}>
-              <span style={{fontSize:18}}>{f.icon}</span>
-              <span style={{fontSize:11,fontWeight:700,color:f.color}}>{f.title}</span>
-            </div>
-            <div style={{fontSize:10,color:'#8a7a7e',lineHeight:1.6}}>{f.desc}</div>
-          </div>)}
-        </div>
-        {/* ── QR Code spotlight ── */}
-        <div style={{padding:'16px 18px',borderRadius:14,background:'rgba(42,14,20,.03)',border:'1px solid rgba(196,50,74,.1)',display:'flex',alignItems:'center',gap:14}}>
-          <div style={{width:44,height:44,borderRadius:12,background:'linear-gradient(135deg,rgba(42,14,20,.09),rgba(42,14,20,.03))',display:'flex',alignItems:'center',justifyContent:'center',fontSize:22,flexShrink:0}}>📱</div>
+
+      {/* Headline */}
+      <h1 style={{fontSize:'clamp(28px,4vw,44px)',fontWeight:900,lineHeight:1.05,color:'#fff',letterSpacing:'-.03em',marginBottom:18}}>
+        Le calepinage<br/><span style={{background:'linear-gradient(135deg,#c4324a,#e8697f)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>nouvelle génération.</span>
+      </h1>
+      <p style={{fontSize:15,color:'rgba(255,255,255,.4)',lineHeight:1.7,maxWidth:420,marginBottom:40}}>
+        De l'étude de prix au chantier. Cassettes, briques, carrelage, étanchéité, charpente — le tout dans un outil.
+      </p>
+
+      {/* Feature cards */}
+      <div style={{display:'flex',flexDirection:'column',gap:12,maxWidth:420}}>
+        {[
+          {icon:'📐',title:'5 modules pro',desc:'Cassettes, briques, carrelage, étanchéité, charpente.',color:'#c4324a'},
+          {icon:'🧊',title:'3D réaliste',desc:'Visualisation Three.js avec matériaux, ombres et QR chantier.',color:'#8b5cf6'},
+          {icon:'📊',title:'Export complet',desc:'PDF, Excel, métrés, devis — prêts pour le client.',color:'#10b981'},
+        ].map((f,i)=><div key={i} style={{display:'flex',gap:14,padding:'14px 16px',borderRadius:12,background:'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.06)',backdropFilter:'blur(8px)'}}>
+          <div style={{width:38,height:38,borderRadius:10,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{f.icon}</div>
           <div>
-            <div style={{fontSize:12,fontWeight:700,color:'#2a0e14',marginBottom:3}}>QR Code Chantier</div>
-            <div style={{fontSize:10,color:'#8a7a7e',lineHeight:1.6}}>Vue 3D sur téléphone via QR code sur le plan papier.</div>
+            <div style={{fontSize:12,fontWeight:700,color:f.color,marginBottom:3}}>{f.title}</div>
+            <div style={{fontSize:11,color:'rgba(255,255,255,.35)',lineHeight:1.5}}>{f.desc}</div>
           </div>
-        </div>
-        {/* ── 3 modules ── */}
-        <div style={{display:'flex',gap:10,marginTop:20}}>
-          {[{icon:'🏢',name:'Cassettes',color:'196,50,74'},{icon:'🧱',name:'Brique',color:'217,119,6'},{icon:'🔲',name:'Carrelage',color:'14,165,233'}].map(m=>
-            <div key={m.name} style={{flex:1,padding:'10px 12px',borderRadius:10,background:'rgba('+m.color+',.04)',border:'1px solid rgba('+m.color+',.1)',textAlign:'center'}}>
-              <div style={{fontSize:18,marginBottom:3}}>{m.icon}</div>
-              <div style={{fontSize:10,fontWeight:700,color:'rgb('+m.color+')'}}>{m.name}</div>
-            </div>
-          )}
-        </div>
+        </div>)}
       </div>
-      {/* ── Right: Login form ── */}
-      <div className="login-form-wrap" style={{width:380,maxWidth:'100%',flexShrink:0}}>
-        <div style={{textAlign:'center',marginBottom:24}}>
-          <div style={{fontSize:18,fontWeight:700,color:'#2a0e14',marginBottom:4}}>{isForgot?'Réinitialiser le mot de passe':isSignup?'Créer votre compte':'Bon retour 👋'}</div>
-          <div style={{fontSize:12,color:'#a86878'}}>{isForgot?'On vous envoie un lien par email':isSignup?'Accès bêta gratuit':'Connectez-vous pour retrouver vos projets'}</div>
+
+      {/* Modules pills */}
+      <div style={{display:'flex',gap:8,marginTop:32,flexWrap:'wrap'}}>
+        {[{l:'Cassettes',c:'196,50,74'},{l:'Brique',c:'217,119,6'},{l:'Carrelage',c:'14,165,233'},{l:'Étanchéité',c:'126,79,170'},{l:'Charpente',c:'14,146,104'}].map(m=>
+          <span key={m.l} style={{padding:'4px 12px',borderRadius:20,fontSize:9,fontWeight:700,background:`rgba(${m.c},.1)`,color:`rgba(${m.c.split(',').map(v=>Math.min(255,parseInt(v)+60)).join(',')},1)`,border:`1px solid rgba(${m.c},.15)`}}>{m.l}</span>)}
+      </div>
+    </div>
+
+    {/* ── Right panel — Form ── */}
+    <div className="login-form-wrap" style={{width:440,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',padding:'40px 36px',position:'relative',zIndex:1}}>
+      <div style={{width:'100%',maxWidth:380}}>
+        {/* Nav top */}
+        <div style={{display:'flex',justifyContent:'flex-end',marginBottom:32}}>
+          <button onClick={()=>setMode('landing')} style={{padding:'6px 14px',borderRadius:8,border:'1px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.03)',color:'rgba(255,255,255,.4)',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>← Accueil</button>
         </div>
-      <div style={{background:'rgba(255,255,255,.7)',border:'1px solid rgba(42,14,20,.1)',borderRadius:20,padding:'28px 24px',backdropFilter:'blur(12px)',boxShadow:'0 8px 32px rgba(42,14,20,.06)'}}>
-        {!isForgot&&<div style={{display:'flex',background:'rgba(42,14,20,.03)',borderRadius:10,padding:3,marginBottom:24,gap:2}}>
+
+        {/* Title */}
+        <div style={{marginBottom:28}}>
+          <div style={{fontSize:22,fontWeight:800,color:'#fff',marginBottom:6,letterSpacing:'-.02em'}}>{isForgot?'Mot de passe oublié':isSignup?'Créer un compte':'Connexion'}</div>
+          <div style={{fontSize:12,color:'rgba(255,255,255,.35)'}}>{isForgot?'On vous envoie un lien par email':isSignup?'Accès bêta gratuit — 5 modules':'Retrouvez vos projets'}</div>
+        </div>
+
+        {/* Toggle login/signup */}
+        {!isForgot&&<div style={{display:'flex',background:'rgba(255,255,255,.04)',borderRadius:10,padding:3,marginBottom:24,border:'1px solid rgba(255,255,255,.06)'}}>
           {[['login','Connexion'],['signup','Inscription']].map(([m,l])=><button key={m} onClick={()=>switchMode(m)} style={{
-            flex:1,padding:'8px',borderRadius:8,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',
-            background:mode===m?'#c4324a':'transparent',color:mode===m?'#fff':'#a86878'
+            flex:1,padding:'9px',borderRadius:8,fontSize:12,fontWeight:600,border:'none',cursor:'pointer',fontFamily:'inherit',transition:'all .2s',
+            background:mode===m?'#c4324a':'transparent',color:mode===m?'#fff':'rgba(255,255,255,.35)',
+            boxShadow:mode===m?'0 2px 12px rgba(196,50,74,.3)':'none'
           }}>{l}</button>)}
         </div>}
-        {isForgot&&<div style={{marginBottom:20}}>
-          <button onClick={()=>switchMode('login')} style={{display:'flex',alignItems:'center',gap:5,background:'none',border:'none',color:'#a86878',cursor:'pointer',fontSize:11,fontFamily:'inherit',padding:0,marginBottom:12}}>← Retour</button>
-          <div style={{fontSize:11,color:'#a86878'}}>Saisissez votre email, on vous envoie un lien</div>
-        </div>}
+
+        {isForgot&&<button onClick={()=>switchMode('login')} style={{display:'flex',alignItems:'center',gap:5,background:'none',border:'none',color:'rgba(255,255,255,.4)',cursor:'pointer',fontSize:11,fontFamily:'inherit',padding:0,marginBottom:16}}>← Retour</button>}
+
+        {/* Errors / Info */}
         {error&&<div style={{background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.2)',borderRadius:10,padding:'10px 12px',marginBottom:16,fontSize:12,color:'#ef4444',display:'flex',alignItems:'flex-start',gap:8}}>
           <span style={{flexShrink:0}}>⚠</span><span>{error}</span>
         </div>}
         {info&&<div style={{background:'rgba(16,185,129,.08)',border:'1px solid rgba(16,185,129,.2)',borderRadius:10,padding:'10px 12px',marginBottom:16,fontSize:12,color:'#10b981',display:'flex',alignItems:'center',gap:8}}>
           <span>✓</span>{info}
         </div>}
-        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+
+        {/* Form fields */}
+        <div style={{display:'flex',flexDirection:'column',gap:16}}>
           {isSignup&&<div>
-            <label style={{fontSize:10,fontWeight:600,color:'#a86878',marginBottom:5,display:'block',letterSpacing:'.05em'}}>NOM</label>
-            <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Jean Dupont" className="idark"
-              style={{width:'100%',padding:'11px 12px',borderRadius:9,fontSize:13,boxSizing:'border-box'}}
+            <label style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,.35)',marginBottom:6,display:'block',letterSpacing:'.08em',textTransform:'uppercase'}}>Nom complet</label>
+            <input type="text" value={name} onChange={e=>setName(e.target.value)} placeholder="Jean Dupont"
+              style={{width:'100%',padding:'12px 14px',borderRadius:10,border:'1.5px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.04)',color:'#fff',fontSize:14,fontFamily:'inherit',outline:'none',boxSizing:'border-box',transition:'border-color .2s'}}
+              onFocus={e=>e.target.style.borderColor='rgba(196,50,74,.4)'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.08)'}
               onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter')handleSignup()}}/>
           </div>}
           <div>
-            <label style={{fontSize:10,fontWeight:600,color:'#a86878',marginBottom:5,display:'block',letterSpacing:'.05em'}}>EMAIL</label>
-            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@entreprise.com" className="idark"
-              style={{width:'100%',padding:'11px 12px',borderRadius:9,fontSize:13,boxSizing:'border-box'}}
+            <label style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,.35)',marginBottom:6,display:'block',letterSpacing:'.08em',textTransform:'uppercase'}}>Email</label>
+            <input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="vous@entreprise.com"
+              style={{width:'100%',padding:'12px 14px',borderRadius:10,border:'1.5px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.04)',color:'#fff',fontSize:14,fontFamily:'inherit',outline:'none',boxSizing:'border-box',transition:'border-color .2s'}}
+              onFocus={e=>e.target.style.borderColor='rgba(196,50,74,.4)'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.08)'}
               onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){isForgot?handleForgot():isLogin?handleLogin():handleSignup()}}}/>
           </div>
           {!isForgot&&<div>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
-              <label style={{fontSize:10,fontWeight:600,color:'#a86878',letterSpacing:'.05em'}}>MOT DE PASSE</label>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <label style={{fontSize:10,fontWeight:600,color:'rgba(255,255,255,.35)',letterSpacing:'.08em',textTransform:'uppercase'}}>Mot de passe</label>
               {isLogin&&<button onClick={()=>switchMode('forgot')} style={{background:'none',border:'none',color:'#c4324a',fontSize:10,cursor:'pointer',fontFamily:'inherit',padding:0}}>Oublié ?</button>}
             </div>
             <div style={{position:'relative'}}>
               <input type={showPwd?'text':'password'} value={password} onChange={e=>setPassword(e.target.value)}
-                placeholder={isSignup?'6 caractères minimum':''} className="idark"
-                style={{width:'100%',padding:'11px 38px 11px 12px',borderRadius:9,fontSize:13,boxSizing:'border-box'}}
+                placeholder={isSignup?'6 caractères minimum':''}
+                style={{width:'100%',padding:'12px 42px 12px 14px',borderRadius:10,border:'1.5px solid rgba(255,255,255,.08)',background:'rgba(255,255,255,.04)',color:'#fff',fontSize:14,fontFamily:'inherit',outline:'none',boxSizing:'border-box',transition:'border-color .2s'}}
+                onFocus={e=>e.target.style.borderColor='rgba(196,50,74,.4)'} onBlur={e=>e.target.style.borderColor='rgba(255,255,255,.08)'}
                 onKeyDown={e=>{e.stopPropagation();if(e.key==='Enter'){isLogin?handleLogin():handleSignup()}}}/>
-              <button onClick={()=>setShowPwd(v=>!v)} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#a86878',padding:2,display:'flex',fontSize:14}}>
+              <button onClick={()=>setShowPwd(v=>!v)} style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'rgba(255,255,255,.3)',padding:2,fontSize:14}}>
                 {showPwd?'🙈':'👁'}</button>
             </div>
           </div>}
           <button onClick={isForgot?handleForgot:isLogin?handleLogin:handleSignup} disabled={submitting}
-            style={{width:'100%',padding:'13px',background:submitting?'#5a1120':'#c4324a',color:'#fff',border:'none',borderRadius:10,
-              fontSize:14,fontWeight:700,cursor:submitting?'wait':'pointer',fontFamily:'inherit',boxShadow:'0 4px 16px rgba(196,50,74,.3)',marginTop:4}}>
-            {submitting?'…':isForgot?'Envoyer le lien':isLogin?'Se connecter':'Demander l\'accès bêta'}</button>
+            style={{width:'100%',padding:'14px',background:submitting?'rgba(196,50,74,.4)':'#c4324a',color:'#fff',border:'none',borderRadius:10,
+              fontSize:14,fontWeight:700,cursor:submitting?'wait':'pointer',fontFamily:'inherit',boxShadow:'0 4px 20px rgba(196,50,74,.35)',transition:'all .2s',marginTop:4}}
+            onMouseOver={e=>{if(!submitting){e.currentTarget.style.boxShadow='0 6px 28px rgba(196,50,74,.5)';e.currentTarget.style.transform='translateY(-1px)'}}}
+            onMouseOut={e=>{e.currentTarget.style.boxShadow='0 4px 20px rgba(196,50,74,.35)';e.currentTarget.style.transform='none'}}>
+            {submitting?'…':isForgot?'Envoyer le lien':isLogin?'Se connecter':'Créer mon compte'}</button>
         </div>
-        {isSignup&&<div style={{marginTop:14,padding:'10px 12px',background:'rgba(245,158,11,.05)',border:'1px solid rgba(245,158,11,.12)',borderRadius:9,display:'flex',alignItems:'center',gap:8}}>
-          <span style={{fontSize:16}}>🔒</span><div style={{fontSize:11,color:'#a86878'}}>Accès bêta — validation sous 24h</div>
+
+        {isSignup&&<div style={{marginTop:16,padding:'10px 14px',background:'rgba(245,158,11,.04)',border:'1px solid rgba(245,158,11,.1)',borderRadius:10,display:'flex',alignItems:'center',gap:8}}>
+          <span style={{fontSize:14}}>🔓</span><div style={{fontSize:10,color:'rgba(255,255,255,.35)'}}>Accès bêta — validation sous 24h</div>
         </div>}
+
+        {/* Switch mode */}
+        <div style={{textAlign:'center',marginTop:24}}>
+          <span style={{fontSize:11,color:'rgba(255,255,255,.25)'}}>{isSignup?'Déjà inscrit ?':'Pas de compte ?'} </span>
+          <button onClick={()=>switchMode(isSignup?'login':'signup')} style={{background:'none',border:'none',color:'#c4324a',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'inherit'}}>{isSignup?'Se connecter':'Créer un compte'}</button>
+        </div>
+
+        <div style={{marginTop:20,fontSize:9,color:'rgba(255,255,255,.15)',textAlign:'center',lineHeight:1.7}}>
+          En continuant, vous acceptez nos conditions d'utilisation.
+        </div>
       </div>
-      <div style={{marginTop:20,fontSize:10,color:'#c8b0a0',textAlign:'center',lineHeight:1.7}}>
-        En continuant, vous acceptez nos conditions d'utilisation et notre politique de confidentialité
-      </div>
-      </div>{/* end right col */}
-    </div>{/* end 2-col */}
+    </div>
   </div>;
 }
 
