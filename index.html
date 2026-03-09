@@ -10701,6 +10701,33 @@ function CharpenteApp({onBack,user}){
   const[qe,setQe]=useState(1.0);const[niIdx,setNiIdx]=useState(0);const[viIdx,setViIdx]=useState(1);
   const[alt,setAlt]=useState(200);const[couv,setCouv]=useState('veg');
   const[view3D,setView3D]=useState(true);const[showRes,setShowRes]=useState(false);
+  const[charpTab,setCharpTab]=useState('structure');// structure | couverture
+  // ── COUVERTURE (multi-pan roof) ──
+  const mkPan=(n,pts,slope=10)=>({id:Date.now()+Math.random(),name:n,pts,slope,insulated:true,type:'polycarbonate',ngf:{}});
+  const[pans,setPans]=useState([
+    mkPan('B113.1',[[0,0],[9.56,0],[9.56,12.24],[0,12.24]],9.85),
+    mkPan('B113.2',[[9.56,0],[19.26,0],[19.26,12.24],[9.56,12.24]],14.04),
+  ]);
+  const[activePan,setActivePan]=useState(null);
+  const[covDrawMode,setCovDrawMode]=useState(null);
+  const[covDrawPts,setCovDrawPts]=useState([]);
+  const[covDragPt,setCovDragPt]=useState(null);
+  const covSvgRef=useRef(null);const covMountRef=useRef(null);const covScRef=useRef({});
+  const covLastPt=useRef(null);
+  const[covView3D,setCovView3D]=useState(false);
+  const[covSnap,setCovSnap]=useState(true);
+  const covSnapV=v=>covSnap?Math.round(v*4)/4:Math.round(v*20)/20;
+  // Edge types between pans
+  const[edges,setEdges]=useState([]);// {id, type:'faitiere'|'noue'|'aretier'|'rive'|'cheneau', p1:[x,y], p2:[x,y]}
+  const polyArea2=pts=>{let a=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;a+=pts[i][0]*pts[j][1]-pts[j][0]*pts[i][1]}return Math.abs(a/2)};
+  const polyPeri2=pts=>{let p=0;for(let i=0;i<pts.length;i++){const j=(i+1)%pts.length;const dx=pts[j][0]-pts[i][0],dy=pts[j][1]-pts[i][1];p+=Math.sqrt(dx*dx+dy*dy)}return p};
+  const polyCtr2=pts=>{let cx=0,cy=0;pts.forEach(p=>{cx+=p[0];cy+=p[1]});return[cx/pts.length,cy/pts.length]};
+  const polyBnds2=pts=>{let mn=[Infinity,Infinity],mx=[-Infinity,-Infinity];pts.forEach(p=>{mn[0]=Math.min(mn[0],p[0]);mn[1]=Math.min(mn[1],p[1]);mx[0]=Math.max(mx[0],p[0]);mx[1]=Math.max(mx[1],p[1])});return{min:mn,max:mx,w:mx[0]-mn[0],h:mx[1]-mn[1]}};
+  const realSurf=(pan)=>{const proj=polyArea2(pan.pts);return proj/Math.cos(pan.slope*Math.PI/180)};
+  const totalProjSurf=pans.reduce((s,p)=>s+polyArea2(p.pts),0);
+  const totalRealSurf=pans.reduce((s,p)=>s+realSurf(p),0);
+  const totalInsulSurf=pans.filter(p=>p.insulated).reduce((s,p)=>s+realSurf(p),0);
+  const COUV_TYPES=[{id:'polycarbonate',l:'Polycarbonate',c:'14,165,233'},{id:'bac_acier',l:'Bac acier',c:'100,110,120'},{id:'zinc',l:'Zinc',c:'160,170,175'},{id:'tuile',l:'Tuile',c:'180,80,40'},{id:'ardoise',l:'Ardoise',c:'60,65,75'}];
   const mountRef=useRef(null);const scRef=useRef({});
   const r2=v=>Math.round(v*100)/100;const r1=v=>Math.round(v*10)/10;
 
@@ -10730,6 +10757,75 @@ function CharpenteApp({onBack,user}){
     const pB=okb.length?okb.reduce((a,b)=>a.Iy<b.Iy?a:b):null;
     return{sn,qv,G,Q,Lc,fadm,qels,qelu,Mels,Melu,Relu,Wreq,Ireq,pM,fM,tW,tF,Wreqb,Ireqb,pB};
   },[geo,L,ea,ht,pe,nb,gb,gi,gs,gv,qe,niIdx,viIdx,alt]);
+
+  // ── COUVERTURE 3D ──
+  useEffect(()=>{
+    if(!covView3D||charpTab!=='couverture'||!covMountRef.current)return;
+    const el=covMountRef.current;const W=el.clientWidth,H=el.clientHeight;if(W<10)return;
+    if(covScRef.current.renderer)covScRef.current.renderer.dispose();el.innerHTML='';
+    const scene=new THREE.Scene();scene.background=new THREE.Color(0xddd4c8);scene.fog=new THREE.FogExp2(0xddd4c8,.005);
+    const cam=new THREE.PerspectiveCamera(42,W/H,.01,300);
+    const rend=new THREE.WebGLRenderer({antialias:true});rend.setSize(W,H);rend.setPixelRatio(Math.min(devicePixelRatio,2));
+    rend.shadowMap.enabled=true;rend.shadowMap.type=THREE.PCFSoftShadowMap;rend.toneMapping=THREE.ACESFilmicToneMapping;rend.toneMappingExposure=1.12;
+    el.appendChild(rend.domElement);rend.domElement.style.cursor='grab';
+    scene.add(new THREE.AmbientLight(0xffe8d8,.35));scene.add(new THREE.HemisphereLight(0xc8dcff,0xc8b8a0,.4));
+    const sun=new THREE.DirectionalLight(0xfff5e8,1.1);sun.position.set(20,30,14);sun.castShadow=true;sun.shadow.mapSize.set(4096,4096);scene.add(sun);
+    const sky=new THREE.DirectionalLight(0xc8dcff,.25);sky.position.set(-15,20,-10);scene.add(sky);
+    const flr=new THREE.Mesh(new THREE.PlaneGeometry(150,150),new THREE.MeshPhongMaterial({color:0xc8b8a0,shininess:4}));
+    flr.rotation.x=-Math.PI/2;flr.receiveShadow=true;scene.add(flr);
+    const gr1=new THREE.GridHelper(150,30,0xa89880,0xb8aa98);gr1.position.y=.003;scene.add(gr1);
+    // Center
+    const allPts=pans.flatMap(p=>p.pts);if(!allPts.length)return;
+    const bndC=polyBnds2(allPts);const cxC=bndC.min[0]+bndC.w/2,czC=bndC.min[1]+bndC.h/2;
+    const ROOF_BASE=3;
+    // Build each pan as a tilted surface
+    pans.forEach(pan=>{
+      const ct=polyCtr2(pan.pts);
+      const panShape=new THREE.Shape();
+      pan.pts.forEach((p,i)=>{const sx=p[0]-cxC,sy=-(p[1]-czC);i===0?panShape.moveTo(sx,sy):panShape.lineTo(sx,sy)});
+      panShape.closePath();
+      // Determine pan color
+      const cvt=COUV_TYPES.find(t=>t.id===pan.type)||COUV_TYPES[0];
+      const rgb=cvt.c.split(',').map(Number);
+      const panCol=new THREE.Color(rgb[0]/255,rgb[1]/255,rgb[2]/255);
+      // Slab with slope
+      const slopeRad=pan.slope*Math.PI/180;
+      const thickness=.08;
+      const geo=new THREE.ExtrudeGeometry(panShape,{depth:thickness,bevelEnabled:false});
+      const mat=new THREE.MeshPhongMaterial({color:panCol,shininess:pan.type==='zinc'?50:pan.type==='polycarbonate'?80:20,
+        specular:pan.type==='zinc'||pan.type==='polycarbonate'?0x444444:0x111111,
+        transparent:pan.type==='polycarbonate',opacity:pan.type==='polycarbonate'?.6:1,side:pan.type==='polycarbonate'?2:0});
+      const mesh=new THREE.Mesh(geo,mat);
+      mesh.rotation.x=-Math.PI/2;
+      // Apply slope (tilt around local X axis)
+      mesh.rotation.x=-Math.PI/2+slopeRad*.3;// simplified visual tilt
+      mesh.position.y=ROOF_BASE;mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);
+      // Support columns at corners
+      const pilMat=new THREE.MeshPhongMaterial({color:0x666660,shininess:5});
+      pan.pts.forEach((p,pi)=>{
+        if(pi%Math.max(1,Math.ceil(pan.pts.length/3))===0){
+          const pil=new THREE.Mesh(new THREE.BoxGeometry(.2,ROOF_BASE,.2),pilMat);
+          pil.position.set(p[0]-cxC,ROOF_BASE/2,-(p[1]-czC));pil.castShadow=true;scene.add(pil);
+        }
+      });
+    });
+    // Camera
+    const span=Math.max(bndC.w,bndC.h)*2;
+    const rot={x:-.5,y:.4};const zm={v:Math.max(span,8)};const pan2={x:0,y:0};
+    const tgt=new THREE.Vector3(0,ROOF_BASE,0);let dr=null;
+    const onD=e=>{dr={x:e.clientX,y:e.clientY,rx:rot.x,ry:rot.y,btn:e.button}};
+    const onU=()=>{dr=null};
+    const onM=e=>{if(!dr)return;if(dr.btn===2||dr.btn===1){pan2.x+=(e.clientX-dr.x)*.005;pan2.y-=(e.clientY-dr.y)*.005;dr.x=e.clientX;dr.y=e.clientY}else{rot.y=dr.ry+(e.clientX-dr.x)*.005;rot.x=Math.max(-1.4,Math.min(.2,dr.rx+(e.clientY-dr.y)*.005))}};
+    const onW=e=>{e.preventDefault();zm.v=Math.max(3,Math.min(80,zm.v*(1+e.deltaY*.001)))};
+    rend.domElement.addEventListener('mousedown',onD);rend.domElement.addEventListener('mouseup',onU);
+    rend.domElement.addEventListener('mouseleave',onU);rend.domElement.addEventListener('mousemove',onM);
+    rend.domElement.addEventListener('wheel',onW,{passive:false});rend.domElement.addEventListener('contextmenu',e=>e.preventDefault());
+    let raf;const anim=()=>{raf=requestAnimationFrame(anim);
+      cam.position.set(tgt.x+zm.v*Math.sin(rot.y)*Math.cos(rot.x)+pan2.x,tgt.y+zm.v*Math.sin(-rot.x)+pan2.y,tgt.z+zm.v*Math.cos(rot.y)*Math.cos(rot.x));
+      cam.lookAt(tgt.x+pan2.x,tgt.y+pan2.y,tgt.z);rend.render(scene,cam)};anim();
+    covScRef.current={renderer:rend,raf};
+    return()=>{cancelAnimationFrame(raf);rend.dispose();el.innerHTML='';covScRef.current={}};
+  },[covView3D,charpTab,pans]);
 
   // ── 3D ──
   useEffect(()=>{
@@ -10885,11 +10981,23 @@ function CharpenteApp({onBack,user}){
         <div style={{width:22,height:22,borderRadius:6,background:'linear-gradient(135deg,#0e9268,#066040)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11}}>⛩</div>
         <span style={{fontSize:12,fontWeight:700,color:'#0e9268'}}>Charpente</span>
       </div>
+      {/* Tabs */}
+      <div style={{display:'flex',gap:2,background:'rgba(42,14,20,.04)',borderRadius:7,padding:2}}>
+        {[['structure','⛩ Structure'],['couverture','🏠 Couverture']].map(([k,l])=>
+          <button key={k} onClick={()=>setCharpTab(k)} style={{padding:'4px 12px',borderRadius:6,fontSize:10,fontWeight:700,border:'none',cursor:'pointer',fontFamily:'inherit',
+            background:charpTab===k?'rgba(14,146,104,.15)':'transparent',color:charpTab===k?'#0e9268':'var(--t3)',transition:'all .12s'}}>{l}</button>)}
+      </div>
       <div style={{flex:1}}/>
-      <button onClick={()=>setShowRes(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid rgba(196,50,74,.2)',background:showRes?'rgba(196,50,74,.08)':'transparent',color:'#c4324a',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .12s'}}>{showRes?'↩ Vue':'📊 Résultats'}</button>
-      <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid '+(view3D?'rgba(14,146,104,.45)':'var(--bd)'),background:view3D?'rgba(14,146,104,.1)':'transparent',color:'#0e9268',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all .12s'}}>{view3D?'↩ Schéma':'🧊 3D'}</button>
+      {charpTab==='structure'&&<>
+        <button onClick={()=>setShowRes(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid rgba(196,50,74,.2)',background:showRes?'rgba(196,50,74,.08)':'transparent',color:'#c4324a',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'inherit',transition:'all .12s'}}>{showRes?'↩ Vue':'📊 Résultats'}</button>
+        <button onClick={()=>setView3D(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid '+(view3D?'rgba(14,146,104,.45)':'var(--bd)'),background:view3D?'rgba(14,146,104,.1)':'transparent',color:'#0e9268',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit',transition:'all .12s'}}>{view3D?'↩ Schéma':'🧊 3D'}</button>
+      </>}
+      {charpTab==='couverture'&&<>
+        <button onClick={()=>setCovView3D(v=>!v)} style={{padding:'4px 11px',borderRadius:6,border:'1px solid '+(covView3D?'rgba(14,146,104,.45)':'var(--bd)'),background:covView3D?'rgba(14,146,104,.1)':'transparent',color:'#0e9268',fontSize:10,fontWeight:700,cursor:'pointer',fontFamily:'inherit'}}>{covView3D?'↩ Plan':'🧊 3D'}</button>
+      </>}
     </div>
     <div style={{display:'flex',flex:1,minHeight:0}}>
+      {charpTab==='structure'&&<>
       {/* Panel */}
       <div style={{width:255,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',overflowY:'auto',padding:8}}>
         {/* Géométrie */}
@@ -11079,6 +11187,176 @@ function CharpenteApp({onBack,user}){
           {calc.pB&&<div style={{color:'#0e9268',fontWeight:600}}>Bois: {calc.pB.n}</div>}
         </div>
       </div>}
+    </>}
+
+    {/* ═══════════════════════════════════════════════════════════ */}
+    {/* COUVERTURE TAB */}
+    {/* ═══════════════════════════════════════════════════════════ */}
+    {charpTab==='couverture'&&<>
+      {/* Drawing toolbar */}
+      {covDrawMode&&<div style={{padding:'4px 14px',background:'rgba(196,50,74,.06)',borderBottom:'1px solid rgba(196,50,74,.15)',display:'flex',alignItems:'center',gap:8,fontSize:10,color:'#c4324a',fontWeight:600,flexShrink:0}}>
+        ✏ {covDrawMode==='pan'?'Tracé pan — cliquez les sommets · double-clic pour fermer':'Tracé arête — 2 clics'}
+        <button onClick={()=>{setCovDrawMode(null);setCovDrawPts([])}} style={{color:'#c4324a',background:'none',border:'none',cursor:'pointer',fontFamily:'inherit',fontWeight:700}}>✕</button>
+      </div>}
+      <div style={{display:'flex',flex:1,minHeight:0}}>
+        {/* Left panel */}
+        <div style={{width:240,flexShrink:0,borderRight:'1px solid var(--bd)',background:'var(--pnl)',overflowY:'auto',padding:8}}>
+          {/* Tools */}
+          <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5,background:'linear-gradient(135deg,rgba(14,146,104,.06),rgba(14,146,104,.02))'}}>
+            <div style={{fontSize:8,fontWeight:700,color:'#0e9268',marginBottom:5}}>🏠 Outils</div>
+            <div style={{display:'flex',gap:3,marginBottom:5}}>
+              <button onClick={()=>{const ct=pans.length?polyCtr2(pans[0].pts):[10,6];
+                const np=mkPan('Pan '+(pans.length+1),[[ct[0]-3,ct[1]-2],[ct[0]+3,ct[1]-2],[ct[0],ct[1]+3]],12);
+                setPans(ps=>[...ps,np]);setActivePan(np.id)}}
+                style={{flex:1,padding:'4px',fontSize:8,fontWeight:700,borderRadius:5,border:'1px solid rgba(14,146,104,.2)',background:'rgba(14,146,104,.06)',color:'#0e9268',cursor:'pointer',fontFamily:'inherit'}}>△ + Pan</button>
+              <button onClick={()=>{setCovDrawMode('pan');setCovDrawPts([])}}
+                style={{flex:1,padding:'4px',fontSize:8,fontWeight:700,borderRadius:5,border:'1px solid rgba(14,146,104,.2)',background:covDrawMode==='pan'?'rgba(14,146,104,.15)':'rgba(14,146,104,.06)',color:'#0e9268',cursor:'pointer',fontFamily:'inherit'}}>✏ Dessiner</button>
+            </div>
+            <button onClick={()=>setCovSnap(v=>!v)} style={{width:'100%',padding:'3px',fontSize:8,fontWeight:600,borderRadius:5,border:'1px solid '+(covSnap?'rgba(126,79,170,.3)':'var(--bd)'),background:covSnap?'rgba(126,79,170,.08)':'var(--crd)',color:covSnap?'#7e4faa':'var(--t3)',cursor:'pointer',fontFamily:'inherit'}}>🧲 {covSnap?'Aimant 25cm':'Libre'}</button>
+          </div>
+          {/* Pans list */}
+          <div style={{padding:7,borderRadius:9,border:'1px solid var(--bd)',marginBottom:5}}>
+            <div style={{fontSize:8,fontWeight:700,color:'var(--t1)',marginBottom:5}}>📐 Pans ({pans.length})</div>
+            {pans.map(pan=>{
+              const isAct=activePan===pan.id;const ct=polyCtr2(pan.pts);
+              return<div key={pan.id} onClick={()=>setActivePan(isAct?null:pan.id)}
+                style={{padding:6,borderRadius:7,border:'1.5px solid '+(isAct?'rgba(14,146,104,.35)':'var(--bd)'),background:isAct?'rgba(14,146,104,.06)':'var(--crd)',marginBottom:3,cursor:'pointer'}}>
+                <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:isAct?5:0}}>
+                  <div style={{width:8,height:8,borderRadius:2,background:pan.insulated?'#0ea5e9':'#999',flexShrink:0}}/>
+                  <input value={pan.name} onClick={e=>e.stopPropagation()} onChange={e=>{const v=e.target.value;setPans(ps=>ps.map(p=>p.id===pan.id?{...p,name:v}:p))}}
+                    style={{flex:1,fontSize:9,fontWeight:700,color:'var(--t1)',background:'none',border:'none',outline:'none',fontFamily:'inherit',padding:0}}/>
+                  <span style={{fontSize:8,color:'var(--t3)',fontFamily:'JetBrains Mono,monospace'}}>{r2(pan.slope)}°</span>
+                  <button onClick={e=>{e.stopPropagation();setPans(ps=>ps.filter(p=>p.id!==pan.id));if(activePan===pan.id)setActivePan(null)}}
+                    style={{fontSize:8,color:'#ef4444',cursor:'pointer',background:'none',border:'none'}}>✕</button>
+                </div>
+                {isAct&&<>
+                  <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:4,marginBottom:4}}>
+                    <div><div style={{fontSize:7,fontWeight:600,color:'var(--t2)',marginBottom:2}}>Pente (°)</div>
+                      <input type="number" value={pan.slope} min={0} max={60} step={.5} onKeyDown={e=>e.stopPropagation()}
+                        onChange={e=>setPans(ps=>ps.map(p=>p.id===pan.id?{...p,slope:Number(e.target.value)}:p))}
+                        style={{width:'100%',padding:'3px 5px',borderRadius:5,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:10,fontFamily:'JetBrains Mono,monospace',fontWeight:700,textAlign:'right',outline:'none',boxSizing:'border-box'}}/>
+                    </div>
+                    <div><div style={{fontSize:7,fontWeight:600,color:'var(--t2)',marginBottom:2}}>Type</div>
+                      <select value={pan.type} onChange={e=>setPans(ps=>ps.map(p=>p.id===pan.id?{...p,type:e.target.value}:p))}
+                        style={{width:'100%',padding:'3px',borderRadius:5,border:'1px solid var(--bd)',background:'var(--inp)',fontSize:8,fontFamily:'inherit',color:'var(--t1)'}}>
+                        {COUV_TYPES.map(t=><option key={t.id} value={t.id}>{t.l}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <label style={{display:'flex',alignItems:'center',gap:5,fontSize:8,color:'var(--t2)',cursor:'pointer'}}>
+                    <input type="checkbox" checked={pan.insulated} onChange={e=>setPans(ps=>ps.map(p=>p.id===pan.id?{...p,insulated:e.target.checked}:p))}/> Isolé</label>
+                  <div style={{fontSize:7,color:'var(--t3)',marginTop:3}}>
+                    Projeté: {r2(polyArea2(pan.pts))} m² · Réel: {r2(realSurf(pan))} m² · {pan.pts.length} pts
+                  </div>
+                </>}
+              </div>})}
+          </div>
+          {/* Métrés */}
+          <div style={{padding:7,borderRadius:9,border:'1px solid rgba(14,146,104,.15)',background:'rgba(14,146,104,.03)',marginBottom:5}}>
+            <div style={{fontSize:8,fontWeight:700,color:'#0e9268',marginBottom:5}}>📊 Métrés couverture</div>
+            <div style={{fontSize:8,color:'var(--t2)',lineHeight:1.9}}>
+              Surf. projetée: <b>{r2(totalProjSurf)} m²</b><br/>
+              Surf. réelle: <b style={{color:'#0e9268'}}>{r2(totalRealSurf)} m²</b><br/>
+              Dont isolée: <b style={{color:'#0ea5e9'}}>{r2(totalInsulSurf)} m²</b><br/>
+              Non isolée: <b>{r2(totalRealSurf-totalInsulSurf)} m²</b><br/>
+              Pans: <b>{pans.length}</b> · Périmètre total: <b>{r2(pans.reduce((s,p)=>s+polyPeri2(p.pts),0))} ml</b>
+            </div>
+          </div>
+        </div>
+        {/* Viewport */}
+        <div style={{flex:1,position:'relative',overflow:'hidden',minWidth:0}}>
+          {covView3D?<div ref={covMountRef} style={{width:'100%',height:'100%',background:'#ddd4c8'}}/>
+          :(()=>{
+            // Compute overall bounds
+            const allPts=pans.flatMap(p=>p.pts);
+            const bnd2=allPts.length?polyBnds2(allPts):{min:[0,0],max:[20,15],w:20,h:15};
+            const pad2=3;const vb2=`${bnd2.min[0]-pad2} ${bnd2.min[1]-pad2} ${bnd2.w+pad2*2} ${bnd2.h+pad2*2}`;
+            const covCoord=e=>{
+              const svg=covSvgRef.current;if(!svg)return[0,0];
+              const pt=svg.createSVGPoint();pt.x=e.clientX;pt.y=e.clientY;
+              const inv=svg.getScreenCTM()?.inverse();if(!inv)return[0,0];
+              const sp=pt.matrixTransform(inv);return[Math.round(sp.x*10)/10,Math.round(sp.y*10)/10];
+            };
+            return<svg ref={covSvgRef} viewBox={vb2} preserveAspectRatio="xMidYMid meet"
+              style={{width:'100%',height:'100%',background:'#f4ece5',cursor:covDrawMode?'crosshair':covDragPt?'grabbing':'default'}}
+              onClick={e=>{
+                if(!covDrawMode)return;
+                const[x,y]=covCoord(e);const np=[...covDrawPts,[covSnapV(x),covSnapV(y)]];
+                if(covDrawMode==='pan'){
+                  if(np.length>=3&&Math.hypot(np[0][0]-x,np[0][1]-y)<.6){
+                    const newPan=mkPan('Pan '+(pans.length+1),np.slice(0,-1),12);
+                    setPans(ps=>[...ps,newPan]);setActivePan(newPan.id);setCovDrawMode(null);setCovDrawPts([]);
+                  } else setCovDrawPts(np);
+                }
+              }}
+              onDoubleClick={()=>{
+                if(covDrawMode==='pan'&&covDrawPts.length>=3){
+                  const newPan=mkPan('Pan '+(pans.length+1),covDrawPts,12);
+                  setPans(ps=>[...ps,newPan]);setActivePan(newPan.id);setCovDrawMode(null);setCovDrawPts([]);
+                }
+              }}
+              onMouseMove={e=>{
+                if(!covDragPt)return;const[x,y]=covCoord(e);
+                if(covDragPt.type==='pt')setPans(ps=>ps.map(p=>p.id===covDragPt.panId?{...p,pts:p.pts.map((pp,i)=>i===covDragPt.idx?[covSnapV(x),covSnapV(y)]:pp)}:p));
+                else if(covDragPt.type==='move'){
+                  if(!covLastPt.current)covLastPt.current=[x,y];
+                  const dx=x-covLastPt.current[0],dy=y-covLastPt.current[1];covLastPt.current=[x,y];
+                  setPans(ps=>ps.map(p=>p.id===covDragPt.panId?{...p,pts:p.pts.map(pp=>[pp[0]+dx,pp[1]+dy])}:p));
+                }
+              }}
+              onMouseUp={()=>{setCovDragPt(null);covLastPt.current=null}}
+              onMouseLeave={()=>{setCovDragPt(null);covLastPt.current=null}}
+              onWheel={e=>{e.preventDefault()}}
+              onContextMenu={e=>e.preventDefault()}>
+              <defs>
+                <pattern id="cv-grd" width="1" height="1" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="none" stroke="rgba(42,14,20,.04)" strokeWidth=".01"/></pattern>
+                <pattern id="cv-grd5" width="5" height="5" patternUnits="userSpaceOnUse"><rect width="5" height="5" fill="none" stroke="rgba(42,14,20,.07)" strokeWidth=".02"/></pattern>
+                <pattern id="cv-hatch" width=".4" height=".4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2=".4" stroke="rgba(42,14,20,.08)" strokeWidth=".03"/></pattern>
+              </defs>
+              <rect x={bnd2.min[0]-pad2} y={bnd2.min[1]-pad2} width={bnd2.w+pad2*2} height={bnd2.h+pad2*2} fill="url(#cv-grd)"/>
+              <rect x={bnd2.min[0]-pad2} y={bnd2.min[1]-pad2} width={bnd2.w+pad2*2} height={bnd2.h+pad2*2} fill="url(#cv-grd5)"/>
+              {/* Pans */}
+              {pans.map(pan=>{
+                const ct=polyCtr2(pan.pts);const isAct=activePan===pan.id;
+                const ct2=COUV_TYPES.find(t=>t.id===pan.type)||COUV_TYPES[0];
+                const fillCol=pan.insulated?`rgba(${ct2.c},.08)`:'rgba(150,150,150,.06)';
+                const strokeCol=isAct?`rgb(${ct2.c})`:'rgba(42,14,20,.25)';
+                return<g key={pan.id}>
+                  {/* Pan polygon */}
+                  <polygon points={pan.pts.map(p=>p.join(',')).join(' ')} fill={fillCol} stroke={strokeCol} strokeWidth={isAct?'.08':'.04'}
+                    style={{cursor:'move'}} onClick={e=>{e.stopPropagation();setActivePan(pan.id)}}
+                    onMouseDown={e=>{e.stopPropagation();e.preventDefault();setCovDragPt({type:'move',panId:pan.id})}}/>
+                  {/* Slope hatching */}
+                  <polygon points={pan.pts.map(p=>p.join(',')).join(' ')} fill="url(#cv-hatch)" style={{pointerEvents:'none'}}/>
+                  {/* Slope label */}
+                  <text x={ct[0]} y={ct[1]-.15} textAnchor="middle" fill={`rgb(${ct2.c})`} fontSize=".28" fontWeight="800" style={{pointerEvents:'none'}}>{pan.slope}°</text>
+                  <text x={ct[0]} y={ct[1]+.15} textAnchor="middle" fill="var(--t3)" fontSize=".18" fontWeight="600" style={{pointerEvents:'none'}}>{pan.name}</text>
+                  <text x={ct[0]} y={ct[1]+.4} textAnchor="middle" fill="var(--t3)" fontSize=".14" style={{pointerEvents:'none'}}>{r2(realSurf(pan))} m²</text>
+                  {/* Insulated marker */}
+                  {pan.insulated&&<text x={ct[0]} y={ct[1]+.6} textAnchor="middle" fill="#0ea5e9" fontSize=".14" fontWeight="600" style={{pointerEvents:'none'}}>🧊 isolé</text>}
+                  {/* Edge dimensions */}
+                  {pan.pts.map((p,i)=>{const j=(i+1)%pan.pts.length;const mx=(p[0]+pan.pts[j][0])/2,my=(p[1]+pan.pts[j][1])/2;
+                    const dx=pan.pts[j][0]-p[0],dy=pan.pts[j][1]-p[1];const len=Math.sqrt(dx*dx+dy*dy);
+                    return<text key={'e'+i} x={mx} y={my-.18} textAnchor="middle" fill="rgba(42,14,20,.4)" fontSize=".16" fontWeight="600" style={{pointerEvents:'none'}}>{r2(len)}m</text>})}
+                  {/* Corner handles */}
+                  {isAct&&pan.pts.map((p,i)=><circle key={'h'+i} cx={p[0]} cy={p[1]} r=".18" fill={`rgb(${ct2.c})`} stroke="#fff" strokeWidth=".05" style={{cursor:'grab'}}
+                    onMouseDown={e=>{e.stopPropagation();e.preventDefault();setCovDragPt({type:'pt',panId:pan.id,idx:i})}}
+                    onContextMenu={e=>{e.preventDefault();e.stopPropagation();if(pan.pts.length>3)setPans(ps=>ps.map(p2=>p2.id===pan.id?{...p2,pts:p2.pts.filter((_,j)=>j!==i)}:p2))}}/>)}
+                  {/* Midpoints to add */}
+                  {isAct&&pan.pts.map((p,i)=>{const j=(i+1)%pan.pts.length;const mx=(p[0]+pan.pts[j][0])/2,my=(p[1]+pan.pts[j][1])/2;
+                    return<circle key={'m'+i} cx={mx} cy={my} r=".1" fill="none" stroke={`rgb(${ct2.c})`} strokeWidth=".03" strokeDasharray=".05,.05" style={{cursor:'pointer'}}
+                      onClick={e=>{e.stopPropagation();setPans(ps=>ps.map(p2=>p2.id===pan.id?{...p2,pts:[...p2.pts.slice(0,i+1),[mx,my],...p2.pts.slice(i+1)]}:p2))}}/>})}
+                </g>})}
+              {/* Draw preview */}
+              {covDrawMode&&covDrawPts.length>0&&<>
+                <polyline points={covDrawPts.map(p=>p.join(',')).join(' ')} fill="none" stroke="#c4324a" strokeWidth=".06" strokeDasharray=".15,.1"/>
+                {covDrawPts.map((p,i)=><circle key={'dp'+i} cx={p[0]} cy={p[1]} r=".12" fill="#c4324a"/>)}
+              </>}
+            </svg>
+          })()}
+        </div>
+      </div>
+    </>}
     </div>
   </div>;
 }
